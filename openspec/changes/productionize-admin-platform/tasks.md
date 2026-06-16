@@ -33,8 +33,8 @@
 
 ## 5. Production Operations Hardening
 
-- [ ] 5.1 Normalize migration discipline from the next migration forward and document how duplicate historical numbers are handled.
-- [ ] 5.2 Add or update `.env.example`, Docker health expectations, local production-like run instructions, and backup/restore notes.
-- [ ] 5.3 Add a one-command production-readiness validation script or documented command chain.
-- [ ] 5.4 Run backend tests, frontend typecheck, frontend tests, frontend build, resource validation, and OpenSpec strict validation after each phase.
+- [x] 5.1 Normalize migration discipline from the next migration forward and document how duplicate historical numbers are handled.
+- [x] 5.2 Add or update `.env.example`, Docker health expectations, local production-like run instructions, and backup/restore notes.
+- [x] 5.3 Add a one-command production-readiness validation script or documented command chain.
+- [x] 5.4 Run backend tests, frontend typecheck, frontend tests, frontend build, resource validation, and OpenSpec strict validation after each phase.
 - [ ] 5.5 Capture final productionization notes that explain what was removed, what is protected, and how to restore the current system from declared resources.

@@ -8,7 +8,7 @@ It includes:
 - FastAPI admin backend in `server`
 - database migrations in `server/migrations`
 - admin bootstrap/import scripts in `scripts`
-- seed data for the formal experiment catalog and reviewed curriculum data for admin setup
+- protected production seed data under `data/seed`
 
 It intentionally excludes:
 
@@ -52,11 +52,17 @@ The admin frontend runs at `http://127.0.0.1:5174/admin/login` and proxies `/api
 
 ## Production-Style Local Run
 
-Build the frontend first:
+Copy the example environment and build the frontend first:
+
+```powershell
+Copy-Item .env.example .env
+```
 
 ```powershell
 Set-Location apps/admin-web
+npm ci
 npm run build
+Set-Location ..\..
 ```
 
 Then run the backend with the built frontend mounted at `/admin`:
@@ -70,6 +76,8 @@ For Docker Compose, copy `.env.example` to `.env`, adjust secrets and database s
 ```powershell
 docker compose up --build
 ```
+
+See `docs/production-operations.md` for health checks, migration discipline, backup/restore, and restore-from-seed instructions.
 
 ## Bootstrap
 
@@ -91,30 +99,24 @@ Import formal admin data and canonical evidence when needed:
 python scripts/seed_formal_experiments.py
 python scripts/publish_reviewed_curriculum.py
 python scripts/import_canonical_evidence.py
-python scripts/import_experiment_question_bank.py --skip-migrations
+python scripts/import_experiment_knowledge_framework.py --skip-migrations
+python scripts/point_aware_question_bank.py import --bank-kind default --bank-status published --question-status published --skip-migrations
+python scripts/import_manual_reviewed_point_evidence.py --skip-migrations
 python scripts/verify_canonical_evidence.py
 ```
 
 ## Validation
 
-Validate backend import:
+Run the production-readiness validation chain:
 
 ```powershell
-python -c "import server.app.admin_main as m; print(m.app.title)"
+python scripts/validate_production_readiness.py --install-frontend
 ```
 
-Validate the frontend:
+For backend/resource-only phases:
 
 ```powershell
-Set-Location apps/admin-web
-npm run typecheck
-npm run build
-```
-
-Validate OpenSpec:
-
-```powershell
-openspec validate extract-admin-management-repo --strict
+python scripts/validate_production_readiness.py --skip-frontend
 ```
 
 ## GitHub Publishing

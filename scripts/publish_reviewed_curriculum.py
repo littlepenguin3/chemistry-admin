@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
 from server.app.curriculum import create_curriculum_draft, load_curriculum_artifact, publish_curriculum_version
 from server.app.database import apply_migrations
 
-DEFAULT_CURRICULUM = ROOT / "data" / "processed" / "reviewed_curriculum.json"
+DEFAULT_CURRICULUM = ROOT / "data" / "seed" / "knowledge_framework" / "reviewed_curriculum.json"
 
 
 def main() -> None:
