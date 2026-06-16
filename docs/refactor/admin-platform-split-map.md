@@ -20,7 +20,7 @@ Current shell and route components:
 | Split | `QuestionBanksPage` | `/question-banks` | `src/features/question-bank/QuestionBanksPage.tsx` |
 | Split | `AnalyticsPage` | `/analytics` | `src/features/analytics/AnalyticsPage.tsx` |
 | Split | `FeedbackPage` | `/feedback` | `src/features/feedback/FeedbackPage.tsx` |
-| 6955 | `LearningAssistantPage` | `/learning-assistant` | `src/features/learning-assistant/LearningAssistantPage.tsx` |
+| Split | `LearningAssistantPage` | `/learning-assistant` | `src/features/learning-assistant/LearningAssistantPage.tsx` |
 | Split | `SettingsPage` | `/settings` | `src/features/settings/SettingsPage.tsx` |
 | Split | `AIConfigurationPage` | `/ai-config` | `src/features/ai-config/AIConfigurationPage.tsx` |
 
@@ -88,7 +88,8 @@ Current frontend extraction status:
 - Done: experiments page -> `src/features/experiments/ExperimentsPage.tsx`, lazy-loaded from the `/experiments` route.
 - Done: shared experiment hooks -> `src/features/experiments/experimentHooks.ts`, reused by experiments and remaining learning-assistant code.
 - Done: question bank page and AI workbench UI -> `src/features/question-bank/QuestionBanksPage.tsx`, lazy-loaded from the `/question-banks` route.
-- Remaining: learning assistant and broader global CSS split.
+- Done: learning assistant page -> `src/features/learning-assistant/LearningAssistantPage.tsx`, lazy-loaded from the `/learning-assistant` route with assistant markdown/KaTeX rendering isolated to the feature.
+- Remaining: broader global CSS split.
 
 ## Backend Endpoint Map
 
