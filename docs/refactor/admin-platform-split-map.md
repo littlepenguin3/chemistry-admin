@@ -22,7 +22,7 @@ Current shell and route components:
 | Split | `FeedbackPage` | `/feedback` | `src/features/feedback/FeedbackPage.tsx` |
 | 6955 | `LearningAssistantPage` | `/learning-assistant` | `src/features/learning-assistant/LearningAssistantPage.tsx` |
 | Split | `SettingsPage` | `/settings` | `src/features/settings/SettingsPage.tsx` |
-| 8137 | `AIConfigurationPage` | `/ai-config` | `src/features/ai-config/AIConfigurationPage.tsx` |
+| Split | `AIConfigurationPage` | `/ai-config` | `src/features/ai-config/AIConfigurationPage.tsx` |
 
 Redirects to preserve:
 
@@ -45,7 +45,7 @@ Keep these as shared modules before moving page bodies:
 
 Heavy dependencies currently imported at the top of `App.tsx` and suitable for lazy feature chunks:
 
-- `@ant-design/charts` via `UsageLineChart`
+- `@ant-design/plots` usage charts are lazy-loaded inside `src/features/ai-config/AIConfigurationPage.tsx`
 - `katex`, `katex/contrib/mhchem`, `react-markdown`, `remark-gfm`, `remark-math`
 - `@uppy/core`, `@uppy/tus`, `hash-wasm`
 - learning-assistant diagnostics and image preview code
@@ -75,7 +75,9 @@ Current frontend extraction status:
 - Done: feedback selectors -> `src/features/feedback/feedback.css`, imported by the feedback feature chunk.
 - Done: settings page -> `src/features/settings/SettingsPage.tsx`, lazy-loaded from the `/settings` route.
 - Done: settings-only selectors -> `src/features/settings/settings.css`; shared `.settings-grid` remains global until learning assistant context layout is split.
-- Remaining: overview/resources, classes/students, experiments, videos/media, question bank, analytics, learning assistant, AI config, and broader global CSS split.
+- Done: AI config page -> `src/features/ai-config/AIConfigurationPage.tsx`, lazy-loaded from the `/ai-config` route.
+- Done: learning-assistant runtime format helpers -> `src/features/learning-assistant/runtimeFormat.ts`, shared by learning assistant diagnostics and AI config.
+- Remaining: overview/resources, classes/students, experiments, videos/media, question bank, analytics, learning assistant, and broader global CSS split.
 
 ## Backend Endpoint Map
 
