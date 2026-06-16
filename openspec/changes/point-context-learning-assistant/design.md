@@ -24,25 +24,19 @@ The current platform-resource rail is intended to prevent fabricated claims abou
 
 ## Decisions
 
-### Temporary spike: generate video-point default evidence artifacts
+### Manual-reviewed video-point evidence is the fixed source
 
-Before relying on question-bank metadata as the point evidence source, run a temporary offline spike to generate default evidence chunks for all formal experiment video points. This is not a production feature in this change and does not modify the question bank.
+The offline GPU rerank spike has been completed and manually reviewed from the beginning. The final artifact is `manual_reviewed_point_evidence.jsonl`, covering all 300 formal experiment video points with no duplicate `point_key` values, no bad chunk ids, and `manual_reviewed=true` on every row. Its quality grades are `pass`, `usable`, and `weak_but_best_available`.
 
-The spike reads the existing Postgres data only:
-- `formal_experiments.metadata.video_candidates` for the 300 video points and stable `point_key` reconstruction;
-- `experiment_chapter_bindings` and `experiment_framework_formal_links` for experiment/chapter scope;
-- `source_chunks` and `chunk_embeddings` for experiment and theory chunk recall;
-- the existing BGE-M3 pgvector embeddings for vector recall.
+This reviewed artifact is not a runtime RAG service and does not replace `source_chunks`. It is a point-to-existing-chunk binding layer:
+- `experiment_id` and stable `point_key` identify the formal experiment video point;
+- `experiment_chunk_ids` are direct experiment/procedure/phenomenon evidence;
+- `theory_chunk_ids` are supporting textbook theory evidence;
+- `review_grade` is surfaced in diagnostics so weaker best-available bindings are visible.
 
-It may start a temporary GPU BGE service on a separate port/profile using the existing local models, with rerank settings tuned for quality rather than online latency, for example `BGE_DEVICE=cuda`, `BGE_USE_FP16=true`, and `BGE_RERANK_MAX_LENGTH=1024`.
+The application should import this reviewed artifact into a small read-only database binding table. The student learning assistant then reads this table by `(experiment_id, point_key)` and hydrates source previews from `source_chunks`. Raw candidate artifacts and the temporary GPU service remain offline-only and are not part of the online answer path.
 
-The output is an artifact, not a canonical database rewrite:
-- raw candidates with vector scores, rerank scores, chunk metadata, and original chunk text;
-- per-point default experiment chunk ids;
-- per-point default theory chunk ids;
-- a summary report for spot checks and threshold tuning.
-
-If this artifact proves reliable, a later implementation can make the learning assistant prefer these default evidence chunks before falling back to question-bank metadata. That later read path should still be explicit and read-only.
+Question-bank `source_audit` metadata is no longer a point evidence source for the student assistant. It may remain useful for historical questions or teacher workflows, but the student assistant must not depend on finding an existing question before it can explain a selected video point, and it must not use question-bank rows as the fallback fixed evidence path.
 
 ### Structured point context is the stable contract
 
@@ -52,16 +46,15 @@ Alternative considered: keep embedding the point in the prompt only. This is fra
 
 ### Point evidence package precedes RAG
 
-The agent will assemble a point evidence package before optional RAG lookup. Sources can include:
+The agent will assemble a point evidence package before optional RAG lookup. Sources include:
 - selected chapter and experiment metadata;
 - selected experiment video point metadata;
-- question-bank records whose `metadata.primary_point_keys` include the selected point;
-- `metadata.source_audit.canonical_chunk_ids` and `supporting_theory_chunk_ids` from those records;
-- available source previews/assets for those chunk ids when the repository can resolve them.
+- manual-reviewed point evidence bindings for the selected `(experiment_id, point_key)`;
+- available source previews/assets for the reviewed experiment and theory chunk ids.
 
 This package is passed to the model regardless of `allow_rag_lookup`. Hybrid RAG may still add broader theory/figure evidence when enabled.
 
-Alternative considered: put all point lookup through BGE. This makes point explanations fail when RAG is off or slow, and it ignores deterministic evidence already present in the question bank.
+Alternative considered: put all point lookup through BGE. This makes point explanations fail when RAG is off or slow. Alternative considered: infer point evidence from existing question-bank `source_audit`; this reverses the dependency and fails for points that have no accepted question yet.
 
 ### Policy classification uses resolved context
 
@@ -83,15 +76,15 @@ If inventory lookup finds nothing, the assistant answers normally with "not publ
 
 ## Risks / Trade-offs
 
-- [Risk] Point evidence may be incomplete for some points -> Show diagnostics and let the model answer from chemistry knowledge without fabricating textbook provenance.
-- [Risk] Querying question-bank metadata by point key can be slower if done naively -> Limit lookups to the selected experiment/chapter and cap evidence items.
+- [Risk] A small number of reviewed rows are `weak_but_best_available` -> Surface the grade in diagnostics and instruct the model not to overstate source strength.
+- [Risk] The reviewed evidence artifact may be missing from a fresh database -> Provide an explicit import step and diagnostics rather than silently falling back to question-bank evidence or RAG-only behavior.
 - [Risk] Resolved follow-up may inherit the wrong prior topic -> Only inherit context for short/deictic follow-ups and preserve raw question in diagnostics.
 - [Risk] Resource rail may become too narrow -> Keep explicit resource availability patterns and tests for published-resource lookup.
 
 ## Migration Plan
 
 1. Add schema fields and frontend prompt metadata without removing existing natural-language prompt behavior.
-2. Add point evidence package assembly and diagnostics.
+2. Add manual-reviewed point evidence import/read path plus point evidence package diagnostics.
 3. Update policy-gate payload and deterministic classifier.
 4. Update debug UI to show point context and route prompt cards with `point_key`.
 5. Add tests covering RAG-disabled point explanation, resource lookup, and multi-turn follow-up.

@@ -5,7 +5,7 @@
 - [x] 0.3 For each point, recall experiment-chunk candidates and theory-chunk candidates from existing pgvector `chunk_embeddings`, keeping experiment/chapter scope signals but recording raw candidates.
 - [x] 0.4 Rerank candidates on GPU and write per-point default experiment chunk ids, default theory chunk ids, raw candidate rows, vector scores, rerank scores, and source chunk text to an artifact directory.
 - [x] 0.5 Spot-check known risky points such as SO2 bleaching versus SO3^2- detection, H2O2 oxidation/reduction, Hg(I) + KI, and AgX photosensitivity before considering the artifact usable by the assistant.
-- [x] 0.6 Keep the spike temporary: do not update question-bank rows, do not alter published status, and do not make the artifact a required production dependency in this change.
+- [x] 0.6 Keep the GPU/raw-candidate spike temporary: do not update question-bank rows, do not alter published status, and do not put raw candidates or the temporary GPU service on the online path.
 
 ## 1. Request Contract
 
@@ -17,6 +17,9 @@
 - [x] 2.1 Resolve selected experiment video point metadata from `experiment_id` and `point_key`.
 - [x] 2.2 Collect point-linked question-bank source-audit chunk ids and expose a fixed point evidence package.
 - [x] 2.3 Include point evidence in model prompt payload even when `allow_rag_lookup` is false.
+- [x] 2.4 Add a database-backed manual-reviewed video-point evidence binding layer sourced from `manual_reviewed_point_evidence.jsonl`.
+- [x] 2.5 Make the student learning assistant use manual-reviewed point evidence as the fixed/no-RAG fallback path and stop using question-bank `source_audit` for student point evidence packages.
+- [x] 2.6 Expose manual review status, review grade, experiment evidence count, and theory evidence count in point-context diagnostics.
 
 ## 3. Policy Gate And Resource Rail
 
@@ -36,8 +39,8 @@
 
 ## 6. Remaining Acceptance Gaps From Review
 
-- [ ] 6.1 Add an explicit UI acceptance task so true platform-resource misses are labeled as "resource unavailable/platform not found" rather than "guardrail/refusal" in the debug console.
-- [ ] 6.2 Decide and implement the point-context continuity rule for typed/manual prompts and follow-up turns: either carry the selected point context forward after a prompt card, or clearly show that the turn is chapter-only.
-- [ ] 6.3 Add an explicit image-evidence requirement/scenario: source figures and evidence images must stay in the evidence rail, must not be routed to platform resource availability, and the assistant may only reference images that exist in fixed point or RAG evidence assets.
-- [ ] 6.4 Add validation coverage for image-evidence behavior, including "image asset present" and "no image asset present" cases.
-- [ ] 6.5 Re-run OpenSpec validation, targeted backend tests, frontend typecheck, and frontend build after the remaining acceptance gaps are handled.
+- [x] 6.1 Add an explicit UI acceptance task so true platform-resource misses are labeled as "resource unavailable/platform not found" rather than "guardrail/refusal" in the debug console.
+- [x] 6.2 Decide and implement the point-context continuity rule for typed/manual prompts and follow-up turns: either carry the selected point context forward after a prompt card, or clearly show that the turn is chapter-only.
+- [x] 6.3 Add an explicit image-evidence requirement/scenario: source figures and evidence images must stay in the evidence rail, must not be routed to platform resource availability, and the assistant may only reference images that exist in fixed point or RAG evidence assets.
+- [x] 6.4 Add validation coverage for image-evidence behavior, including "image asset present" and "no image asset present" cases.
+- [x] 6.5 Re-run OpenSpec validation, targeted backend tests, frontend typecheck, and frontend build after the remaining acceptance gaps are handled.

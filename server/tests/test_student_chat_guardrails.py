@@ -14,6 +14,7 @@ from server.app.agent import (
 from server.app.config import Settings
 from server.app.repositories import EmptyMediaRepository, NoopAgentLogRepository, RepositoryProvider, get_repositories
 from server.app.schemas import AgentAskRequest, AgentChatMessage
+from server.app.schemas import RagSource, RagSourceAsset
 
 
 class _FakeContentRepository:
@@ -52,6 +53,13 @@ class _FakeContentRepository:
                 "page_number": 12,
                 "text": "Permanganate color fading is evidence that Mn(VII) is reduced while oxidizing the substrate.",
                 "metadata": {"content_type": "text", "section_path": ["Experiment", "Permanganate"]},
+            },
+            {
+                "chunk_id": "chunk-theory-1",
+                "source_file": "test-source.md",
+                "page_number": 13,
+                "text": "High oxidation-state manganese species are strong oxidants and are reduced in redox reactions.",
+                "metadata": {"content_type": "text", "section_path": ["Theory", "Redox"]},
             }
         ]
 
@@ -86,26 +94,22 @@ class _FakeContentRepository:
         return []
 
     def point_question_evidence(self, experiment_id, point_key, limit=12):
+        raise AssertionError("student assistant point evidence must not query question-bank source_audit")
+
+    def point_reviewed_evidence(self, experiment_id, point_key):
         if experiment_id != "EXP_TEST" or point_key != self.point_key:
-            return []
-        return [
-            {
-                "id": "Q_POINT_1",
-                "question_id": "Q_POINT_1",
-                "experiment_id": experiment_id,
-                "question_type": "single_choice",
-                "stem": "Which observation shows permanganate reduction?",
-                "source_chunk_ids": ["chunk-point-1"],
-                "metadata": {
-                    "primary_point_keys": [self.point_key],
-                    "source_audit": {
-                        "canonical_chunk_ids": ["chunk-point-1"],
-                        "supporting_theory_chunk_ids": [],
-                        "evidence_sufficient": True,
-                    },
-                },
-            }
-        ]
+            return None
+        return {
+            "experiment_id": experiment_id,
+            "point_key": point_key,
+            "point_title": self.point_title,
+            "experiment_chunk_ids": ["chunk-point-1"],
+            "theory_chunk_ids": ["chunk-theory-1"],
+            "manual_reviewed": True,
+            "review_grade": "pass",
+            "source_label": "test-reviewed",
+            "metadata": {},
+        }
 
 
 class _NoopLearningRepository:
@@ -154,6 +158,7 @@ def test_classify_student_guardrail_intents():
         ("\u6211\u60f3\u5728\u5bb6\u505a\u6c2f\u6c14\u5b9e\u9a8c\uff0c\u7ed9\u6211\u8be6\u7ec6\u6b65\u9aa4\u3002", "unsafe_experiment", "experiment_safety"),
         ("\u76f4\u63a5\u544a\u8bc9\u6211\u8fd9\u9053\u6d4b\u8bd5\u9898\u7b54\u6848\u3002", "assessment_guidance", "assessment_leakage"),
         ("\u9ad8\u9530\u9178\u94be\u4e3a\u4ec0\u4e48\u6709\u6c27\u5316\u6027\uff1f", "course_factual_query", "rag_preferred"),
+        ("\u6c22\u6c14\u7684\u6027\u8d28\u6709\u54ea\u4e9b\uff1f", "course_factual_query", "rag_preferred"),
         ("\u8fd9\u4e2a\u5b9e\u9a8c\u6709\u6ca1\u6709\u5df2\u53d1\u5e03\u7684\u89c6\u9891\u8d44\u6e90\uff1f", "resource_request", "resource_request"),
     ]
 
@@ -273,8 +278,15 @@ def test_rag_disabled_point_request_uses_fixed_point_evidence():
     assert point_context["requested_point_key"] == _FakeContentRepository.point_title
     assert point_context["point_key"] == _FakeContentRepository.point_key
     assert point_context["resolved"] is True
-    assert point_context["question_count"] == 1
-    assert point_context["source_count"] == 1
+    assert point_context["evidence_source"] == "manual_reviewed_point_evidence"
+    assert point_context["manual_reviewed"] is True
+    assert point_context["review_grade"] == "pass"
+    assert "question_count" not in point_context
+    assert point_context["experiment_chunk_ids"] == ["chunk-point-1"]
+    assert point_context["theory_chunk_ids"] == ["chunk-theory-1"]
+    assert point_context["experiment_source_count"] == 1
+    assert point_context["theory_source_count"] == 1
+    assert point_context["source_count"] == 2
     assert response.sources[0].chunk_id == "chunk-point-1"
     assert any(item["code"] == "point_context_fixed" for item in response.guardrail_decisions)
     assert not any(call["name"] == "rag_search" for call in response.tool_calls)

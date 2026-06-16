@@ -327,19 +327,6 @@ def _resolve_point_context(context: AgentRunContext) -> dict[str, Any]:
     }
 
 
-def _question_metadata(question: dict[str, Any]) -> dict[str, Any]:
-    metadata = question.get("metadata")
-    if isinstance(metadata, dict):
-        return metadata
-    if isinstance(metadata, str) and metadata.strip():
-        try:
-            parsed = json.loads(metadata)
-        except ValueError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
-    return {}
-
-
 def _unique_texts(values: list[Any]) -> list[str]:
     result: list[str] = []
     seen: set[str] = set()
@@ -351,20 +338,33 @@ def _unique_texts(values: list[Any]) -> list[str]:
     return result
 
 
-def _question_source_chunk_ids(question: dict[str, Any]) -> list[str]:
-    metadata = _question_metadata(question)
-    source_audit = metadata.get("source_audit") if isinstance(metadata.get("source_audit"), dict) else {}
-    ids: list[Any] = []
-    ids.extend(question.get("source_chunk_ids") or [])
-    ids.extend(metadata.get("source_chunk_ids") or [])
-    ids.extend(source_audit.get("canonical_chunk_ids") or [])
-    ids.extend(source_audit.get("supporting_theory_chunk_ids") or [])
-    for ref in question.get("source_refs") or metadata.get("source_refs") or []:
-        if isinstance(ref, dict):
-            ids.append(ref.get("chunk_id") or ref.get("id"))
-        else:
-            ids.append(ref)
-    return _unique_texts(ids)
+def _sources_for_chunk_ids(context: AgentRunContext, chunk_ids: list[str]) -> tuple[list[RagSource], list[str]]:
+    if not chunk_ids:
+        return [], []
+    source_chunks = context.repositories.content.source_chunks()
+    chunks_by_id = {
+        str(chunk.get("chunk_id") or chunk.get("id")): chunk
+        for chunk in source_chunks
+        if str(chunk.get("chunk_id") or chunk.get("id") or "").strip()
+    }
+    fixed_chunks = [chunks_by_id[chunk_id] for chunk_id in chunk_ids if chunk_id in chunks_by_id]
+    missing_chunk_ids = [chunk_id for chunk_id in chunk_ids if chunk_id not in chunks_by_id]
+    return [_source_from_chunk(chunk) for chunk in fixed_chunks], missing_chunk_ids
+
+
+def _point_source_payloads(
+    sources: list[RagSource],
+    experiment_chunk_ids: list[str],
+    theory_chunk_ids: list[str],
+) -> list[dict[str, Any]]:
+    role_by_chunk_id = {chunk_id: "experiment" for chunk_id in experiment_chunk_ids}
+    role_by_chunk_id.update({chunk_id: "theory" for chunk_id in theory_chunk_ids if chunk_id not in role_by_chunk_id})
+    payloads: list[dict[str, Any]] = []
+    for source in sources:
+        payload = _source_evidence_payload(source)
+        payload["evidence_kind"] = role_by_chunk_id.get(source.chunk_id, "point")
+        payloads.append(payload)
+    return payloads
 
 
 def _build_point_evidence_package(context: AgentRunContext) -> None:
@@ -375,40 +375,63 @@ def _build_point_evidence_package(context: AgentRunContext) -> None:
 
     experiment_id = point_context["experiment_id"]
     point_key = point_context["point_key"]
-    questions = context.repositories.content.point_question_evidence(experiment_id, point_key, limit=12)
-    chunk_ids = _unique_texts([chunk_id for question in questions for chunk_id in _question_source_chunk_ids(question)])
-    source_chunks = context.repositories.content.source_chunks() if chunk_ids else []
-    chunks_by_id = {
-        str(chunk.get("chunk_id") or chunk.get("id")): chunk
-        for chunk in source_chunks
-        if str(chunk.get("chunk_id") or chunk.get("id") or "").strip()
-    }
-    fixed_chunks = [chunks_by_id[chunk_id] for chunk_id in chunk_ids if chunk_id in chunks_by_id]
-    fixed_sources = [_source_from_chunk(chunk) for chunk in fixed_chunks[:8]]
+    reviewed = context.repositories.content.point_reviewed_evidence(experiment_id, point_key)
+    if not reviewed:
+        context.point_evidence = {
+            **point_context,
+            "enabled": True,
+            "evidence_source": "manual_reviewed_point_evidence",
+            "manual_reviewed": False,
+            "review_grade": None,
+            "experiment_chunk_ids": [],
+            "theory_chunk_ids": [],
+            "chunk_ids": [],
+            "experiment_source_count": 0,
+            "theory_source_count": 0,
+            "source_count": 0,
+            "sources": [],
+            "missing_binding": True,
+        }
+        context.add_guardrail(
+            "point_context_missing_reviewed_evidence",
+            "answer_from_model_knowledge",
+            "manual reviewed point evidence binding not found; keeping structured point context only",
+        )
+        return
+
+    experiment_chunk_ids = _unique_texts(list(reviewed.get("experiment_chunk_ids") or []))
+    theory_chunk_ids = _unique_texts(list(reviewed.get("theory_chunk_ids") or []))
+    chunk_ids = _unique_texts([*experiment_chunk_ids, *theory_chunk_ids])
+    fixed_sources, missing_chunk_ids = _sources_for_chunk_ids(context, chunk_ids)
     if fixed_sources:
         context.sources = _merge_sources(fixed_sources, context.sources)
+    source_payloads = _point_source_payloads(fixed_sources[:10], experiment_chunk_ids, theory_chunk_ids)
+    found_chunk_ids = {source.chunk_id for source in fixed_sources}
 
     context.point_evidence = {
         **point_context,
         "enabled": True,
-        "question_count": len(questions),
-        "chunk_ids": chunk_ids[:12],
+        "evidence_source": "manual_reviewed_point_evidence",
+        "manual_reviewed": bool(reviewed.get("manual_reviewed")),
+        "review_grade": reviewed.get("review_grade"),
+        "source_label": reviewed.get("source_label"),
+        "experiment_chunk_ids": experiment_chunk_ids,
+        "theory_chunk_ids": theory_chunk_ids,
+        "chunk_ids": chunk_ids,
+        "missing_chunk_ids": missing_chunk_ids,
+        "experiment_source_count": len([chunk_id for chunk_id in experiment_chunk_ids if chunk_id in found_chunk_ids]),
+        "theory_source_count": len([chunk_id for chunk_id in theory_chunk_ids if chunk_id in found_chunk_ids]),
         "source_count": len(fixed_sources),
-        "sources": [_source_evidence_payload(source) for source in fixed_sources[:5]],
-        "question_samples": [
-            {
-                "question_id": question.get("question_id") or question.get("id"),
-                "question_type": question.get("question_type"),
-                "stem": str(question.get("stem") or "")[:160],
-            }
-            for question in questions[:5]
-        ],
+        "sources": source_payloads,
     }
     if fixed_sources:
-        context.add_guardrail("point_context_fixed", "use_fixed_evidence", "已按实验视频点位装载固定教材证据")
+        context.add_guardrail("point_context_fixed", "use_fixed_evidence", "manual reviewed point evidence loaded")
     else:
-        context.add_guardrail("point_context_empty", "answer_from_model_knowledge", "该点位暂无题库 source_audit 证据，仍保留章节与点位上下文")
-
+        context.add_guardrail(
+            "point_context_empty",
+            "answer_from_model_knowledge",
+            "manual reviewed point binding exists, but source_chunks did not hydrate any evidence",
+        )
 
 def classify_agent_request(request: AgentAskRequest) -> dict[str, Any]:
     question = request.question.strip()
@@ -637,7 +660,13 @@ def _apply_policy_decision_to_classification(context: AgentRunContext) -> None:
     source_asset_request = _is_rag_source_asset_request(context.request.question)
     deterministic_platform_resource_request = (not source_asset_request) and _is_platform_resource_request(context.request.question)
     if source_asset_request and mode in {"needs_platform_evidence", "refuse_out_of_scope"}:
+        context.add_guardrail(
+            "policy_resource_veto",
+            "treat_as_learning_answer",
+            "Policy gate classified a source figure or evidence image request as resource availability/refusal; keeping it on the learning evidence rail.",
+        )
         mode = "normal_answer"
+        decision.evidence_required = False
     if mode == "needs_platform_evidence" and not deterministic_platform_resource_request:
         context.add_guardrail(
             "policy_resource_veto",
@@ -1188,6 +1217,7 @@ async def _run_openai_chat_completion(context: AgentRunContext, settings: Settin
                     "If rag_figure_evidence is not empty or any rag_evidence item has asset_count > 0, tell the student the source figure is available in the evidence panel and summarize what it shows; do not say the figure is unavailable."
                     "When a source figure helps answer the question, include one provided Markdown image reference exactly as-is from markdown_images or rag_figure_evidence.asset_files[].markdown."
                     "If source_figures_available is true, you must not say the system has no image files or asset_count is zero."
+                    f"{CHEM_MATH_OUTPUT_CONTRACT}"
                     "不要提供危险实验的私下操作步骤，也不要直接给测验答案。"
                     "回答要适合学生阅读，简洁、分点、可复习。"
                 ),
@@ -1276,6 +1306,7 @@ async def _run_openai_chat_completion_stream(context: AgentRunContext, settings:
                     "If rag_figure_evidence is not empty or any rag_evidence item has asset_count > 0, tell the student the source figure is available in the evidence panel and summarize what it shows; do not say the figure is unavailable."
                     "When a source figure helps answer the question, include one provided Markdown image reference exactly as-is from markdown_images or rag_figure_evidence.asset_files[].markdown."
                     "If source_figures_available is true, you must not say the system has no image files or asset_count is zero."
+                    f"{CHEM_MATH_OUTPUT_CONTRACT}"
                     "不要提供危险家庭实验步骤，不要直接泄露测验答案，只给思路和概念提示。"
                 ),
             },
@@ -1361,6 +1392,87 @@ def _run_local_agent(context: AgentRunContext) -> str:
     return answer
 
 
+CHEM_MATH_OUTPUT_CONTRACT = (
+    "\nChemistry/math formatting contract:\n"
+    "- Inline formulas MUST use $...$ and block formulas MUST use $$...$$.\n"
+    "- Every chemical formula, ion, and reaction using mhchem MUST use braces: \\ce{...}. Never write loose forms such as \\ceKMnO4, \\ceCl2, \\ceMn^{2+}, or \\ceMnO2.\n"
+    "- Whole reaction equations MUST be one mhchem expression, for example $\\ce{Cl2 + 2Br- -> 2Cl- + Br2}$. Do not split one reaction into multiple \\ce fragments.\n"
+    "- Use mhchem arrows inside \\ce{...}: ->, <-, <=>. Do not write -->, -- >, \\rightarrow, or plain math arrows for reaction equations.\n"
+    "- Use \\mathrm{...} only inside math delimiters for units or roman text, for example $0.1\\,\\mathrm{mol\\cdot L^{-1}}$.\n"
+    "- Do NOT emit raw LaTeX commands such as \\mathrm, \\ce, \\ch, \\rightarrow, \\cdot, or \\Delta outside math delimiters.\n"
+    "- Do NOT emit HTML line breaks such as <br>; use Markdown lists or tables.\n"
+)
+
+
+_FENCED_BLOCK_RE = re.compile(r"(```[\s\S]*?```)")
+_MATH_SPAN_RE = re.compile(r"(\$\$[\s\S]*?\$\$|\$(?:\\.|[^$])+\$)")
+_BRACED_CHEM_COMMAND_RE = re.compile(r"\\(?:ce|ch|mathrm|text)\s*\{(?:[^{}]|\{[^{}]*\})*\}")
+_UNIT_EXPRESSION_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:\\,)?\s*\\mathrm\s*\{(?:[^{}]|\{[^{}]*\})*\}")
+_LOOSE_CHEM_REACTION_RE = re.compile(
+    r"\\(ce|ch)\s*(?!\{)([-+A-Za-z0-9\s\\_^{}().·]*?(?:-{1,3}\s*>|=>|<=>|→|⇌)[-+A-Za-z0-9\s\\_^{}().·]*)"
+)
+_LOOSE_CHEM_COMMAND_RE = re.compile(
+    r"\\(ce|ch)\s*(?!\{)((?:[A-Z0-9][A-Za-z0-9+\-().=<>·]*|[_^]\{[^{}]*\}|[_^](?:[+\-]?\d+[+\-]?|[+\-]))+)"
+)
+_BARE_MATH_COMMAND_RE = re.compile(
+    r"\\(?:rightarrow|to|leftarrow|rightleftharpoons|Delta|delta|ominus|cdot|times|pm|circ|alpha|beta|gamma)\b"
+)
+_BARE_FORMULA_RE = re.compile(
+    rf"(?:{_UNIT_EXPRESSION_RE.pattern}|{_BRACED_CHEM_COMMAND_RE.pattern}|{_BARE_MATH_COMMAND_RE.pattern})"
+)
+_RAW_LATEX_LEAK_RE = re.compile(r"\\(?:ce|ch|mathrm|text|rightarrow|cdot|Delta|ominus|times)\b")
+
+
+def _normalize_math_delimiters(text: str) -> str:
+    text = re.sub(r"\\\[([\s\S]*?)\\\]", lambda match: f"$${match.group(1)}$$", text)
+    return re.sub(r"\\\(([\s\S]*?)\\\)", lambda match: f"${match.group(1)}$", text)
+
+
+def _normalize_chem_reaction_body(body: str) -> str:
+    body = re.sub(r"\\(?:ce|ch)\s*\{([^{}]*)\}", r"\1", body)
+    body = _LOOSE_CHEM_COMMAND_RE.sub(lambda match: match.group(2), body)
+    body = re.sub(r"-{1,3}\s*>|=>|→", "->", body)
+    return re.sub(r"\s+", " ", body).strip()
+
+
+def _normalize_loose_chem_commands(text: str) -> str:
+    text = _LOOSE_CHEM_REACTION_RE.sub(
+        lambda match: f"\\{match.group(1)}{{{_normalize_chem_reaction_body(match.group(2))}}}",
+        text,
+    )
+    return _LOOSE_CHEM_COMMAND_RE.sub(lambda match: f"\\{match.group(1)}{{{match.group(2)}}}", text)
+
+
+def _wrap_bare_formula_commands(text: str) -> str:
+    parts = _MATH_SPAN_RE.split(text)
+    normalized: list[str] = []
+    for index, part in enumerate(parts):
+        if not part:
+            continue
+        if index % 2 == 1:
+            normalized.append(part)
+            continue
+        segment = _BARE_FORMULA_RE.sub(lambda match: f"${match.group(0)}$", _normalize_loose_chem_commands(part))
+        normalized.append(segment)
+    return "".join(normalized)
+
+
+def _normalize_assistant_formula_output(answer: str) -> str:
+    if not answer:
+        return answer
+    blocks = _FENCED_BLOCK_RE.split(answer)
+    normalized: list[str] = []
+    for index, block in enumerate(blocks):
+        if index % 2 == 1:
+            normalized.append(block)
+            continue
+        text = _normalize_math_delimiters(block)
+        text = _normalize_loose_chem_commands(text)
+        text = _wrap_bare_formula_commands(text)
+        normalized.append(text)
+    return "".join(normalized)
+
+
 def _apply_output_guardrails(context: AgentRunContext, answer: str) -> str:
     evidence_required = bool(context.classification["requires_evidence"])
     if evidence_required and not context.classification["resource_request"] and not context.sources and "没有找到" not in answer:
@@ -1373,6 +1485,11 @@ def _apply_output_guardrails(context: AgentRunContext, answer: str) -> str:
     if max_answer_chars and len(answer) > max_answer_chars:
         context.add_guardrail("mobile_length", "trim", "回答超过小程序端建议长度。")
         answer = answer[:max_answer_chars].rstrip() + "..."
+    normalized_answer = _normalize_assistant_formula_output(answer)
+    if normalized_answer != answer:
+        if _RAW_LATEX_LEAK_RE.search(answer):
+            context.add_guardrail("chem_latex_format", "normalize_formula_output", "normalized chemistry/math LaTeX formatting")
+        answer = normalized_answer
     return answer
 
 
@@ -1835,6 +1952,7 @@ def _agent_instructions(context: AgentRunContext) -> str:
         f"\n学生 AI 安全策略：{context.policy.compact_rail}"
         f"\n本次策略判定：{context.policy_decision.as_dict()}"
         f"\n课程限制提示摘录：{context.policy.source_excerpt}"
+        f"{CHEM_MATH_OUTPUT_CONTRACT}"
     )
 
 

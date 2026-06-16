@@ -829,6 +829,7 @@ export type PointAwareSuggestionRequest = {
   prompt: string;
   question_id?: string | null;
   point_key?: string | null;
+  point_keys?: string[];
   question_types?: Question["question_type"][];
   count?: number;
   difficulty?: string | null;
@@ -892,7 +893,27 @@ export type QuestionWorkbenchSession = {
       summary?: string | null;
     };
     selected_point?: QuestionPoint | null;
+    target_points?: QuestionPoint[];
+    target_point_keys?: string[];
     source_refs?: SourceRef[];
+    rag_gate?: {
+      healthy?: boolean;
+      status?: string;
+      reason_code?: string;
+      message?: string;
+      rag_runtime?: AIConfiguration["rag_runtime"];
+      bge_status?: LearningAssistantRuntime["bge_status"];
+      bge_error?: string | null;
+      bge_metrics?: LearningAssistantRuntime["bge_metrics"];
+      [key: string]: unknown;
+    };
+    evidence_package?: {
+      mode?: string;
+      source_refs?: SourceRef[];
+      source_count?: number;
+      diagnostics?: Record<string, unknown>;
+      [key: string]: unknown;
+    };
     coverage?: {
       question_count?: number;
       selected_point_question_count?: number | null;

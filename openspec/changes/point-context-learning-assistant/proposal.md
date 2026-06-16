@@ -7,7 +7,7 @@ The assistant needs a stable point-context layer: chapter, experiment, video poi
 ## What Changes
 
 - Add structured point context to learning assistant requests, including optional `point_key` and point prompt metadata.
-- Build a fixed point evidence package before optional RAG lookup, using experiment/video-point data and question-bank source-audit metadata where available.
+- Build a fixed point evidence package before optional RAG lookup, using the manual-reviewed video-point evidence bindings as the primary source.
 - Make the policy gate context-aware by giving it recent conversation context or a resolved question, so short follow-ups inherit the prior course/point context.
 - Narrow the platform-resource rail to published resource availability questions only, instead of treating every mention of video/material/resource as a resource request.
 - Update the admin debug console so empty chat starts with centered video-point prompt suggestions and sends structured point context when a suggestion is selected.
@@ -25,7 +25,7 @@ The assistant needs a stable point-context layer: chapter, experiment, video poi
 ## Impact
 
 - Backend schemas: learning assistant and agent request models add optional `point_key` and resolved-context diagnostics.
-- Backend agent: point evidence package assembly, policy-gate payload, local classifier, tool routing, and response diagnostics change.
+- Backend agent: manual-reviewed point evidence loading, point evidence package assembly, policy-gate payload, local classifier, tool routing, and response diagnostics change.
 - Admin API: `/api/admin/learning-assistant/ask` and `/ask/stream` pass point context through to the agent.
 - Admin web: point prompt cards send structured point metadata and show clearer diagnostics for point context versus supplemental RAG.
 - Tests: guardrail classification, RAG-disabled point explanation, resource availability query, and multi-turn follow-up coverage need targeted tests.

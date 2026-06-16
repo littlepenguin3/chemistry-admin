@@ -1,9 +1,17 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { isValidElement } from "react";
 import type { ReactNode } from "react";
+import ReactMarkdown from "react-markdown";
+import type { Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import katex from "katex";
+import "katex/contrib/mhchem";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense } from "react";
 import { motion, useReducedMotion } from "motion/react";
+import { AIGlowButton } from "./components/AIGlowButton";
 import {
   Alert,
   App as AntApp,
@@ -4474,6 +4482,106 @@ function questionBankStatusText(status?: string) {
   return status || "-";
 }
 
+type QuestionWorkbenchGateState = {
+  healthy: boolean;
+  label: string;
+  message: string;
+  tagColor: string;
+  alertType: "success" | "info" | "warning" | "error";
+  bgeStatus: string;
+  route: string;
+  tone: "ready" | "checking" | "blocked";
+};
+
+function questionWorkbenchGateFromRuntime(runtime?: LearningAssistantRuntime): QuestionWorkbenchGateState {
+  const ragRuntime = runtime?.rag_runtime;
+  const bgeStatus = runtime?.bge_metrics?.ok
+    ? "healthy"
+    : runtime?.bge_status || (runtime?.bge_error ? "unreachable" : ragRuntime?.bge_service_required ? "checking" : "not_required");
+  const route = ragRuntime?.hybrid_bge_enabled
+    ? "来源检索正常"
+    : ragRuntime?.rag_enabled
+      ? "基础来源检索"
+      : "来源检索关闭";
+
+  if (!runtime || !ragRuntime) {
+    return {
+      healthy: false,
+      label: "正在检查",
+      message: "正在确认来源检索状态，稍等一下再使用 AI 建议。",
+      tagColor: "#356f9c",
+      alertType: "info",
+      bgeStatus: "checking",
+      route,
+      tone: "checking",
+    };
+  }
+  if (!ragRuntime.rag_enabled) {
+    return {
+      healthy: false,
+      label: "AI 暂不可用",
+      message: "来源检索还没开启，暂时不能让 AI 出题或修题。",
+      tagColor: "#b42318",
+      alertType: "error",
+      bgeStatus,
+      route,
+      tone: "blocked",
+    };
+  }
+  if (!ragRuntime.hybrid_bge_enabled) {
+    return {
+      healthy: false,
+      label: "AI 暂不可用",
+      message: "来源检索还没准备好，暂时不能使用 AI 建议。",
+      tagColor: "#b42318",
+      alertType: "error",
+      bgeStatus,
+      route,
+      tone: "blocked",
+    };
+  }
+  if (!ragRuntime.query_generation_enabled) {
+    return {
+      healthy: false,
+      label: "AI 暂不可用",
+      message: "来源检索的扩展查询未开启，暂时不能使用 AI 建议。",
+      tagColor: "#b42318",
+      alertType: "error",
+      bgeStatus,
+      route,
+      tone: "blocked",
+    };
+  }
+  if (bgeStatus !== "healthy") {
+    const statusText: Record<string, string> = {
+      checking: "正在检查来源检索服务",
+      degraded: "来源检索服务异常",
+      unreachable: "来源检索服务连接不上",
+      not_configured: "来源检索服务未配置",
+    };
+    return {
+      healthy: false,
+      label: bgeStatus === "checking" ? "正在检查" : "AI 暂不可用",
+      message: `${statusText[bgeStatus] || "来源检索还没准备好"}，稍后再使用 AI 建议。`,
+      tagColor: bgeStatus === "checking" ? "#356f9c" : "#b42318",
+      alertType: bgeStatus === "checking" ? "info" : "error",
+      bgeStatus,
+      route,
+      tone: bgeStatus === "checking" ? "checking" : "blocked",
+    };
+  }
+  return {
+    healthy: true,
+    label: "AI 建议可用",
+    message: "会先读取当前实验和点位的来源片段，再生成出题/修题建议。",
+    tagColor: "#005826",
+    alertType: "success",
+    bgeStatus,
+    route,
+    tone: "ready",
+  };
+}
+
 function QuestionBanksPage() {
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
@@ -4487,6 +4595,7 @@ function QuestionBanksPage() {
   const [assistantIntent, setAssistantIntent] = useState<"add_questions" | "repair_question">("add_questions");
   const [assistantQuestion, setAssistantQuestion] = useState<Question | null>(null);
   const [assistantPointKey, setAssistantPointKey] = useState<string>();
+  const [assistantPointKeys, setAssistantPointKeys] = useState<string[]>([]);
   const [aiWorkbenchOpen, setAiWorkbenchOpen] = useState(false);
   const [aiWorkbenchSessionId, setAiWorkbenchSessionId] = useState<string>();
   const [workbenchPrompt, setWorkbenchPrompt] = useState("");
@@ -4541,6 +4650,12 @@ function QuestionBanksPage() {
     enabled: Boolean(aiWorkbenchOpen && aiWorkbenchSessionId),
   });
 
+  const assistantRuntime = useQuery({
+    queryKey: ["learning-assistant-runtime", "question-bank-workbench"],
+    queryFn: () => api<LearningAssistantRuntime>("/api/admin/learning-assistant/runtime"),
+    refetchInterval: 10000,
+  });
+
   const selectedExperiment = useMemo(
     () => bankExperiments.find((item) => item.id === experimentId),
     [bankExperiments, experimentId],
@@ -4588,6 +4703,33 @@ function QuestionBanksPage() {
   const workbenchTurns = aiWorkbench.data?.turns || [];
   const workbenchContext = aiWorkbench.data?.context_snapshot || {};
   const workbenchOriginalQuestion = aiWorkbench.data?.original_question_snapshot || assistantQuestion || null;
+  const questionWorkbenchGate = questionWorkbenchGateFromRuntime(assistantRuntime.data);
+  const workbenchRagGate = workbenchContext.rag_gate;
+  const workbenchGateLabel = workbenchRagGate?.healthy === false
+    ? String(workbenchRagGate.message || questionWorkbenchGate.message)
+    : questionWorkbenchGate.message;
+  const workbenchTargetPoints = (workbenchContext.target_points?.length
+    ? workbenchContext.target_points
+    : workbenchContext.selected_point
+      ? [workbenchContext.selected_point]
+      : assistantPointKeys.map((key) => ({ point_key: key, point_title: pointOptions.find((option) => option.value === key)?.label || key }))) || [];
+  const workbenchEvidencePackage = workbenchContext.evidence_package;
+  const workbenchStatusTone = workbenchRagGate?.healthy === false ? "blocked" : questionWorkbenchGate.tone;
+  const workbenchEvidenceSourceCount = workbenchEvidencePackage?.source_count ?? (workbenchContext.source_refs || []).length;
+  const workbenchEvidenceTitle = workbenchRagGate?.healthy === false
+    ? "本轮没有生成"
+    : questionWorkbenchGate.healthy
+      ? "证据已就绪"
+      : questionWorkbenchGate.label;
+  const workbenchEvidenceMessage = workbenchRagGate?.healthy === false
+    ? workbenchGateLabel
+    : questionWorkbenchGate.healthy
+      ? "已读取当前实验和点位的来源片段，可以继续用提示细化 AI 建议。"
+      : workbenchGateLabel;
+  const createTargetPointKeys = pointKeys.filter(Boolean);
+  const createTargetPointLabel = createTargetPointKeys.length
+    ? `围绕 ${createTargetPointKeys.length} 个点位出题`
+    : "未选点位时，将从本实验默认点位开始";
 
   const openQuestionWorkbench = (question: Question) => {
     setSelectedQuestion(question);
@@ -4600,23 +4742,40 @@ function QuestionBanksPage() {
   };
 
   const openAddSuggestion = () => {
+    if (!questionWorkbenchGate.healthy) {
+      message.warning(questionWorkbenchGate.message);
+      return;
+    }
     const primaryPointKey = pointKeys[0];
+    const targetPointKeys = pointKeys.filter(Boolean);
     setAssistantIntent("add_questions");
     setAssistantQuestion(null);
     setAssistantPointKey(primaryPointKey);
+    setAssistantPointKeys(targetPointKeys);
     setWorkbenchPrompt(selectedExperiment ? `为《${selectedExperiment.code} ${selectedExperiment.title}》补充点位诊断题。` : "补充点位诊断题。");
     setWorkbenchQuestionTypes(["single_choice", "true_false"]);
     setWorkbenchCount(3);
     if (experimentId) {
-      startWorkbench.mutate({ mode: "create", experiment_id: experimentId, point_key: primaryPointKey || null });
+      startWorkbench.mutate({
+        mode: "create",
+        experiment_id: experimentId,
+        point_key: primaryPointKey || null,
+        point_keys: targetPointKeys,
+      });
     }
   };
 
   const openRepairSuggestion = (question: Question) => {
+    if (!questionWorkbenchGate.healthy) {
+      message.warning(questionWorkbenchGate.message);
+      return;
+    }
+    const questionPointKeys = questionPoints(question).map((point) => point.point_key).filter(Boolean) as string[];
     setAssistantIntent("repair_question");
     setAssistantQuestion(question);
     setWorkbenchOpen(false);
     setAssistantPointKey(questionPoints(question)[0]?.point_key);
+    setAssistantPointKeys(questionPointKeys);
     setWorkbenchPrompt("请基于当前实验点位、来源证据和选项诊断链接，给出一版更清晰、更可诊断的修正题。");
     setWorkbenchQuestionTypes([question.question_type]);
     setWorkbenchCount(1);
@@ -4625,6 +4784,7 @@ function QuestionBanksPage() {
       experiment_id: question.experiment_id,
       question_id: question.id,
       point_key: questionPoints(question)[0]?.point_key || null,
+      point_keys: questionPointKeys,
     });
   };
 
@@ -4640,6 +4800,7 @@ function QuestionBanksPage() {
       experiment_id: string;
       question_id?: string | null;
       point_key?: string | null;
+      point_keys?: string[];
     }) => postJson<QuestionWorkbenchSession>("/api/admin/question-banks/workbench-sessions", payload),
     onSuccess: (result) => {
       setAiWorkbenchSessionId(result.id);
@@ -4651,6 +4812,10 @@ function QuestionBanksPage() {
 
   const sendWorkbenchMessage = async () => {
     if (!aiWorkbenchSessionId || !workbenchPrompt.trim() || workbenchStreaming) return;
+    if (!questionWorkbenchGate.healthy) {
+      message.warning(questionWorkbenchGate.message);
+      return;
+    }
     const prompt = workbenchPrompt.trim();
     setWorkbenchStreaming(true);
     setWorkbenchStreamStatus("已发送提示，等待 AI 开始生成");
@@ -4790,11 +4955,40 @@ function QuestionBanksPage() {
               </Text>
             </div>
             <Space wrap className="question-list-heading-actions">
-              <Button type="primary" icon={<MessageOutlined />} onClick={openAddSuggestion} disabled={!experimentId}>
-                AI 新增建议
-              </Button>
+              <Tooltip title={questionWorkbenchGate.healthy ? createTargetPointLabel : questionWorkbenchGate.message}>
+                <Button
+                  type="primary"
+                  icon={<MessageOutlined />}
+                  onClick={openAddSuggestion}
+                  disabled={!experimentId || !questionWorkbenchGate.healthy}
+                >
+                  AI 新增建议
+                </Button>
+              </Tooltip>
             </Space>
           </Flex>
+
+          <div className={`question-workbench-status question-workbench-status-${questionWorkbenchGate.tone}`} role="status">
+            <div className="question-workbench-status-main">
+              <span className="question-workbench-status-icon">
+                {questionWorkbenchGate.tone === "ready" ? (
+                  <CheckCircleOutlined />
+                ) : questionWorkbenchGate.tone === "checking" ? (
+                  <ReloadOutlined />
+                ) : (
+                  <CloseCircleOutlined />
+                )}
+              </span>
+              <div className="question-workbench-status-copy">
+                <Text strong>{questionWorkbenchGate.label}</Text>
+                <Text type="secondary">{questionWorkbenchGate.message}</Text>
+              </div>
+            </div>
+            <div className="question-workbench-status-meta">
+              <span>{questionWorkbenchGate.route}</span>
+              <span>{createTargetPointLabel}</span>
+            </div>
+          </div>
 
           <div className="question-bank-actions">
             <Select
@@ -4918,7 +5112,14 @@ function QuestionBanksPage() {
         footer={
           selectedQuestion
             ? [
-                <Button key="repair" type="primary" icon={<MessageOutlined />} onClick={() => openRepairSuggestion(selectedQuestion)}>
+                <Button
+                  key="repair"
+                  type="primary"
+                  icon={<MessageOutlined />}
+                  disabled={!questionWorkbenchGate.healthy}
+                  title={questionWorkbenchGate.healthy ? "" : questionWorkbenchGate.message}
+                  onClick={() => openRepairSuggestion(selectedQuestion)}
+                >
                   AI 修正建议
                 </Button>,
                 <Button key="close" onClick={closeWorkbench}>
@@ -5102,7 +5303,7 @@ function QuestionBanksPage() {
             type="primary"
             icon={<MessageOutlined />}
             loading={workbenchStreaming}
-            disabled={!aiWorkbenchSessionId || !workbenchPrompt.trim() || workbenchStreaming}
+            disabled={!aiWorkbenchSessionId || !workbenchPrompt.trim() || workbenchStreaming || !questionWorkbenchGate.healthy}
             onClick={sendWorkbenchMessage}
           >
             发送提示
@@ -5123,6 +5324,27 @@ function QuestionBanksPage() {
                   {assistantIntent === "repair_question" ? "修题会话" : "新增会话"}
                 </Tag>
               </Flex>
+              <div className={`question-workbench-status question-workbench-status-${workbenchStatusTone}`}>
+                <div className="question-workbench-status-main">
+                  <span className="question-workbench-status-icon">
+                    {workbenchStatusTone === "ready" ? (
+                      <CheckCircleOutlined />
+                    ) : workbenchStatusTone === "checking" ? (
+                      <ReloadOutlined />
+                    ) : (
+                      <CloseCircleOutlined />
+                    )}
+                  </span>
+                  <div className="question-workbench-status-copy">
+                    <Text strong>{workbenchEvidenceTitle}</Text>
+                    <Text type="secondary">{workbenchEvidenceMessage}</Text>
+                  </div>
+                </div>
+                <div className="question-workbench-status-meta">
+                  <span>来源 {workbenchEvidenceSourceCount} 条</span>
+                  {workbenchTargetPoints.length ? <span>{workbenchTargetPoints.length} 个目标点位</span> : null}
+                </div>
+              </div>
 
               {assistantIntent === "repair_question" && workbenchOriginalQuestion ? (
                 <Space direction="vertical" size={12} className="full">
@@ -5157,7 +5379,9 @@ function QuestionBanksPage() {
                   <Text strong>当前实验与点位</Text>
                   <Descriptions size="small" column={1} className="question-workbench-descriptions">
                     <Descriptions.Item label="目标点位">
-                      {workbenchContext.selected_point?.point_title || workbenchContext.selected_point?.point_key || assistantPointKey || "全部点位"}
+                      {workbenchTargetPoints.length
+                        ? workbenchTargetPoints.map((point) => point.point_title || point.point_key).join("、")
+                        : assistantPointKey || "全部点位"}
                     </Descriptions.Item>
                     <Descriptions.Item label="已有题量">{workbenchContext.coverage?.question_count ?? "-"}</Descriptions.Item>
                     <Descriptions.Item label="该点位题量">{workbenchContext.coverage?.selected_point_question_count ?? "-"}</Descriptions.Item>
@@ -5168,10 +5392,12 @@ function QuestionBanksPage() {
               <div className="question-point-section">
                 <Text strong>点位与证据</Text>
                 <Space wrap className="question-point-list">
-                  {workbenchContext.selected_point ? (
-                    <Tag color="cyan">{workbenchContext.selected_point.point_title || workbenchContext.selected_point.point_key}</Tag>
-                  ) : null}
-                  {workbenchOriginalQuestion?.metadata
+                  {workbenchTargetPoints.map((point) => (
+                    <Tag key={point.point_key || point.point_title} color="cyan">
+                      {point.point_title || point.point_key}
+                    </Tag>
+                  ))}
+                  {!workbenchTargetPoints.length && workbenchOriginalQuestion?.metadata
                     ? questionPoints(workbenchOriginalQuestion as Question).map((point) => (
                         <Tag key={point.point_key || point.point_title} color="cyan">
                           {point.point_title || point.point_key}
@@ -5250,7 +5476,7 @@ function QuestionBanksPage() {
                         { value: "true_false", label: "判断" },
                         { value: "fill_blank", label: "填空" },
                       ]}
-                      disabled={assistantIntent === "repair_question" || workbenchStreaming}
+                      disabled={assistantIntent === "repair_question" || workbenchStreaming || !questionWorkbenchGate.healthy}
                       className="ai-workbench-type-select"
                     />
                     <InputNumber
@@ -5259,13 +5485,13 @@ function QuestionBanksPage() {
                       value={workbenchCount}
                       onChange={(value) => setWorkbenchCount(Number(value || 1))}
                       addonBefore="数量"
-                      disabled={assistantIntent === "repair_question" || workbenchStreaming}
+                      disabled={assistantIntent === "repair_question" || workbenchStreaming || !questionWorkbenchGate.healthy}
                     />
                   </Space>
                   <Input.TextArea
                     rows={4}
                     value={workbenchPrompt}
-                    disabled={workbenchStreaming}
+                    disabled={workbenchStreaming || !questionWorkbenchGate.healthy}
                     onChange={(event) => setWorkbenchPrompt(event.target.value)}
                     placeholder="可以连续追问，例如：保留原实验点位，把选项 B 改成更有诊断价值的误区。"
                   />
@@ -5935,12 +6161,35 @@ type LearningAssistantTurn = {
   createdAt: string;
 };
 
+type LearningAssistantPointContext = {
+  chapterId?: string | null;
+  experimentId?: string | null;
+  experimentCode?: string | null;
+  experimentTitle?: string | null;
+  pointKey?: string | null;
+  pointTitle?: string | null;
+  pointIndex?: number | null;
+};
+
+type LearningAssistantPointOption = {
+  pointKey: string;
+  pointTitle: string;
+  pointIndex: number;
+};
+
+type LearningAssistantPointIntent = {
+  id: string;
+  label: string;
+  description: string;
+  buildQuestion?: (context: LearningAssistantPointContext) => string;
+};
+
 const learningAssistantPolicyLabels: Record<string, string> = {
   normal_answer: "普通回答",
   refuse_out_of_scope: "课程外拒答",
   safe_experiment_guidance: "实验安全引导",
   assessment_hint: "测验提示",
-  needs_platform_evidence: "平台证据",
+  needs_platform_evidence: "资源可用性",
 };
 
 const learningAssistantModeLabels: Record<string, string> = {
@@ -5960,7 +6209,10 @@ const learningAssistantGuardrailLabels: Record<string, string> = {
   course_scope: "课程范围",
   experiment_safety: "实验安全",
   missing_evidence: "缺少证据",
-  no_fabricated_resource: "资源防编造",
+  no_fabricated_resource: "资源未发布",
+  point_context_empty: "点位证据为空",
+  point_context_fixed: "固定点位证据",
+  point_context_missing_reviewed_evidence: "点位证据缺失",
   policy_decision_invalid: "策略兜底",
   policy_gate_fallback: "策略兜底",
   rag_no_match: "RAG 未命中",
@@ -5978,13 +6230,14 @@ const learningAssistantActionLabels: Record<string, string> = {
   answer_from_model_knowledge: "用模型常识",
   no_evidence_fallback: "说明无证据",
   override_no_evidence: "覆盖无来源回答",
-  override_unavailable_resource: "覆盖无资源回答",
+  override_unavailable_resource: "资源未发布",
   provide_hint: "只给提示",
   refuse: "拒答",
   refuse_unsafe_detail: "拒绝危险步骤",
   skip_rag_lookup: "跳过 RAG",
-  state_unavailable: "说明暂无资源",
+  state_unavailable: "资源未发布",
   trim: "截断",
+  use_fixed_evidence: "使用固定证据",
 };
 
 function createStreamingAssistantResponse(answer = ""): LearningAssistantResponse {
@@ -6000,134 +6253,266 @@ function createStreamingAssistantResponse(answer = ""): LearningAssistantRespons
   };
 }
 
-function normalizeAssistantLatex(latex: string) {
-  return latex
-    .replace(/\\left/g, "")
-    .replace(/\\right/g, "")
-    .replace(/\\rig(?:h|ht)?/g, "")
-    .replace(/\\mathrm\s*\{([^{}]*)\}/g, "$1")
-    .replace(/\\text\s*\{([^{}]*)\}/g, "$1")
-    .replace(/\\ce\s*\{([^{}]*)\}/g, "$1")
-    .replace(/\\ch\s*\{([^{}]*)\}/g, "$1")
+const assistantFencedBlockPattern = /(```[\s\S]*?```)/;
+const assistantMathSpanPattern = /(\$\$[\s\S]*?\$\$|\$(?:\\.|[^$])+\$)/;
+const assistantLooseChemReactionPattern =
+  /\\(ce|ch)\s*(?!\{)([-+A-Za-z0-9\s\\_^{}().·]*?(?:-{1,3}\s*>|=>|<=>|→|⇌)[-+A-Za-z0-9\s\\_^{}().·]*)/g;
+const assistantLooseChemCommandPattern =
+  /\\(ce|ch)\s*(?!\{)((?:[A-Z0-9][A-Za-z0-9+\-().=<>·]*|[_^]\{[^{}]*\}|[_^](?:[+\-]?\d+[+\-]?|[+\-]))+)/g;
+const assistantBrokenUnitDollarPattern =
+  /\b(mol|mmol)\s*\\cdot\s*\$+\s*L\s*\^\s*\{?\s*(-?\d+)\s*\}?/gi;
+const assistantUnitExpressionPattern =
+  /((?:\d+(?:\.\d+)?\s*)?)(\b(?:mol|mmol))\s*\\cdot\s*L\s*\^\s*\{?\s*(-?\d+)\s*\}?/gi;
+const assistantBareFormulaPattern =
+  /(?:\d+(?:\.\d+)?\s*(?:\\,)?\s*\\mathrm\s*\{(?:[^{}]|\{[^{}]*\})*\}|\\(?:ce|ch|mathrm|text)\s*\{(?:[^{}]|\{[^{}]*\})*\}|\\(?:rightarrow|to|leftarrow|rightleftharpoons|Delta|delta|ominus|cdot|times|pm|circ|alpha|beta|gamma)\b)/g;
+
+function normalizeAssistantMathDelimiters(text: string) {
+  return text
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_, content: string) => `$$${content}$$`)
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_, content: string) => `$${content}$`);
+}
+
+function normalizeAssistantBrokenUnitText(text: string) {
+  return text.replace(
+    assistantBrokenUnitDollarPattern,
+    (_match: string, unit: string, power: string) => `${unit}\\cdot L^{${power.replace(/\s+/g, "")}}`,
+  );
+}
+
+function normalizeAssistantChemCommandAliases(text: string) {
+  return text.replace(/\\ch\b/g, "\\ce");
+}
+
+function wrapBareAssistantFormulaCommands(text: string) {
+  return text
+    .split(assistantMathSpanPattern)
+    .map((part, index) => {
+      if (!part || index % 2 === 1) return part;
+      const withUnits = part.includes("\\mathrm")
+        ? part
+        : part.replace(assistantUnitExpressionPattern, (_match: string, amount: string, unit: string, power: string) => {
+            const prefix = amount.trim() ? `${amount.trim()}\\,` : "";
+            return `$${prefix}\\mathrm{${unit}\\cdot L^{${power.replace(/\s+/g, "")}}}$`;
+          });
+      return withUnits
+        .split(assistantMathSpanPattern)
+        .map((nestedPart, nestedIndex) => {
+          if (!nestedPart || nestedIndex % 2 === 1) return nestedPart;
+          return nestedPart.replace(assistantBareFormulaPattern, (match) => `$${match}$`);
+        })
+        .join("");
+    })
+    .join("");
+}
+
+function normalizeAssistantChemReactionBody(body: string) {
+  return body
+    .replace(/\\(?:ce|ch)\s*\{([^{}]*)\}/g, "$1")
+    .replace(assistantLooseChemCommandPattern, (_, _command: string, formula: string) => formula)
+    .replace(/-{1,3}\s*>|=>|→/g, "->")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeLooseAssistantChemCommands(text: string) {
+  const normalizedReactions = text.replace(
+    assistantLooseChemReactionPattern,
+    (_, command: string, formula: string) => `\\${command}{${normalizeAssistantChemReactionBody(formula)}}`,
+  );
+  return normalizedReactions.replace(
+    assistantLooseChemCommandPattern,
+    (_, command: string, formula: string) => `\\${command}{${formula}}`,
+  );
+}
+
+function sanitizeLatexCommandsForText(value: string) {
+  return value
+    .replace(/\\(?:ce|ch|mathrm|text)\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g, "$1")
+    .replace(/\\left|\\right/g, "")
     .replace(/\\Delta/g, "Δ")
+    .replace(/\\delta/g, "δ")
     .replace(/\\ominus/g, "⊖")
-    .replace(/\\rightarrow/g, "→")
-    .replace(/\\to/g, "→")
+    .replace(/\\rightleftharpoons/g, "⇌")
+    .replace(/\\rightarrow|\\to/g, "→")
+    .replace(/\\leftarrow/g, "←")
     .replace(/\\cdot/g, "·")
     .replace(/\\times/g, "×")
-    .replace(/\\/g, "");
+    .replace(/\\pm/g, "±")
+    .replace(/\\circ/g, "°")
+    .replace(/\\,/g, " ")
+    .replace(/\\[a-zA-Z]+/g, "")
+    .replace(/[{}]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function readMathScript(value: string, start: number) {
-  if (value[start] === "{") {
-    let depth = 1;
-    for (let index = start + 1; index < value.length; index += 1) {
-      if (value[index] === "{") depth += 1;
-      if (value[index] === "}") depth -= 1;
-      if (depth === 0) {
-        return { content: value.slice(start + 1, index), next: index + 1 };
-      }
-    }
-    return { content: value.slice(start + 1), next: value.length };
+function mathSegmentIsRenderable(latex: string, displayMode: boolean) {
+  try {
+    katex.renderToString(latex, {
+      displayMode,
+      strict: "ignore",
+      throwOnError: true,
+      trust: false,
+    });
+    return true;
+  } catch {
+    return false;
   }
-  return { content: value[start] || "", next: Math.min(start + 1, value.length) };
 }
 
-function renderAssistantMath(latex: string, keyPrefix: string): ReactNode {
-  const value = normalizeAssistantLatex(latex);
-  const nodes: ReactNode[] = [];
-  for (let index = 0; index < value.length; index += 1) {
-    const char = value[index];
-    if ((char === "_" || char === "^") && index + 1 < value.length) {
-      const script = readMathScript(value, index + 1);
-      const TagName = char === "_" ? "sub" : "sup";
-      nodes.push(
-        <TagName key={`${keyPrefix}-script-${index}`}>
-          {renderAssistantMath(script.content, `${keyPrefix}-script-${index}`)}
-        </TagName>,
-      );
-      index = script.next - 1;
-      continue;
-    }
-    if (char === "{" || char === "}") continue;
-    nodes.push(<span key={`${keyPrefix}-char-${index}`}>{char}</span>);
-  }
-  return <span className="assistant-math">{nodes}</span>;
-}
-
-function renderAssistantPlainText(text: string, keyPrefix: string) {
-  return text.split("\n").flatMap((part, index) => {
-    const key = `${keyPrefix}-plain-${index}`;
-    return index === 0 ? [part] : [<br key={`${key}-br`} />, part];
+function renderAssistantKatexHtml(latex: string, displayMode: boolean) {
+  return katex.renderToString(latex, {
+    displayMode,
+    strict: "ignore",
+    throwOnError: true,
+    trust: false,
   });
 }
 
-function renderAssistantRichText(text: string | null | undefined): ReactNode {
-  const value = String(text || "");
-  const nodes: ReactNode[] = [];
-  let cursor = 0;
-  let segmentIndex = 0;
-
-  while (cursor < value.length) {
-    const start = value.indexOf("$", cursor);
-    if (start === -1) {
-      nodes.push(...renderAssistantPlainText(value.slice(cursor), `tail-${segmentIndex}`));
-      break;
+function AssistantKatex({
+  latex,
+  displayMode,
+}: {
+  latex: string;
+  displayMode: boolean;
+}) {
+  const html = useMemo(() => {
+    try {
+      return renderAssistantKatexHtml(latex, displayMode);
+    } catch {
+      return "";
     }
-    nodes.push(...renderAssistantPlainText(value.slice(cursor, start), `text-${segmentIndex}`));
+  }, [displayMode, latex]);
 
-    const end = value.indexOf("$", start + 1);
-    const latex = value.slice(start + 1, end === -1 ? value.length : end);
-    if (latex.trim()) {
-      nodes.push(renderAssistantMath(latex, `math-${segmentIndex}`));
-    } else {
-      nodes.push("$");
-    }
-    if (end === -1) break;
-    cursor = end + 1;
-    segmentIndex += 1;
+  if (!html) {
+    const fallback = sanitizeLatexCommandsForText(latex);
+    return <span className="assistant-math-fallback">{fallback || latex}</span>;
   }
 
-  return <>{nodes}</>;
+  const className = displayMode ? "assistant-katex assistant-katex-display" : "assistant-katex";
+  return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+function sanitizeInvalidAssistantMathSegments(text: string) {
+  return text
+    .split(assistantMathSpanPattern)
+    .map((part, index) => {
+      if (!part || index % 2 === 0) return part;
+      const displayMode = part.startsWith("$$");
+      const body = displayMode ? part.slice(2, -2) : part.slice(1, -1);
+      if (mathSegmentIsRenderable(body, displayMode)) return part;
+      return sanitizeLatexCommandsForText(body);
+    })
+    .join("");
+}
+
+function normalizeAssistantMarkdownMath(text: string | null | undefined) {
+  const value = String(text || "");
+  if (!value) return "";
+  return value
+    .split(assistantFencedBlockPattern)
+    .map((block, index) => {
+      if (!block || index % 2 === 1) return block;
+      const normalized = wrapBareAssistantFormulaCommands(
+        normalizeLooseAssistantChemCommands(
+          normalizeAssistantChemCommandAliases(normalizeAssistantMathDelimiters(normalizeAssistantBrokenUnitText(block))),
+        ),
+      );
+      return sanitizeInvalidAssistantMathSegments(normalized);
+    })
+    .join("");
+}
+
+function createAssistantMarkdownComponents(inline: boolean): Components {
+  return {
+    p({ children }) {
+      if (inline) return <>{children}</>;
+      return <Typography.Paragraph className="assistant-md-paragraph">{children}</Typography.Paragraph>;
+    },
+    h1({ children }) {
+      return <div className="assistant-md-heading level-1">{children}</div>;
+    },
+    h2({ children }) {
+      return <div className="assistant-md-heading level-2">{children}</div>;
+    },
+    h3({ children }) {
+      return <div className="assistant-md-heading level-3">{children}</div>;
+    },
+    h4({ children }) {
+      return <div className="assistant-md-heading level-4">{children}</div>;
+    },
+    ul({ children }) {
+      if (inline) return <>{children}</>;
+      return <ul className="assistant-md-list">{children}</ul>;
+    },
+    ol({ children }) {
+      if (inline) return <>{children}</>;
+      return <ol className="assistant-md-list assistant-md-ordered-list">{children}</ol>;
+    },
+    li({ children }) {
+      if (inline) return <span>{children}</span>;
+      return <li className="assistant-md-list-item">{children}</li>;
+    },
+    code({ className, children }) {
+      const value = String(children).replace(/\n$/, "");
+      const classValue = String(className || "");
+      const isMath = classValue.includes("language-math") || classValue.includes("math-inline") || classValue.includes("math-display");
+      if (isMath) {
+        const displayMode = classValue.includes("math-display") || value.includes("\n");
+        return <AssistantKatex latex={value} displayMode={displayMode} />;
+      }
+      if (classValue || value.includes("\n")) {
+        return <code className={className}>{value}</code>;
+      }
+      return <code className="assistant-md-inline-code">{value}</code>;
+    },
+    pre({ children }) {
+      const child = Array.isArray(children) ? children[0] : children;
+      if (isValidElement<{ className?: string }>(child)) {
+        const classValue = String(child.props.className || "");
+        if (classValue.includes("language-math") || classValue.includes("math-display")) {
+          return <div className="assistant-md-math-block">{children}</div>;
+        }
+      }
+      return <pre className="assistant-md-code">{children}</pre>;
+    },
+    img({ alt, src }) {
+      return <AssistantMarkdownImage alt={String(alt || "")} src={String(src || "")} />;
+    },
+    a({ children, href }) {
+      return (
+        <a href={href} target="_blank" rel="noreferrer">
+          {children}
+        </a>
+      );
+    },
+  };
+}
+
+export function AssistantMarkdownContent({
+  text,
+  inline = false,
+}: {
+  text: string | null | undefined;
+  inline?: boolean;
+}) {
+  const value = normalizeAssistantMarkdownMath(text);
+  if (!value.trim()) return null;
+  const Wrapper = inline ? "span" : "div";
+  return (
+    <Wrapper className={inline ? "assistant-markdown assistant-markdown-inline" : "assistant-markdown"}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        components={createAssistantMarkdownComponents(inline)}
+      >
+        {value}
+      </ReactMarkdown>
+    </Wrapper>
+  );
 }
 
 function renderAssistantInlineMarkdown(text: string | null | undefined): ReactNode {
-  const value = String(text || "");
-  if (!value) return null;
-  const nodes: ReactNode[] = [];
-  let cursor = 0;
-  let segmentIndex = 0;
-
-  while (cursor < value.length) {
-    const boldStart = value.indexOf("**", cursor);
-    if (boldStart === -1) {
-      nodes.push(
-        <span key={`inline-${segmentIndex}`}>{renderAssistantRichText(value.slice(cursor))}</span>,
-      );
-      break;
-    }
-    if (boldStart > cursor) {
-      nodes.push(
-        <span key={`inline-${segmentIndex}`}>{renderAssistantRichText(value.slice(cursor, boldStart))}</span>,
-      );
-      segmentIndex += 1;
-    }
-    const boldEnd = value.indexOf("**", boldStart + 2);
-    if (boldEnd === -1) {
-      nodes.push(
-        <span key={`inline-open-${segmentIndex}`}>{renderAssistantRichText(value.slice(boldStart))}</span>,
-      );
-      break;
-    }
-    const boldText = value.slice(boldStart + 2, boldEnd);
-    nodes.push(
-      <strong key={`inline-bold-${segmentIndex}`}>{renderAssistantRichText(boldText)}</strong>,
-    );
-    cursor = boldEnd + 2;
-    segmentIndex += 1;
-  }
-
-  return <>{nodes}</>;
+  return <AssistantMarkdownContent text={text} inline />;
 }
 
 function resolveMarkdownImageUrl(src: string) {
@@ -6222,85 +6607,7 @@ function AssistantMarkdownImage({ alt, src }: { alt: string; src: string }) {
 }
 
 function renderAssistantMarkdown(text: string | null | undefined): ReactNode {
-  const value = String(text || "");
-  if (!value.trim()) return null;
-  const lines = value.split(/\r?\n/);
-  const blocks: ReactNode[] = [];
-  let codeLines: string[] = [];
-  let inCode = false;
-
-  const flushCode = (key: string) => {
-    if (!codeLines.length) return;
-    blocks.push(
-      <pre className="assistant-md-code" key={key}>
-        <code>{codeLines.join("\n")}</code>
-      </pre>,
-    );
-    codeLines = [];
-  };
-
-  lines.forEach((line, index) => {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("```")) {
-      if (inCode) {
-        flushCode(`code-${index}`);
-      }
-      inCode = !inCode;
-      return;
-    }
-    if (inCode) {
-      codeLines.push(line);
-      return;
-    }
-    if (!trimmed) {
-      blocks.push(<div className="assistant-md-space" key={`space-${index}`} />);
-      return;
-    }
-    const image = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-    if (image) {
-      blocks.push(
-        <AssistantMarkdownImage alt={image[1]} src={image[2]} key={`image-${index}`} />,
-      );
-      return;
-    }
-    const heading = trimmed.match(/^(#{1,4})\s+(.+)$/);
-    if (heading) {
-      const level = Math.min(heading[1].length, 4);
-      blocks.push(
-        <div className={`assistant-md-heading level-${level}`} key={`heading-${index}`}>
-          {renderAssistantInlineMarkdown(heading[2])}
-        </div>,
-      );
-      return;
-    }
-    const unordered = trimmed.match(/^[-*]\s+(.+)$/);
-    if (unordered) {
-      blocks.push(
-        <div className="assistant-md-list-item" key={`ul-${index}`}>
-          <span className="assistant-md-bullet" />
-          <span>{renderAssistantInlineMarkdown(unordered[1])}</span>
-        </div>,
-      );
-      return;
-    }
-    const ordered = trimmed.match(/^(\d+)[.、]\s+(.+)$/);
-    if (ordered) {
-      blocks.push(
-        <div className="assistant-md-list-item" key={`ol-${index}`}>
-          <span className="assistant-md-index">{ordered[1]}</span>
-          <span>{renderAssistantInlineMarkdown(ordered[2])}</span>
-        </div>,
-      );
-      return;
-    }
-    blocks.push(
-      <Typography.Paragraph className="assistant-md-paragraph" key={`p-${index}`}>
-        {renderAssistantInlineMarkdown(line)}
-      </Typography.Paragraph>,
-    );
-  });
-  if (inCode) flushCode("code-tail");
-  return <div className="assistant-markdown">{blocks}</div>;
+  return <AssistantMarkdownContent text={text} />;
 }
 
 function assistantConversationHistory(turns: LearningAssistantTurn[]) {
@@ -6325,7 +6632,7 @@ function assistantResponseTypeLabel(turn: LearningAssistantTurn) {
     course_factual_query: "课程问答",
     assessment_guidance: "测验保护",
     unsafe_experiment: "安全拦截",
-    resource_request: "资源查询",
+    resource_request: "资源可用性",
     out_of_scope: "范围外",
     greeting: "问候",
   };
@@ -6351,23 +6658,167 @@ function assistantChapterExperiments(experiments: Experiment[], chapterId?: stri
   ).some((binding) => binding.chapter_id === selectedChapterId));
 }
 
-function learningAssistantPointPrompts(experiments: Experiment[], chapterId?: string | null) {
-  const promptItems: Array<{ label: string; question: string; meta: string; experimentId: string; pointKey: string }> = [];
-  for (const experiment of assistantChapterExperiments(experiments, chapterId)) {
-    const candidates = experimentVideoCandidates(experiment);
-    for (const [index, pointTitle] of candidates.entries()) {
-      promptItems.push({
-        label: `${experiment.code || experiment.title} · 点位 ${index + 1}`,
-        meta: pointTitle,
-        experimentId: experiment.id,
-        pointKey: pointTitle,
-        question: `我正在看「${experiment.code ? `${experiment.code} ` : ""}${experiment.title}」里的「${pointTitle}」这个视频点位。请结合本实验的教材证据，解释这个点位要观察什么、现象说明什么，以及背后的化学原理。`,
-      });
-      if (promptItems.length >= 6) return promptItems;
-    }
+function sha1Hex(value: string) {
+  const bytes = Array.from(new TextEncoder().encode(value.trim()));
+  const bitLength = bytes.length * 8;
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  for (let shift = 56; shift >= 0; shift -= 8) {
+    bytes.push(Math.floor(bitLength / 2 ** shift) & 0xff);
   }
-  return promptItems;
+
+  let h0 = 0x67452301;
+  let h1 = 0xefcdab89;
+  let h2 = 0x98badcfe;
+  let h3 = 0x10325476;
+  let h4 = 0xc3d2e1f0;
+
+  const rotateLeft = (num: number, bits: number) => ((num << bits) | (num >>> (32 - bits))) >>> 0;
+  for (let offset = 0; offset < bytes.length; offset += 64) {
+    const words = new Array<number>(80).fill(0);
+    for (let index = 0; index < 16; index += 1) {
+      const base = offset + index * 4;
+      words[index] = (
+        (bytes[base] << 24)
+        | (bytes[base + 1] << 16)
+        | (bytes[base + 2] << 8)
+        | bytes[base + 3]
+      ) >>> 0;
+    }
+    for (let index = 16; index < 80; index += 1) {
+      words[index] = rotateLeft(words[index - 3] ^ words[index - 8] ^ words[index - 14] ^ words[index - 16], 1);
+    }
+
+    let a = h0;
+    let b = h1;
+    let c = h2;
+    let d = h3;
+    let e = h4;
+    for (let index = 0; index < 80; index += 1) {
+      let f = 0;
+      let k = 0;
+      if (index < 20) {
+        f = (b & c) | (~b & d);
+        k = 0x5a827999;
+      } else if (index < 40) {
+        f = b ^ c ^ d;
+        k = 0x6ed9eba1;
+      } else if (index < 60) {
+        f = (b & c) | (b & d) | (c & d);
+        k = 0x8f1bbcdc;
+      } else {
+        f = b ^ c ^ d;
+        k = 0xca62c1d6;
+      }
+      const temp = (rotateLeft(a, 5) + f + e + k + words[index]) >>> 0;
+      e = d;
+      d = c;
+      c = rotateLeft(b, 30);
+      b = a;
+      a = temp;
+    }
+    h0 = (h0 + a) >>> 0;
+    h1 = (h1 + b) >>> 0;
+    h2 = (h2 + c) >>> 0;
+    h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0;
+  }
+
+  return [h0, h1, h2, h3, h4].map((word) => word.toString(16).padStart(8, "0")).join("");
 }
+
+function learningAssistantCandidatePointKey(index: number, title: string) {
+  return `candidate-${index + 1}-${sha1Hex(title).slice(0, 8)}`;
+}
+
+function learningAssistantExperimentLabel(experiment?: Experiment | null) {
+  if (!experiment) return "-";
+  return [experiment.code, experiment.title].map((item) => String(item || "").trim()).filter(Boolean).join(" · ")
+    || experiment.id;
+}
+
+function learningAssistantPointOptions(experiment?: Experiment | null): LearningAssistantPointOption[] {
+  const candidates = experimentVideoCandidates(experiment);
+  if (candidates.length) {
+    return candidates.map((pointTitle, index) => ({
+      pointKey: learningAssistantCandidatePointKey(index, pointTitle),
+      pointTitle,
+      pointIndex: index + 1,
+    }));
+  }
+
+  const byKey = new Map<string, LearningAssistantPointOption>();
+  for (const resource of experiment?.media_resources || []) {
+    const key = String(resource.point_key || resource.point_title || "").trim();
+    if (!key || byKey.has(key)) continue;
+    byKey.set(key, {
+      pointKey: key,
+      pointTitle: String(resource.point_title || resource.title || resource.original_file_name || key).trim(),
+      pointIndex: byKey.size + 1,
+    });
+  }
+  return [...byKey.values()];
+}
+
+function learningAssistantPointContext(
+  chapterId: string | null | undefined,
+  experiment: Experiment,
+  point: LearningAssistantPointOption,
+): LearningAssistantPointContext {
+  return {
+    chapterId: chapterId || null,
+    experimentId: experiment.id,
+    experimentCode: experiment.code,
+    experimentTitle: experiment.title,
+    pointKey: point.pointKey,
+    pointTitle: point.pointTitle,
+    pointIndex: point.pointIndex,
+  };
+}
+
+const learningAssistantPointIntents: LearningAssistantPointIntent[] = [
+  {
+    id: "observe",
+    label: "观察什么",
+    description: "聚焦操作对象和观察目标",
+    buildQuestion: (context) => `我正在看「${context.experimentCode ? `${context.experimentCode} ` : ""}${context.experimentTitle || "这个实验"}」的点位 ${context.pointIndex || ""}「${context.pointTitle || context.pointKey || ""}」。这个点位主要要观察什么？`,
+  },
+  {
+    id: "phenomenon",
+    label: "现象说明什么",
+    description: "把现象和结论连起来",
+    buildQuestion: (context) => `请结合「${context.pointTitle || context.pointKey || "这个点位"}」这个视频点位，说明可能观察到的现象分别说明什么。`,
+  },
+  {
+    id: "principle",
+    label: "背后原理",
+    description: "解释对应化学原理",
+    buildQuestion: (context) => `请解释「${context.pointTitle || context.pointKey || "这个点位"}」背后的化学原理，并说明它和本实验结论的关系。`,
+  },
+  {
+    id: "design",
+    label: "为什么这样设计",
+    description: "理解试剂和步骤安排",
+    buildQuestion: (context) => `为什么本实验要设置「${context.pointTitle || context.pointKey || "这个点位"}」这个点位？这种实验设计想证明什么？`,
+  },
+  {
+    id: "compare",
+    label: "和其他点位对比",
+    description: "放回同一实验里比较",
+    buildQuestion: (context) => `请把「${context.pointTitle || context.pointKey || "这个点位"}」放回「${context.experimentCode || ""} ${context.experimentTitle || "本实验"}」中，和相邻点位对比说明它的作用。`,
+  },
+  {
+    id: "mistake",
+    label: "易错点",
+    description: "找常见误解和判断边界",
+    buildQuestion: (context) => `学习「${context.pointTitle || context.pointKey || "这个点位"}」时容易误解哪里？请结合本实验证据帮我梳理易错点。`,
+  },
+  {
+    id: "custom",
+    label: "我自己问",
+    description: "保留点位上下文，手动输入",
+  },
+];
 
 function getRagTraceLatest(response?: LearningAssistantResponse) {
   const trace = response?.rag_trace || {};
@@ -6509,10 +6960,15 @@ function LearningAssistantPage() {
   const [selectedTurnId, setSelectedTurnId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState("");
   const [assistantStreaming, setAssistantStreaming] = useState(false);
+  const [starterExperimentId, setStarterExperimentId] = useState<string | null>(null);
+  const [starterPointKey, setStarterPointKey] = useState<string | null>(null);
+  const [starterIntentId, setStarterIntentId] = useState<string>(learningAssistantPointIntents[0].id);
+  const [activePointContext, setActivePointContext] = useState<LearningAssistantPointContext | null>(null);
   const chatListRef = useRef<HTMLDivElement | null>(null);
   const chapters = useChapters();
   const experiments = useExperiments("?limit=200");
   const selectedChapterId = (Form.useWatch("chapter_id", form) as string | undefined) || "CH13";
+  const experimentItems = experiments.data?.items || [];
   const aiConfig = useQuery({
     queryKey: ["ai-configuration", "learning-assistant"],
     queryFn: () => api<AIConfiguration>("/api/admin/ai-configuration"),
@@ -6528,9 +6984,59 @@ function LearningAssistantPage() {
     chatListRef.current?.scrollTo({ top: chatListRef.current.scrollHeight, behavior: "smooth" });
   }, [turns]);
 
+  useEffect(() => {
+    setStarterExperimentId(null);
+    setStarterPointKey(null);
+    setStarterIntentId(learningAssistantPointIntents[0].id);
+    setActivePointContext(null);
+    setChatDraft("");
+  }, [selectedChapterId]);
+
+  const starterExperiments = useMemo(
+    () => assistantChapterExperiments(experimentItems, selectedChapterId),
+    [experimentItems, selectedChapterId],
+  );
+  const starterExperiment = starterExperiments.find((experiment) => experiment.id === starterExperimentId)
+    || starterExperiments[0]
+    || null;
+  const starterPointOptions = useMemo(
+    () => learningAssistantPointOptions(starterExperiment),
+    [starterExperiment],
+  );
+  const starterPoint = starterPointOptions.find((point) => point.pointKey === starterPointKey)
+    || starterPointOptions[0]
+    || null;
+  const starterIntent = learningAssistantPointIntents.find((intent) => intent.id === starterIntentId)
+    || learningAssistantPointIntents[0];
+  const starterPointContext = starterExperiment && starterPoint
+    ? learningAssistantPointContext(selectedChapterId, starterExperiment, starterPoint)
+    : null;
+  const starterQuestion = starterPointContext && starterIntent.buildQuestion
+    ? starterIntent.buildQuestion(starterPointContext)
+    : "";
+  const starterLaunchDisabled = assistantStreaming || !starterPointContext || (!chatDraft.trim() && !starterQuestion);
+  const starterPointTotal = useMemo(
+    () => starterExperiments.reduce((total, experiment) => total + learningAssistantPointOptions(experiment).length, 0),
+    [starterExperiments],
+  );
+
+  useEffect(() => {
+    setStarterExperimentId((current) => {
+      if (current && starterExperiments.some((experiment) => experiment.id === current)) return current;
+      return starterExperiments[0]?.id || null;
+    });
+  }, [starterExperiments]);
+
+  useEffect(() => {
+    setStarterPointKey((current) => {
+      if (current && starterPointOptions.some((point) => point.pointKey === current)) return current;
+      return starterPointOptions[0]?.pointKey || null;
+    });
+  }, [starterPointOptions]);
+
   const submit = async (
     questionInput?: string,
-    pointContext?: { experimentId?: string | null; pointKey?: string | null },
+    pointContext?: LearningAssistantPointContext,
   ) => {
     const question = String(questionInput ?? chatDraft).trim();
     if (!question) {
@@ -6543,12 +7049,13 @@ function LearningAssistantPage() {
       message.warning("请选择章节范围");
       return;
     }
+    const contextForRequest = pointContext ?? activePointContext;
     const payload: LearningAssistantAskRequest = {
       question,
       student_id: values.student_id?.trim() || null,
       chapter_id: chapterId,
-      experiment_id: pointContext?.experimentId || null,
-      point_key: pointContext?.pointKey || null,
+      experiment_id: contextForRequest?.experimentId || null,
+      point_key: contextForRequest?.pointKey || null,
       knowledge_point_ids: [],
       allow_progress_lookup: values.allow_progress_lookup ?? true,
       allow_rag_lookup: values.allow_rag_lookup ?? true,
@@ -6568,6 +7075,9 @@ function LearningAssistantPage() {
     };
     setAssistantStreaming(true);
     setChatDraft("");
+    if (pointContext) {
+      setActivePointContext(pointContext);
+    }
     setTurns((current) => [...current, nextTurn]);
     setSelectedTurnId(turnId);
     try {
@@ -6623,7 +7133,21 @@ function LearningAssistantPage() {
     }
   };
 
-  const samplePrompts = learningAssistantPointPrompts(experiments.data?.items || [], selectedChapterId);
+  const applyStarterIntent = (intent: LearningAssistantPointIntent) => {
+    setStarterIntentId(intent.id);
+  };
+  const submitStarterQuestion = async () => {
+    if (!starterPointContext) {
+      message.warning("请先选择实验点位");
+      return;
+    }
+    const question = (chatDraft.trim() || starterQuestion).trim();
+    if (!question) {
+      message.info("请先输入问题或选择一个提问方向");
+      return;
+    }
+    await submit(question, starterPointContext);
+  };
   const assistantChapterOptions = (chapters.data || [])
     .filter((chapter) => !isGeneralResourceTitle(chapter.chapter_title, chapter.chapter_id))
     .map((chapter) => ({
@@ -6655,7 +7179,19 @@ function LearningAssistantPage() {
   const pointContextChunkIds = Array.isArray(pointContextTrace.chunk_ids)
     ? pointContextTrace.chunk_ids.map((item) => String(item)).filter(Boolean)
     : [];
-  const pointContextQuestionCount = traceNumber(pointContextTrace.question_count);
+  const pointContextExperimentChunkIds = Array.isArray(pointContextTrace.experiment_chunk_ids)
+    ? pointContextTrace.experiment_chunk_ids.map((item) => String(item)).filter(Boolean)
+    : [];
+  const pointContextTheoryChunkIds = Array.isArray(pointContextTrace.theory_chunk_ids)
+    ? pointContextTrace.theory_chunk_ids.map((item) => String(item)).filter(Boolean)
+    : [];
+  const pointContextMissingChunkIds = Array.isArray(pointContextTrace.missing_chunk_ids)
+    ? pointContextTrace.missing_chunk_ids.map((item) => String(item)).filter(Boolean)
+    : [];
+  const pointContextEvidenceSource = String(pointContextTrace.evidence_source || "");
+  const pointContextReviewGrade = String(pointContextTrace.review_grade || "");
+  const pointContextExperimentSourceCount = traceNumber(pointContextTrace.experiment_source_count);
+  const pointContextTheorySourceCount = traceNumber(pointContextTrace.theory_source_count);
   const pointContextSourceCount = traceNumber(pointContextTrace.source_count);
   const traceTimings = traceRecord(latestRagTrace, "timings_ms");
   const traceCounts = traceRecord(latestRagTrace, "candidate_counts");
@@ -6770,6 +7306,7 @@ function LearningAssistantPage() {
                 onClick={() => {
                   setTurns([]);
                   setSelectedTurnId(null);
+                  setActivePointContext(null);
                 }}
                 disabled={!turns.length || assistantStreaming}
               >
@@ -6835,35 +7372,163 @@ function LearningAssistantPage() {
                   ))}
                 </div>
               ) : (
-                <div className="assistant-empty-start">
-                  <div className="assistant-empty-title">我想问以下视频点位相关：</div>
-                  {samplePrompts.length ? (
-                    <div className="assistant-start-prompts">
-                      {samplePrompts.map((item) => (
-                        <button
-                          type="button"
-                          key={item.label}
-                          className="assistant-start-prompt"
-                          onClick={() => void submit(item.question, {
-                            experimentId: item.experimentId,
-                            pointKey: item.pointKey,
-                          })}
-                          disabled={assistantStreaming}
-                        >
-                          <span className="assistant-start-prompt-label">{item.label}</span>
-                          <span className="assistant-start-prompt-meta">{item.meta}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
+                <div className="assistant-empty-start assistant-starter-panel">
+                  <div className="assistant-starter-heading">
+                    <div className="assistant-empty-title">从本章实验点位开始提问</div>
                     <Text type="secondary">
-                      {experiments.isLoading ? "正在读取本章视频点位..." : "当前章节暂无可用视频点位问题。"}
+                      章节范围由左侧选择；这里选择实验、点位和想问的方向，发送后继续正常多轮对话。
                     </Text>
+                  </div>
+                  {experiments.isLoading ? (
+                    <Spin tip="正在读取本章实验点位" />
+                  ) : starterPointTotal ? (
+                    <>
+                      <div className="assistant-starter-grid">
+                        <section className="assistant-starter-column">
+                          <div className="assistant-starter-section-title">1. 选择实验</div>
+                          <div className="assistant-starter-list">
+                            {starterExperiments.map((experiment) => {
+                              const pointCount = learningAssistantPointOptions(experiment).length;
+                              const selected = starterExperiment?.id === experiment.id;
+                              return (
+                                <button
+                                  type="button"
+                                  key={experiment.id}
+                                  className={`assistant-starter-option ${selected ? "selected" : ""}`}
+                                  onClick={() => {
+                                    setStarterExperimentId(experiment.id);
+                                    setStarterPointKey(null);
+                                    setStarterIntentId(learningAssistantPointIntents[0].id);
+                                    setChatDraft("");
+                                  }}
+                                  disabled={assistantStreaming}
+                                >
+                                  <span className="assistant-starter-option-title">
+                                    {experiment.code || experiment.title || experiment.id}
+                                  </span>
+                                  <span className="assistant-starter-option-meta">{experiment.title || experiment.id}</span>
+                                  <span className="assistant-starter-option-badge">{pointCount} 点位</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </section>
+
+                        <section className="assistant-starter-column">
+                          <div className="assistant-starter-section-title">2. 选择点位</div>
+                          {starterPointOptions.length ? (
+                            <div className="assistant-starter-list">
+                              {starterPointOptions.map((point) => {
+                                const selected = starterPoint?.pointKey === point.pointKey;
+                                return (
+                                  <button
+                                    type="button"
+                                    key={point.pointKey}
+                                    className={`assistant-starter-option ${selected ? "selected" : ""}`}
+                                  onClick={() => {
+                                    setStarterPointKey(point.pointKey);
+                                    setStarterIntentId(learningAssistantPointIntents[0].id);
+                                    setChatDraft("");
+                                  }}
+                                    disabled={assistantStreaming}
+                                  >
+                                    <span className="assistant-starter-option-title">点位 {point.pointIndex}</span>
+                                    <span className="assistant-starter-option-meta">{point.pointTitle}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <Text type="secondary" className="assistant-starter-empty-text">
+                              当前实验暂无视频点位，仍可在下方输入章节问题。
+                            </Text>
+                          )}
+                        </section>
+
+                        <section className="assistant-starter-column">
+                          <div className="assistant-starter-section-title">3. 选择想问的方向</div>
+                          <div className="assistant-starter-intents">
+                            {learningAssistantPointIntents.map((intent) => (
+                              <button
+                                type="button"
+                                key={intent.id}
+                                className={`assistant-starter-intent ${starterIntent.id === intent.id ? "selected" : ""}`}
+                                onClick={() => applyStarterIntent(intent)}
+                                disabled={assistantStreaming || !starterPointContext}
+                              >
+                                <span>{intent.label}</span>
+                                <small>{intent.description}</small>
+                              </button>
+                            ))}
+                          </div>
+                        </section>
+                      </div>
+
+                      <div className="assistant-starter-preview">
+                        <div className="assistant-starter-preview-question">
+                          {starterQuestion ? (
+                            renderAssistantInlineMarkdown(starterQuestion)
+                          ) : (
+                            <Text type="secondary">已选择点位上下文，请在下方输入自己的问题。</Text>
+                          )}
+                        </div>
+                        <div className="assistant-starter-launch-row">
+                          <AIGlowButton
+                            type="button"
+                            className="assistant-starter-launch"
+                            onClick={() => void submitStarterQuestion()}
+                            disabled={starterLaunchDisabled}
+                            glowColor="rgba(194, 255, 219, 0.44)"
+                            glowSoftColor="rgba(73, 219, 132, 0.22)"
+                            washColor="rgba(183, 255, 210, 0.5)"
+                            washSoftColor="rgba(72, 211, 126, 0.24)"
+                            background="linear-gradient(135deg, #00552c 0%, #04723c 48%, #139653 100%)"
+                          >
+                            <span className="assistant-launch-label">从这个问题开始</span>
+                            <span className="assistant-launch-arrow">
+                              <ArrowRightOutlined />
+                            </span>
+                          </AIGlowButton>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description="当前章节暂无可用视频点位"
+                    >
+                      <Text type="secondary">仍可在下方输入框发送章节范围内的问题。</Text>
+                    </Empty>
                   )}
                 </div>
               )}
             </div>
             <div className="assistant-chat-composer">
+              {activePointContext ? (
+                <div className="assistant-active-point-context">
+                  <div>
+                    <Text type="secondary">当前点位</Text>
+                    <div className="assistant-active-point-title">
+                      {[activePointContext.experimentCode, activePointContext.experimentTitle]
+                        .map((item) => String(item || "").trim())
+                        .filter(Boolean)
+                        .join(" · ") || activePointContext.experimentId || "-"}
+                      {" / "}
+                      点位 {activePointContext.pointIndex || "-"}
+                    </div>
+                    <Text type="secondary">
+                      {activePointContext.pointTitle || activePointContext.pointKey || "-"}
+                    </Text>
+                  </div>
+                  <Button
+                    size="small"
+                    onClick={() => setActivePointContext(null)}
+                    disabled={assistantStreaming}
+                  >
+                    清除
+                  </Button>
+                </div>
+              ) : null}
               <div className={`assistant-composer-box ${chatDraftAtLimit ? "assistant-composer-box-limit" : ""}`}>
                 <Input.TextArea
                   className="assistant-chat-textarea"
@@ -6957,8 +7622,17 @@ function LearningAssistantPage() {
                         ) : null}
                       </Descriptions.Item>
                       <Descriptions.Item label="固定证据">
+                        <Tag color={pointContextEvidenceSource === "manual_reviewed_point_evidence" ? "#005826" : "default"}>
+                          {pointContextEvidenceSource === "manual_reviewed_point_evidence" ? "人工审核点位证据" : pointContextEvidenceSource || "未装载"}
+                        </Tag>
+                        <Tag color={pointContextTrace.manual_reviewed === true ? "#005826" : "default"}>
+                          {pointContextTrace.manual_reviewed === true ? "manual reviewed" : "未确认人工审核"}
+                        </Tag>
+                        {pointContextReviewGrade ? <Tag color={pointContextReviewGrade === "weak_but_best_available" ? "orange" : "#005826"}>{pointContextReviewGrade}</Tag> : null}
                         <Tag color={pointContextSourceCount ? "#005826" : "default"}>来源 {pointContextSourceCount ?? 0}</Tag>
-                        <Tag>题库记录 {pointContextQuestionCount ?? 0}</Tag>
+                        <Tag>实验证据 {pointContextExperimentSourceCount ?? pointContextExperimentChunkIds.length}</Tag>
+                        <Tag>理论证据 {pointContextTheorySourceCount ?? pointContextTheoryChunkIds.length}</Tag>
+                        {pointContextMissingChunkIds.length ? <Tag color="orange">缺失 chunk {pointContextMissingChunkIds.length}</Tag> : null}
                         {pointContextChunkIds.slice(0, 4).map((chunkId) => <Tag key={chunkId}>{chunkId}</Tag>)}
                       </Descriptions.Item>
                     </Descriptions>
@@ -6968,8 +7642,10 @@ function LearningAssistantPage() {
                           <div key={String(source.chunk_id || index)} className="assistant-point-evidence-item">
                             <Space size={8} wrap>
                               <Tag color="#005826">固定 #{index + 1}</Tag>
+                              {source.evidence_kind ? <Tag>{String(source.evidence_kind)}</Tag> : null}
                               <Text strong>{String(source.caption || source.source_file || source.chunk_id || "点位证据")}</Text>
                               {source.page_number ? <Text type="secondary">p.{String(source.page_number)}</Text> : null}
+                              {Array.isArray(source.assets) && source.assets.length ? <Tag color="blue">图像 {source.assets.length}</Tag> : null}
                             </Space>
                             <Text type="secondary" className="block-text">
                               {renderAssistantInlineMarkdown(String(source.text_preview || ""))}
@@ -6979,7 +7655,7 @@ function LearningAssistantPage() {
                       </div>
                     ) : (
                       <Text type="secondary" className="block-text">
-                        本轮保留了结构化点位，但暂无题库 source_audit 固定来源片段。
+                        本轮保留了结构化点位，但未装载到人工审核点位固定来源片段。请确认 experiment_video_point_evidence 已导入且 source_chunks 引用有效。
                       </Text>
                     )}
                   </>

@@ -34,6 +34,7 @@ class ContentRepository(Protocol):
         point_key: str,
         limit: int = 12,
     ) -> list[dict[str, Any]]: ...
+    def point_reviewed_evidence(self, experiment_id: str, point_key: str) -> dict[str, Any] | None: ...
 
 
 class LearningRepository(Protocol):
@@ -124,6 +125,9 @@ class JsonContentRepository:
             if len(result) >= limit:
                 break
         return result
+
+    def point_reviewed_evidence(self, experiment_id: str, point_key: str) -> dict[str, Any] | None:
+        return None
 
 
 class JsonLearningRepository:
@@ -532,6 +536,35 @@ class PostgresContentRepository:
         for row in rows:
             row["metadata"] = _metadata_dict(row.get("metadata"))
         return rows
+
+    def point_reviewed_evidence(self, experiment_id: str, point_key: str) -> dict[str, Any] | None:
+        if not experiment_id or not point_key or not _table_exists("experiment_video_point_evidence"):
+            return None
+        row = _one(
+            """
+            SELECT
+              experiment_id,
+              point_key,
+              experiment_code,
+              point_title,
+              experiment_chunk_ids,
+              theory_chunk_ids,
+              manual_reviewed,
+              review_grade,
+              source_label,
+              metadata,
+              created_at,
+              updated_at
+            FROM experiment_video_point_evidence
+            WHERE experiment_id = :experiment_id
+              AND point_key = :point_key
+            """,
+            {"experiment_id": experiment_id, "point_key": point_key},
+        )
+        if not row:
+            return None
+        row["metadata"] = _metadata_dict(row.get("metadata"))
+        return row
 
     def _question_chapter_id(self, question: dict[str, Any]) -> str | None:
         kp_ids = question.get("related_knowledge_point_ids") or []

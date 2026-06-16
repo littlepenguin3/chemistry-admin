@@ -33,6 +33,11 @@ The student learning assistant SHALL require platform lookup only for claims abo
 - **THEN** the assistant SHALL treat the request as a learning answer
 - **AND** it SHALL NOT route the request to platform resource availability solely because the words "video", "material", or "resource" appear.
 
+#### Scenario: Student asks about an evidence image or figure
+- **WHEN** the student asks what a source figure, evidence image, or figure-backed point shows
+- **THEN** the assistant SHALL keep the request on the learning evidence rail
+- **AND** it SHALL NOT treat the request as a platform resource availability query unless the student explicitly asks whether an uploaded platform resource exists.
+
 #### Scenario: No published resource exists
 - **WHEN** a true platform-resource availability query finds no ready and published resources
 - **THEN** the assistant SHALL answer with the factual unavailable state
