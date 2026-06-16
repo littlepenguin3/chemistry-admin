@@ -15,7 +15,7 @@ Current shell and route components:
 | 408 | `ProtectedShell` | authenticated layout | `src/app/ProtectedShell.tsx` |
 | Split | `LearningResourcesPage` | `/overview` | `src/features/resources/LearningResourcesPage.tsx` |
 | Split | `ClassesPage` | `/classes` | `src/features/classes/ClassesPage.tsx` |
-| 2349 | `ExperimentsPage` | `/experiments` | `src/features/experiments/ExperimentsPage.tsx` |
+| Split | `ExperimentsPage` | `/experiments` | `src/features/experiments/ExperimentsPage.tsx` |
 | Split | `VideoResourcesPage` | `/videos` | `src/features/media/VideoResourcesPage.tsx` |
 | 4585 | `QuestionBanksPage` | `/question-banks` | `src/features/question-bank/QuestionBanksPage.tsx` |
 | Split | `AnalyticsPage` | `/analytics` | `src/features/analytics/AnalyticsPage.tsx` |
@@ -85,7 +85,9 @@ Current frontend extraction status:
 - Done: shared error formatter -> `src/lib/errors.ts`, used by classes and remaining legacy pages.
 - Done: videos/media page -> `src/features/media/VideoResourcesPage.tsx`, lazy-loaded from the `/videos` route with Uppy/tus and `hash-wasm` work isolated to the media feature.
 - Done: shared authenticated image loader -> `src/components/AuthenticatedImage.tsx`, reused by media and remaining experiment pages.
-- Remaining: experiments, question bank, learning assistant, and broader global CSS split.
+- Done: experiments page -> `src/features/experiments/ExperimentsPage.tsx`, lazy-loaded from the `/experiments` route.
+- Done: shared experiment hooks -> `src/features/experiments/experimentHooks.ts`, reused by experiments and remaining learning-assistant code.
+- Remaining: question bank, learning assistant, and broader global CSS split.
 
 ## Backend Endpoint Map
 
