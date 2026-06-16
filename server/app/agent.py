@@ -7,13 +7,24 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable
-from urllib.parse import quote
 
 from server.app.config import ROOT, Settings, get_settings
 from server.app.hybrid_rag import retrieve_hybrid_context
 from server.app.repositories import RepositoryProvider, get_repositories
 from server.app.retrieval import keyword_score
 from server.app.schemas import AgentAskRequest, AgentAskResponse, RagAskRequest, RagSource
+from server.app.services.agent_output_normalization import (
+    CHEM_MATH_OUTPUT_CONTRACT,
+    has_raw_latex_leak,
+    normalize_assistant_formula_output as _normalize_assistant_formula_output,
+)
+from server.app.services.rag_source_service import (
+    _asset_url,
+    _source_asset_markdown,
+    _source_evidence_payload,
+    _source_from_chunk,
+    source_to_dict,
+)
 
 
 COURSE_KEYWORDS = {
@@ -1392,87 +1403,6 @@ def _run_local_agent(context: AgentRunContext) -> str:
     return answer
 
 
-CHEM_MATH_OUTPUT_CONTRACT = (
-    "\nChemistry/math formatting contract:\n"
-    "- Inline formulas MUST use $...$ and block formulas MUST use $$...$$.\n"
-    "- Every chemical formula, ion, and reaction using mhchem MUST use braces: \\ce{...}. Never write loose forms such as \\ceKMnO4, \\ceCl2, \\ceMn^{2+}, or \\ceMnO2.\n"
-    "- Whole reaction equations MUST be one mhchem expression, for example $\\ce{Cl2 + 2Br- -> 2Cl- + Br2}$. Do not split one reaction into multiple \\ce fragments.\n"
-    "- Use mhchem arrows inside \\ce{...}: ->, <-, <=>. Do not write -->, -- >, \\rightarrow, or plain math arrows for reaction equations.\n"
-    "- Use \\mathrm{...} only inside math delimiters for units or roman text, for example $0.1\\,\\mathrm{mol\\cdot L^{-1}}$.\n"
-    "- Do NOT emit raw LaTeX commands such as \\mathrm, \\ce, \\ch, \\rightarrow, \\cdot, or \\Delta outside math delimiters.\n"
-    "- Do NOT emit HTML line breaks such as <br>; use Markdown lists or tables.\n"
-)
-
-
-_FENCED_BLOCK_RE = re.compile(r"(```[\s\S]*?```)")
-_MATH_SPAN_RE = re.compile(r"(\$\$[\s\S]*?\$\$|\$(?:\\.|[^$])+\$)")
-_BRACED_CHEM_COMMAND_RE = re.compile(r"\\(?:ce|ch|mathrm|text)\s*\{(?:[^{}]|\{[^{}]*\})*\}")
-_UNIT_EXPRESSION_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:\\,)?\s*\\mathrm\s*\{(?:[^{}]|\{[^{}]*\})*\}")
-_LOOSE_CHEM_REACTION_RE = re.compile(
-    r"\\(ce|ch)\s*(?!\{)([-+A-Za-z0-9\s\\_^{}().·]*?(?:-{1,3}\s*>|=>|<=>|→|⇌)[-+A-Za-z0-9\s\\_^{}().·]*)"
-)
-_LOOSE_CHEM_COMMAND_RE = re.compile(
-    r"\\(ce|ch)\s*(?!\{)((?:[A-Z0-9][A-Za-z0-9+\-().=<>·]*|[_^]\{[^{}]*\}|[_^](?:[+\-]?\d+[+\-]?|[+\-]))+)"
-)
-_BARE_MATH_COMMAND_RE = re.compile(
-    r"\\(?:rightarrow|to|leftarrow|rightleftharpoons|Delta|delta|ominus|cdot|times|pm|circ|alpha|beta|gamma)\b"
-)
-_BARE_FORMULA_RE = re.compile(
-    rf"(?:{_UNIT_EXPRESSION_RE.pattern}|{_BRACED_CHEM_COMMAND_RE.pattern}|{_BARE_MATH_COMMAND_RE.pattern})"
-)
-_RAW_LATEX_LEAK_RE = re.compile(r"\\(?:ce|ch|mathrm|text|rightarrow|cdot|Delta|ominus|times)\b")
-
-
-def _normalize_math_delimiters(text: str) -> str:
-    text = re.sub(r"\\\[([\s\S]*?)\\\]", lambda match: f"$${match.group(1)}$$", text)
-    return re.sub(r"\\\(([\s\S]*?)\\\)", lambda match: f"${match.group(1)}$", text)
-
-
-def _normalize_chem_reaction_body(body: str) -> str:
-    body = re.sub(r"\\(?:ce|ch)\s*\{([^{}]*)\}", r"\1", body)
-    body = _LOOSE_CHEM_COMMAND_RE.sub(lambda match: match.group(2), body)
-    body = re.sub(r"-{1,3}\s*>|=>|→", "->", body)
-    return re.sub(r"\s+", " ", body).strip()
-
-
-def _normalize_loose_chem_commands(text: str) -> str:
-    text = _LOOSE_CHEM_REACTION_RE.sub(
-        lambda match: f"\\{match.group(1)}{{{_normalize_chem_reaction_body(match.group(2))}}}",
-        text,
-    )
-    return _LOOSE_CHEM_COMMAND_RE.sub(lambda match: f"\\{match.group(1)}{{{match.group(2)}}}", text)
-
-
-def _wrap_bare_formula_commands(text: str) -> str:
-    parts = _MATH_SPAN_RE.split(text)
-    normalized: list[str] = []
-    for index, part in enumerate(parts):
-        if not part:
-            continue
-        if index % 2 == 1:
-            normalized.append(part)
-            continue
-        segment = _BARE_FORMULA_RE.sub(lambda match: f"${match.group(0)}$", _normalize_loose_chem_commands(part))
-        normalized.append(segment)
-    return "".join(normalized)
-
-
-def _normalize_assistant_formula_output(answer: str) -> str:
-    if not answer:
-        return answer
-    blocks = _FENCED_BLOCK_RE.split(answer)
-    normalized: list[str] = []
-    for index, block in enumerate(blocks):
-        if index % 2 == 1:
-            normalized.append(block)
-            continue
-        text = _normalize_math_delimiters(block)
-        text = _normalize_loose_chem_commands(text)
-        text = _wrap_bare_formula_commands(text)
-        normalized.append(text)
-    return "".join(normalized)
-
-
 def _apply_output_guardrails(context: AgentRunContext, answer: str) -> str:
     evidence_required = bool(context.classification["requires_evidence"])
     if evidence_required and not context.classification["resource_request"] and not context.sources and "没有找到" not in answer:
@@ -1487,7 +1417,7 @@ def _apply_output_guardrails(context: AgentRunContext, answer: str) -> str:
         answer = answer[:max_answer_chars].rstrip() + "..."
     normalized_answer = _normalize_assistant_formula_output(answer)
     if normalized_answer != answer:
-        if _RAW_LATEX_LEAK_RE.search(answer):
+        if has_raw_latex_leak(answer):
             context.add_guardrail("chem_latex_format", "normalize_formula_output", "normalized chemistry/math LaTeX formatting")
         answer = normalized_answer
     return answer
@@ -1696,201 +1626,6 @@ def _retrieve_context(
             scored.append({**item, "_score": score})
     scored.sort(key=lambda item: item["_score"], reverse=True)
     return scored[:limit]
-
-
-def _chunk_metadata(chunk: dict[str, Any]) -> dict[str, Any]:
-    metadata = chunk.get("metadata")
-    if isinstance(metadata, dict):
-        return metadata
-    if isinstance(metadata, str) and metadata.strip():
-        try:
-            parsed = json.loads(metadata)
-        except ValueError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
-    return {}
-
-
-def _first_chunk_value(chunk: dict[str, Any], metadata: dict[str, Any], *keys: str) -> Any:
-    for key in keys:
-        value = chunk.get(key)
-        if value not in (None, "", []):
-            return value
-        value = metadata.get(key)
-        if value not in (None, "", []):
-            return value
-    return None
-
-
-def _path_file_name(path: str) -> str:
-    return path.replace("\\", "/").rstrip("/").split("/")[-1] or path
-
-
-def _clean_figure_caption(caption: Any) -> str | None:
-    text = " ".join(str(caption or "").split())
-    if not text:
-        return None
-    markers = (
-        "； 前文",
-        "；前文",
-        "; 前文",
-        ";前文",
-        "，前文",
-        ", 前文",
-        "； 后文",
-        "；后文",
-        "; 后文",
-        ";后文",
-        "，后文",
-        ", 后文",
-        "视觉摘要",
-    )
-    cut = min((index for marker in markers if (index := text.find(marker)) > 0), default=-1)
-    if cut > 0:
-        text = text[:cut]
-    text = re.sub(r"\s*(前文|后文|视觉摘要)\s*[:：].*$", "", text).strip()
-    text = text.rstrip("；;，,。 ")
-    if len(text) > 72:
-        punctuation_cuts = [
-            index
-            for token in ("；", ";", "。", "，", ",")
-            if (index := text.find(token, 18)) > 0
-        ]
-        if punctuation_cuts:
-            text = text[: min(punctuation_cuts)].rstrip("；;，,。 ")
-        if len(text) > 72:
-            text = text[:69].rstrip() + "..."
-    return text or None
-
-
-def _asset_entries(paths: Any, *, kind: str, caption: str | None) -> list[dict[str, str | None]]:
-    if not isinstance(paths, list):
-        return []
-    clean_caption = _clean_figure_caption(caption)
-    entries: list[dict[str, str | None]] = []
-    seen: set[str] = set()
-    for item in paths:
-        path = str(item or "").strip()
-        if not path or path in seen:
-            continue
-        seen.add(path)
-        entries.append(
-            {
-                "path": path,
-                "file_name": _path_file_name(path),
-                "kind": kind,
-                "caption": clean_caption,
-            }
-        )
-    return entries
-
-
-def _asset_url(path: Any) -> str | None:
-    if not path:
-        return None
-    return f"/api/admin/rag-assets?path={quote(str(path), safe='')}"
-
-
-def _asset_markdown(asset: dict[str, Any], caption: str | None = None) -> str | None:
-    path = asset.get("path")
-    url = _asset_url(path)
-    if not url:
-        return None
-    alt = str(caption or asset.get("caption") or asset.get("file_name") or "RAG 图像证据").strip()
-    alt = alt.replace("[", " ").replace("]", " ").replace("\n", " ").strip() or "RAG 图像证据"
-    return f"![{alt}]({url})"
-
-
-def _source_asset_markdown(asset: dict[str, Any], caption: str | None = None) -> str | None:
-    path = asset.get("path")
-    url = _asset_url(path)
-    if not url:
-        return None
-    alt = str(
-        _clean_figure_caption(caption)
-        or _clean_figure_caption(asset.get("caption"))
-        or asset.get("file_name")
-        or "RAG image evidence"
-    ).strip()
-    alt = alt.replace("[", " ").replace("]", " ").replace("\n", " ").strip() or "RAG image evidence"
-    return f"![{alt}]({url})"
-
-
-def _source_evidence_payload(source: RagSource) -> dict[str, Any]:
-    payload = source_to_dict(source)
-    assets = payload.get("assets") or []
-    if isinstance(assets, list):
-        markdown_images = [
-            markdown
-            for asset in assets
-            if isinstance(asset, dict)
-            for markdown in [_source_asset_markdown(asset, payload.get("caption") or payload.get("text_preview"))]
-            if markdown
-        ]
-        if markdown_images:
-            payload["markdown_images"] = markdown_images[:3]
-    return payload
-
-
-def _is_page_image_path(path: str) -> bool:
-    normalized = path.replace("\\", "/").lower()
-    return "/page_images/" in normalized or bool(re.search(r"/page_\d+\.(png|jpg|jpeg|webp)$", normalized))
-
-
-def _source_assets(
-    chunk: dict[str, Any],
-    metadata: dict[str, Any],
-    caption: str | None,
-    content_type: str | None,
-) -> list[dict[str, str | None]]:
-    raw_asset_paths = _first_chunk_value(chunk, metadata, "asset_paths")
-    asset_paths = [str(item or "").strip() for item in raw_asset_paths] if isinstance(raw_asset_paths, list) else []
-    has_figure = (
-        content_type == "figure"
-        or _first_chunk_value(chunk, metadata, "has_figure") is True
-        or any(path and not _is_page_image_path(path) for path in asset_paths)
-    )
-    if not has_figure:
-        return []
-
-    figure_asset_paths = [path for path in asset_paths if path and not _is_page_image_path(path)] or asset_paths
-    assets = _asset_entries(figure_asset_paths, kind="figure", caption=caption)
-    page_assets = _asset_entries(
-        _first_chunk_value(chunk, metadata, "source_page_images"),
-        kind="page",
-        caption=caption,
-    )
-    if assets:
-        return [*assets[:3], *page_assets[:1]]
-    return page_assets[:1]
-
-
-def _source_from_chunk(chunk: dict[str, Any]) -> RagSource:
-    metadata = _chunk_metadata(chunk)
-    content_type = _first_chunk_value(chunk, metadata, "content_type")
-    caption = _first_chunk_value(chunk, metadata, "caption", "title")
-    display_caption = _clean_figure_caption(caption) or (str(caption) if caption else None)
-    section_path = _first_chunk_value(chunk, metadata, "section_path") or []
-    if not isinstance(section_path, list):
-        section_path = []
-    raw_text = chunk.get("text") or chunk.get("markdown") or caption or ""
-    text = " ".join(str(raw_text).split())
-    return RagSource(
-        chunk_id=str(chunk.get("chunk_id") or chunk.get("id")),
-        source_file=chunk.get("source_file") or _first_chunk_value(chunk, metadata, "source_file", "book_title"),
-        page_number=chunk.get("page_number") or _first_chunk_value(chunk, metadata, "page_number", "page_start"),
-        text_preview=text[:220],
-        content_type=str(content_type) if content_type else None,
-        caption=display_caption,
-        section_path=[str(item) for item in section_path],
-        assets=_source_assets(chunk, metadata, display_caption, str(content_type) if content_type else None),
-    )
-
-
-def source_to_dict(source: RagSource) -> dict[str, Any]:
-    if hasattr(source, "model_dump"):
-        return source.model_dump()
-    return source.dict()
 
 
 def _dump_agent_response(response: AgentAskResponse) -> dict[str, Any]:

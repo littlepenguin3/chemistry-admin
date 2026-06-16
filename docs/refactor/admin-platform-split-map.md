@@ -123,6 +123,13 @@ Prefer service extraction before router moves when helper functions are shared b
 - `services/analytics_service.py`: class dashboard, student report, weak points, exports.
 - `services/student_experiment_service.py`: submit answers, grade attempts, progress/events.
 
+## Agent Helper Split
+
+`server/app/agent.py` remains the student assistant orchestration module. Pure reusable helpers have moved out:
+
+- `server/app/services/agent_output_normalization.py`: chemistry/math output contract and LaTeX/mhchem normalization helpers.
+- `server/app/services/rag_source_service.py`: RAG source/chunk to evidence payload conversion, asset URL/Markdown helpers, and source serialization used by both the student agent and question workbench.
+
 ## Migration Guardrails
 
 - Keep `admin_main.py` router inclusion stable during extraction.

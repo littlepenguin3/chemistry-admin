@@ -10,7 +10,6 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy import text
 
-from server.app.agent import _source_evidence_payload, _source_from_chunk
 from server.app.auth import AuthUser
 from server.app.config import get_settings
 from server.app.database import db_session
@@ -40,6 +39,7 @@ from server.app.services.question_bank_service import (
     _validate_question_payload,
 )
 from server.app.services.question_generation_service import _load_generation_sources
+from server.app.services.rag_source_service import _source_evidence_payload, _source_from_chunk
 from server.app.schemas import AgentAskRequest
 
 OBJECTIVE_TYPES = {"single_choice", "true_false", "fill_blank"}
