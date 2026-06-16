@@ -18,7 +18,7 @@ Current shell and route components:
 | 2349 | `ExperimentsPage` | `/experiments` | `src/features/experiments/ExperimentsPage.tsx` |
 | 3467 | `VideoResourcesPage` | `/videos` | `src/features/media/VideoResourcesPage.tsx` |
 | 4585 | `QuestionBanksPage` | `/question-banks` | `src/features/question-bank/QuestionBanksPage.tsx` |
-| 5603 | `AnalyticsPage` | `/analytics` | `src/features/analytics/AnalyticsPage.tsx` |
+| Split | `AnalyticsPage` | `/analytics` | `src/features/analytics/AnalyticsPage.tsx` |
 | Split | `FeedbackPage` | `/feedback` | `src/features/feedback/FeedbackPage.tsx` |
 | 6955 | `LearningAssistantPage` | `/learning-assistant` | `src/features/learning-assistant/LearningAssistantPage.tsx` |
 | Split | `SettingsPage` | `/settings` | `src/features/settings/SettingsPage.tsx` |
@@ -77,7 +77,9 @@ Current frontend extraction status:
 - Done: settings-only selectors -> `src/features/settings/settings.css`; shared `.settings-grid` remains global until learning assistant context layout is split.
 - Done: AI config page -> `src/features/ai-config/AIConfigurationPage.tsx`, lazy-loaded from the `/ai-config` route.
 - Done: learning-assistant runtime format helpers -> `src/features/learning-assistant/runtimeFormat.ts`, shared by learning assistant diagnostics and AI config.
-- Remaining: overview/resources, classes/students, experiments, videos/media, question bank, analytics, learning assistant, and broader global CSS split.
+- Done: analytics page -> `src/features/analytics/AnalyticsPage.tsx`, lazy-loaded from the `/analytics` route.
+- Done: shared status/diagnostic display helpers -> `src/lib/status.tsx`, used by analytics and remaining legacy pages.
+- Remaining: overview/resources, classes/students, experiments, videos/media, question bank, learning assistant, and broader global CSS split.
 
 ## Backend Endpoint Map
 
