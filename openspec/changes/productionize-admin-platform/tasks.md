@@ -26,9 +26,9 @@
 ## 4. Backend Router And Service Split
 
 - [x] 4.1 Map `experiment_admin.py` endpoints, dependencies, permissions, database access, and response shapes.
-- [ ] 4.2 Extract routers for experiments, question banks, workbench, analytics, learning resources/media, and student submissions while preserving endpoint paths.
-- [ ] 4.3 Extract domain services for question-bank import/validation, point evidence, knowledge framework, analytics, and media handling.
-- [ ] 4.4 Keep API contracts stable and add focused regression tests for moved endpoints.
+- [x] 4.2 Extract routers for experiments, question banks, workbench, analytics, learning resources/media, and student submissions while preserving endpoint paths.
+- [x] 4.3 Extract domain services for question-bank import/validation, point evidence, knowledge framework, analytics, and media handling.
+- [x] 4.4 Keep API contracts stable and add focused regression tests for moved endpoints.
 - [ ] 4.5 Review `agent.py` after resource consolidation and split reusable policy/RAG/normalization helpers where behavior can remain equivalent.
 
 ## 5. Production Operations Hardening

@@ -81,7 +81,7 @@ Preserve these endpoint paths while extracting routers:
 | 2041-2456 | Question bank CRUD/import/export | `/api/admin/question-banks*` excluding workbench/generation | `server/app/routers/admin_question_banks.py` |
 | Split | AI generation helpers | generation source loading and local/OpenAI draft helpers | `server/app/services/question_generation_service.py` |
 | Split | Point-aware suggestion endpoint and helpers | `/api/admin/question-banks/point-aware-suggestions` | `server/app/routers/admin_point_aware_questions.py` plus `server/app/services/point_aware_question_service.py` |
-| Current 787-1294 | Question workbench sessions, turns, candidates | `/api/admin/question-banks/workbench-*` | `server/app/routers/admin_question_workbench.py` plus `services/question_workbench_service.py` |
+| Split | Question workbench sessions, turns, candidates | `/api/admin/question-banks/workbench-*` | `server/app/routers/admin_question_workbench.py` plus `server/app/services/question_workbench_service.py` |
 | Split | Legacy draft generation endpoints | `/api/admin/question-banks/generate`, `/drafts*` | `server/app/routers/admin_question_generation.py`, `server/app/routers/admin_question_drafts.py` |
 | 4615 | Student submit API | `/api/experiment-questions/submit` | `server/app/routers/student_experiment_questions.py` |
 | 4832-5177 | Class analytics | `/api/admin/analytics/classes/*` | `server/app/routers/admin_analytics.py` |
@@ -97,9 +97,10 @@ Current extraction status:
 - Done: shared question generation helpers -> `server/app/services/question_generation_service.py`.
 - Done: question generation `/api/admin/question-banks/generate` -> `server/app/routers/admin_question_generation.py`, `server/app/services/question_generation_service.py`.
 - Done: point-aware suggestions `/api/admin/question-banks/point-aware-suggestions` -> `server/app/routers/admin_point_aware_questions.py`, `server/app/services/point_aware_question_service.py`.
-- Remaining: question workbench sessions/candidates.
+- Done: question workbench sessions/candidates -> `server/app/routers/admin_question_workbench.py`, `server/app/services/question_workbench_service.py`.
+- Remaining: `server/app/experiment_admin.py` is now a compatibility stub only; backend endpoint groups have moved.
 
-Pydantic request models currently defined at the top of the file should move into `server/app/schemas/experiment_admin.py` or feature-specific schema modules before router extraction:
+Pydantic request models are centralized in `server/app/experiment_admin_schemas.py` during this refactor. A later naming cleanup may move them into `server/app/schemas/experiment_admin.py` or feature-specific schema modules:
 
 - `ExperimentCreateRequest`, `ExperimentUpdateRequest`, `ExperimentChapterBinding`
 - `QuestionRequest`, `QuestionUpdateRequest`, `GenerationRequest`

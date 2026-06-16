@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 
-import server.app.experiment_admin as experiment_admin_module
+import server.app.services.question_workbench_service as question_workbench_service
 from scripts.point_aware_question_bank import prepare_import_rows
 from server.app.experiment_admin_schemas import PointAwareSuggestionRequest
-from server.app.experiment_admin import (
+from server.app.services.question_workbench_service import (
     _record_workbench_generation_failure,
     _workbench_candidate_validation_errors,
     _workbench_context,
@@ -296,7 +296,7 @@ def test_workbench_generation_failure_preserves_prompt_turn(monkeypatch):
         def execute(self, statement, params):
             self.statements.append((str(statement), params))
 
-    monkeypatch.setattr(experiment_admin_module, "_insert_workbench_turn", fake_insert_workbench_turn)
+    monkeypatch.setattr(question_workbench_service, "_insert_workbench_turn", fake_insert_workbench_turn)
     session = FakeSession()
 
     assistant_turn = _record_workbench_generation_failure(

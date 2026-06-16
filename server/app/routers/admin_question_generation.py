@@ -5,10 +5,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from server.app.auth import AuthUser, require_roles
-from server.app.experiment_admin import _ensure_question_workbench_rag_ready, _load_workbench_evidence_package
 from server.app.experiment_admin_schemas import GenerationRequest
 from server.app.platform_settings import ai_feature_enabled
 from server.app.services.question_generation_service import OBJECTIVE_TYPES, generate_question_drafts
+from server.app.services.question_workbench_service import _ensure_question_workbench_rag_ready, _load_workbench_evidence_package
 
 
 router = APIRouter(prefix="/api/admin", tags=["experiment-admin"])

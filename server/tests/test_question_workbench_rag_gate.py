@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-import server.app.experiment_admin as experiment_admin_module
 from server.app.config import Settings
-from server.app.experiment_admin import _question_workbench_rag_gate
+import server.app.services.question_workbench_service as question_workbench_service
+from server.app.services.question_workbench_service import _question_workbench_rag_gate
 
 
 def _rag_gate_settings(**overrides):
@@ -18,8 +18,8 @@ def _rag_gate_settings(**overrides):
 
 
 def test_question_workbench_rag_gate_blocks_when_rag_access_disabled(monkeypatch):
-    monkeypatch.setattr(experiment_admin_module, "get_settings", lambda: _rag_gate_settings())
-    monkeypatch.setattr(experiment_admin_module, "ai_feature_enabled", lambda name: False if name == "rag_access_enabled" else True)
+    monkeypatch.setattr(question_workbench_service, "get_settings", lambda: _rag_gate_settings())
+    monkeypatch.setattr(question_workbench_service, "ai_feature_enabled", lambda name: False if name == "rag_access_enabled" else True)
 
     gate = _question_workbench_rag_gate()
 
@@ -38,9 +38,9 @@ def test_question_workbench_rag_gate_allows_when_bge_metrics_are_ok(monkeypatch)
         def read(self):
             return b'{"ok": true, "service": "bge-rag"}'
 
-    monkeypatch.setattr(experiment_admin_module, "get_settings", lambda: _rag_gate_settings())
-    monkeypatch.setattr(experiment_admin_module, "ai_feature_enabled", lambda name: True)
-    monkeypatch.setattr(experiment_admin_module.urllib.request, "urlopen", lambda url, timeout: FakeResponse())
+    monkeypatch.setattr(question_workbench_service, "get_settings", lambda: _rag_gate_settings())
+    monkeypatch.setattr(question_workbench_service, "ai_feature_enabled", lambda name: True)
+    monkeypatch.setattr(question_workbench_service.urllib.request, "urlopen", lambda url, timeout: FakeResponse())
 
     gate = _question_workbench_rag_gate()
 
@@ -60,9 +60,9 @@ def test_question_workbench_rag_gate_blocks_degraded_bge_metrics(monkeypatch):
         def read(self):
             return b'{"ok": false, "service": "bge-rag"}'
 
-    monkeypatch.setattr(experiment_admin_module, "get_settings", lambda: _rag_gate_settings())
-    monkeypatch.setattr(experiment_admin_module, "ai_feature_enabled", lambda name: True)
-    monkeypatch.setattr(experiment_admin_module.urllib.request, "urlopen", lambda url, timeout: FakeResponse())
+    monkeypatch.setattr(question_workbench_service, "get_settings", lambda: _rag_gate_settings())
+    monkeypatch.setattr(question_workbench_service, "ai_feature_enabled", lambda name: True)
+    monkeypatch.setattr(question_workbench_service.urllib.request, "urlopen", lambda url, timeout: FakeResponse())
 
     gate = _question_workbench_rag_gate()
 
