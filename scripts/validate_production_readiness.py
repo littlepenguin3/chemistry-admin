@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = ROOT / "apps" / "admin-web"
-DEFAULT_CHANGE = "productionize-admin-platform"
+DEFAULT_CHANGE = "production-hardening-iteration-two"
 
 
 @dataclass
@@ -127,6 +127,7 @@ def _stages(args: argparse.Namespace) -> list[Stage]:
                 Stage("frontend typecheck", [_npm(), "run", "typecheck"], cwd=FRONTEND_DIR),
                 Stage("frontend tests", [_npm(), "test"], cwd=FRONTEND_DIR),
                 Stage("frontend build", [_npm(), "run", "build"], cwd=FRONTEND_DIR),
+                Stage("frontend build chunk report", [_npm(), "run", "build:report"], cwd=FRONTEND_DIR),
             ]
         )
     return stages

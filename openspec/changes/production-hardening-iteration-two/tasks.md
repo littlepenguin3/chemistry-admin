@@ -24,10 +24,10 @@
 
 ## 4. Validation And CI
 
-- [ ] 4.1 Update `scripts/validate_production_readiness.py` so its default change points at `production-hardening-iteration-two` during this pass while keeping `--change` override.
-- [ ] 4.2 Add a CI workflow that runs protected resource validation, OpenSpec strict validation, backend import smoke, backend tests, frontend typecheck, frontend tests, and frontend build.
-- [ ] 4.3 Document CI/local validation usage, dependency expectations, and any acceptable environment-specific skips.
-- [ ] 4.4 Run the validation script locally with the active hardening change and confirm failures stop on the first failed required stage.
+- [x] 4.1 Update `scripts/validate_production_readiness.py` so its default change points at `production-hardening-iteration-two` during this pass while keeping `--change` override.
+- [x] 4.2 Add a CI workflow that runs protected resource validation, OpenSpec strict validation, backend import smoke, backend tests, frontend typecheck, frontend tests, and frontend build.
+- [x] 4.3 Document CI/local validation usage, dependency expectations, and any acceptable environment-specific skips.
+- [x] 4.4 Run the validation script locally with the active hardening change and confirm failures stop on the first failed required stage.
 
 ## 5. Media Lifecycle Hardening
 

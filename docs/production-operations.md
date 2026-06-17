@@ -91,6 +91,8 @@ python scripts/validate_production_readiness.py --install-frontend
 ```
 
 The command checks protected resources, OpenSpec strict validation, backend import smoke, backend tests, frontend typecheck, frontend tests, and frontend build.
+During the second hardening pass, the default OpenSpec target is `production-hardening-iteration-two`; use `--change <name>` to validate a different active or historical change.
+The frontend stage also runs `npm run build:report` after `npm run build` so large production chunks stay classified by owner.
 
 For backend/resource-only environments:
 
@@ -150,8 +152,24 @@ Before declaring a phase production-ready, run:
 
 ```powershell
 python scripts/validate_production_readiness.py --install-frontend
-openspec validate productionize-admin-platform --strict
+openspec validate production-hardening-iteration-two --strict
 git status --short
 ```
 
 The worktree should be clean after generated local outputs are either ignored or intentionally cleaned.
+
+## Continuous Integration
+
+The repository includes a GitHub Actions workflow at `.github/workflows/production-readiness.yml`.
+It runs on pull requests and pushes to `main` or `codex/**` branches.
+
+CI performs the same readiness gates as the local script:
+
+- checkout with Git LFS enabled so protected seed resources are present
+- Python dependency installation and backend tests
+- frontend `npm ci`, typecheck, tests, production build, and chunk report
+- OpenSpec strict validation for the active hardening change
+- protected resource manifest validation
+- admin app import smoke
+
+If an environment-specific phase needs to skip a stage locally, use the explicit script flags such as `--skip-frontend`, `--skip-backend-tests`, `--skip-openspec`, or `--skip-resource-validation`. Production release gates and CI should run the full chain.
