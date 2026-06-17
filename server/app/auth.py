@@ -37,6 +37,11 @@ class PasswordChangeRequest(BaseModel):
     new_password: str = Field(min_length=8)
 
 
+class StudentPasswordChangeRequest(BaseModel):
+    current_password: str | None = Field(default=None, min_length=1)
+    new_password: str = Field(min_length=8)
+
+
 class AuthUser(BaseModel):
     id: str
     username: str
@@ -672,7 +677,7 @@ async def change_password(
 
 @router.post("/student/password", response_model=LoginResponse)
 def change_student_password(
-    payload: PasswordChangeRequest,
+    payload: StudentPasswordChangeRequest,
     user: AuthUser = Depends(get_current_user),
 ) -> LoginResponse:
     if user.role != "student":
@@ -686,7 +691,12 @@ def change_student_password(
             .mappings()
             .first()
         )
-        if not row or not verify_password(payload.current_password, row["password_hash"]):
+        if not row:
+            raise _auth_error("Current password is invalid")
+        requires_current_password = not user.must_change_password
+        if requires_current_password and (
+            not payload.current_password or not verify_password(payload.current_password, row["password_hash"])
+        ):
             raise _auth_error("Current password is invalid")
         updated = (
             session.execute(

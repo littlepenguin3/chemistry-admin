@@ -1,8 +1,9 @@
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from server.app.admin_main import app
-from server.app.auth import AuthUser, require_roles
+from server.app.auth import AuthUser, PasswordChangeRequest, StudentPasswordChangeRequest, require_roles
 
 
 @pytest.fixture
@@ -17,6 +18,18 @@ def test_admin_entrypoint_exposes_student_login_only() -> None:
     assert "/api/auth/student/password" in paths
     assert "/api/auth/student/activate" not in paths
     assert "/api/auth/student/register" not in paths
+
+
+def test_student_initial_password_change_does_not_require_current_password() -> None:
+    payload = StudentPasswordChangeRequest(new_password="new-pass-123")
+
+    assert payload.current_password is None
+    assert payload.new_password == "new-pass-123"
+
+
+def test_admin_password_change_still_requires_current_password() -> None:
+    with pytest.raises(ValidationError):
+        PasswordChangeRequest(new_password="new-pass-123")
 
 
 @pytest.mark.anyio

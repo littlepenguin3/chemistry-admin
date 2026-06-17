@@ -172,6 +172,7 @@ function App() {
   const [pretest, setPretest] = useState<Awaited<ReturnType<typeof startStudentPretest>> | null>(null);
   const [pretestLoading, setPretestLoading] = useState(false);
   const [pretestError, setPretestError] = useState("");
+  const [pretestSkipped, setPretestSkipped] = useState(false);
 
   useEffect(() => {
     if (!getAuthToken()) {
@@ -198,12 +199,14 @@ function App() {
       setPretest(null);
       setPretestLoading(false);
       setPretestError("");
+      setPretestSkipped(false);
       return;
     }
 
     let cancelled = false;
     setPretestLoading(true);
     setPretestError("");
+    setPretestSkipped(false);
     startStudentPretest()
       .then((response) => {
         if (cancelled) return;
@@ -227,11 +230,11 @@ function App() {
     if (!user) return "login";
     if (user.must_change_password) return "password";
     if (pretestLoading && !pretest) return "pretest-loading";
-    if (pretestError) return "pretest-error";
+    if (pretestError && !pretestSkipped) return "pretest-error";
     if (pretest?.status === "in_progress" && pretest.stage && pretest.questions.length) return "pretest";
     if (pretestLoading) return "pretest-loading";
     return "home";
-  }, [checking, pretest, pretestError, pretestLoading, user]);
+  }, [checking, pretest, pretestError, pretestLoading, pretestSkipped, user]);
 
   const acceptLogin = (response: LoginResponse) => {
     if (!isStudent(response)) {
@@ -248,6 +251,7 @@ function App() {
     await logout();
     setPretest(null);
     setPretestError("");
+    setPretestSkipped(false);
     setUser(null);
   };
 
@@ -284,7 +288,9 @@ function App() {
       {view === "login" ? <LoginPanel sessionError={sessionError} onLogin={acceptLogin} /> : null}
       {view === "password" && user ? <PasswordPanel user={user} onChanged={acceptLogin} /> : null}
       {view === "pretest-loading" ? <LoadingPanel text="正在准备课前摸底" /> : null}
-      {view === "pretest-error" ? <PretestErrorPanel message={pretestError} onLogout={handleLogout} /> : null}
+      {view === "pretest-error" ? (
+        <PretestErrorPanel message={pretestError} onSkip={() => setPretestSkipped(true)} onLogout={handleLogout} />
+      ) : null}
       {view === "pretest" && pretest ? (
         <AssessmentPanel
           eyebrow="课前摸底"
@@ -408,7 +414,7 @@ function AssessmentPanel({
   );
 }
 
-function PretestErrorPanel({ message, onLogout }: { message: string; onLogout: () => void }) {
+function PretestErrorPanel({ message, onSkip, onLogout }: { message: string; onSkip: () => void; onLogout: () => void }) {
   return (
     <section className="auth-panel success-panel">
       <div className="success-mark warning-mark">
@@ -418,6 +424,11 @@ function PretestErrorPanel({ message, onLogout }: { message: string; onLogout: (
         <p>课前摸底</p>
         <h2>{message || "暂时无法开始"}</h2>
       </div>
+      <div className="form-hint">临时跳过屏障：课前摸底由后续分支继续完善，本轮可先进入学习页检查学习体验。</div>
+      <button className="primary-action" type="button" onClick={onSkip}>
+        <BookOpenCheck size={18} />
+        <span>跳过课前摸底</span>
+      </button>
       <button className="secondary-action" type="button" onClick={onLogout}>
         <LogOut size={18} />
         <span>退出登录</span>
@@ -500,13 +511,12 @@ function LoginPanel({
 }
 
 function PasswordPanel({ user, onChanged }: { user: AuthUser; onChanged: (response: LoginResponse) => void }) {
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const canSubmit = Boolean(currentPassword) && newPassword.length >= 8 && newPassword === confirmPassword;
+  const canSubmit = newPassword.length >= 8 && newPassword === confirmPassword;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -514,7 +524,7 @@ function PasswordPanel({ user, onChanged }: { user: AuthUser; onChanged: (respon
     setLoading(true);
     setError("");
     try {
-      const response = await changeStudentPassword(currentPassword, newPassword);
+      const response = await changeStudentPassword(newPassword);
       onChanged(response);
     } catch (requestError) {
       setError(errorMessage(requestError));
@@ -536,16 +546,7 @@ function PasswordPanel({ user, onChanged }: { user: AuthUser; onChanged: (respon
       </div>
 
       <form onSubmit={submit} className="auth-form">
-        <label>
-          <span>当前密码</span>
-          <input
-            value={currentPassword}
-            onChange={(event) => setCurrentPassword(event.target.value)}
-            placeholder="首次登录为初始密码"
-            type="password"
-            autoComplete="current-password"
-          />
-        </label>
+        <div className="form-hint">首次登录已完成身份校验，只需要设置新密码。</div>
         <label>
           <span>新密码</span>
           <input

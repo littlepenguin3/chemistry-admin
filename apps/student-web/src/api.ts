@@ -490,9 +490,9 @@ export function studentLogin(studentId: string, password: string): Promise<Login
   });
 }
 
-export function changeStudentPassword(currentPassword: string, newPassword: string): Promise<LoginResponse> {
+export function changeStudentPassword(newPassword: string, currentPassword?: string): Promise<LoginResponse> {
   return postJson<LoginResponse>("/api/auth/student/password", {
-    current_password: currentPassword,
+    current_password: currentPassword || undefined,
     new_password: newPassword,
   });
 }
