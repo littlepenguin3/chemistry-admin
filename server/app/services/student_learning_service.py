@@ -438,9 +438,9 @@ def _record_learning_event(
               :event_type,
               :chapter_id,
               CASE
-                WHEN :experiment_id IS NOT NULL
-                 AND EXISTS (SELECT 1 FROM experiments e WHERE e.id = :experiment_id)
-                THEN :experiment_id
+                WHEN CAST(:experiment_id AS text) IS NOT NULL
+                 AND EXISTS (SELECT 1 FROM experiments e WHERE e.id = CAST(:experiment_id AS text))
+                THEN CAST(:experiment_id AS text)
                 ELSE NULL
               END,
               CAST(:metadata AS jsonb),

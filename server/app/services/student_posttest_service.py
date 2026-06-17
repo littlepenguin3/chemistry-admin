@@ -158,7 +158,7 @@ def _load_learning_experiments(session: Any, *, student_id: str) -> list[Posttes
               WHERE se.student_id = :student_id
                 AND se.event_type = 'experiment_detail_opened'
                 AND se.metadata->>'experiment_id' IS NOT NULL
-                AND (:after_at IS NULL OR se.created_at > :after_at)
+                AND (CAST(:after_at AS timestamptz) IS NULL OR se.created_at > CAST(:after_at AS timestamptz))
               GROUP BY se.metadata->>'experiment_id'
             )
             SELECT fe.id, fe.code, fe.title, fe.metadata, opened.first_opened_at, fe.display_order
