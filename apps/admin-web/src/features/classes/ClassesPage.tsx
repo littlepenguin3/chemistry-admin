@@ -15,6 +15,7 @@ import {
   Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   Upload,
 } from "antd";
@@ -201,7 +202,7 @@ export function ClassesPage() {
       if (!selectedClassId) throw new Error("请先选择班级");
       return postJson(`/api/admin/classes/${selectedClassId}/students/${studentId}/reset-password`, { force_change: true });
     },
-    onSuccess: () => message.success("已重置为学号初始密码"),
+    onSuccess: () => message.success("已重置，学生下次登录需使用学号初始密码并修改密码"),
     onError: (error) => message.error(errorMessage(error)),
   });
 
@@ -358,7 +359,7 @@ export function ClassesPage() {
                 <div className="roster-heading-copy">
                   <Text strong>学生名单</Text>
                   <Text type="secondary" className="block-text">
-                    导入或添加即完成班级登记；学生首次登录并修改密码后才算已激活。
+                    导入或添加即完成班级登记；未激活学生使用班级初始密码首次登录，完成改密后才算已激活。
                   </Text>
                 </div>
                 <Space className="roster-heading-actions" size={10}>
@@ -415,9 +416,17 @@ export function ClassesPage() {
                           </Button>
                           {rosterView === "current" ? (
                             <>
-                              <Button icon={<KeyOutlined />} disabled={!row.activated} onClick={() => resetPassword.mutate(row.student_id)}>
-                                重置
-                              </Button>
+                              <Tooltip
+                                title={
+                                  row.activated
+                                    ? "重置后学生下次登录需使用学号初始密码并修改密码"
+                                    : "未激活学生还没有账号，首次登录使用班级初始密码"
+                                }
+                              >
+                                <Button icon={<KeyOutlined />} disabled={!row.activated} onClick={() => resetPassword.mutate(row.student_id)}>
+                                  重置
+                                </Button>
+                              </Tooltip>
                               <Popconfirm title="确认禁用该学生？" onConfirm={() => disableStudent.mutate(row.student_id)}>
                                 <Button danger icon={<DeleteOutlined />}>
                                   禁用
@@ -493,7 +502,7 @@ export function ClassesPage() {
             <div className="modal-section">
               <Text strong>登录规则</Text>
               <Text type="secondary" className="block-text">
-                当前名单内学生首次登录时使用这里设置的初始密码；完成改密后才算已激活。
+                当前名单内未激活学生首次登录时使用这里设置的初始密码；已激活学生可从名单中重置为学号初始密码。
               </Text>
               <Form form={registrationForm} layout="vertical" className="modal-form">
                 <Form.Item name="mode" hidden>

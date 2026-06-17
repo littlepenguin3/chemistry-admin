@@ -1,6 +1,6 @@
 {
   "version": "production-core-resources-v1",
-  "generated_at": "2026-06-17T08:15:15.967340+00:00",
+  "generated_at": "2026-06-17T09:13:12.909323+00:00",
   "policy": "These files are the protected current system resources. Destructive cleanup must validate this manifest before deleting or moving historical artifacts.",
   "external_sources_mirrored": true,
   "expected_database_counts": {
@@ -152,6 +152,24 @@
       "kind": "json",
       "size_bytes": 421,
       "sha256": "f4b2c123c2c7818ecdf4d2fa83372ca87068e040461cbdfc287396d24b41add3"
+    },
+    {
+      "id": "student_learning_profiles",
+      "role": "Student H5 display-facing family and element learning profiles",
+      "path": "data/seed/student_learning/element_profiles.json",
+      "source_path": null,
+      "required": true,
+      "kind": "json",
+      "size_bytes": 25200,
+      "sha256": "2fd9056a6d3602fd8b4db22c8f756b1abbcdbc63dd8371daee42deda72d4db2c",
+      "count": {
+        "profiles": 9,
+        "enabled_profiles": 9
+      },
+      "expected_counts": {
+        "profiles": 9,
+        "enabled_profiles": 9
+      }
     },
     {
       "id": "canonical_chunks_inorganic_lower",

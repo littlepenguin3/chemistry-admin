@@ -83,6 +83,36 @@ def _question_bank_count(path: Path) -> dict[str, int]:
     }
 
 
+def _student_learning_profile_count(path: Path) -> dict[str, int]:
+    required_cards = {
+        "atomic_number",
+        "electron_configuration",
+        "group",
+        "common_valence",
+        "elemental_state",
+        "redox",
+    }
+    data = _json(path)
+    profiles = data.get("profiles") or []
+    if not isinstance(profiles, list):
+        raise ValueError(f"{path} profiles is not a JSON list")
+    enabled = [profile for profile in profiles if isinstance(profile, dict) and profile.get("enabled", True)]
+    for profile in enabled:
+        profile_id = profile.get("profile_id") or "<missing>"
+        for key in ["chapter_id", "title", "hero", "elements", "property_cards", "property_sections"]:
+            if not profile.get(key):
+                raise ValueError(f"{path} profile {profile_id} missing {key}")
+        card_keys = {
+            str(card.get("key") or "")
+            for card in profile.get("property_cards") or []
+            if isinstance(card, dict)
+        }
+        missing = sorted(required_cards - card_keys)
+        if missing:
+            raise ValueError(f"{path} profile {profile_id} missing property cards: {', '.join(missing)}")
+    return {"profiles": len(profiles), "enabled_profiles": len(enabled)}
+
+
 def _embedding_dense_count(path: Path) -> dict[str, int]:
     dense = np.load(path, mmap_mode="r")
     if len(dense.shape) != 2:
@@ -178,6 +208,14 @@ RESOURCE_SPECS: list[dict[str, Any]] = [
         "path": "data/seed/point_evidence/manual_review_manifest.json",
         "kind": "json",
         "source_path": "artifacts/video-point-default-evidence/gpu-rerank-direct-v2-20260616T1140Z/manual-reviewed-from-start-20260616T2135Z/manifest.json",
+    },
+    {
+        "id": "student_learning_profiles",
+        "role": "Student H5 display-facing family and element learning profiles",
+        "path": "data/seed/student_learning/element_profiles.json",
+        "kind": "json",
+        "count": _student_learning_profile_count,
+        "expected_counts": {"profiles": 9, "enabled_profiles": 9},
     },
     {
         "id": "canonical_chunks_inorganic_lower",

@@ -9,6 +9,7 @@ from server.app.auth import AuthUser, get_user_from_access_token, require_roles
 from server.app.services.student_learning_service import (
     get_student_experiment_detail,
     get_student_experiment_group,
+    get_student_learning_page,
     get_student_learning_home,
     get_student_media_thumbnail,
     stream_student_media_asset,
@@ -16,6 +17,7 @@ from server.app.services.student_learning_service import (
 from server.app.student_learning_schemas import (
     StudentExperimentDetailResponse,
     StudentExperimentGroupResponse,
+    StudentLearningPageResponse,
     StudentLearningHomeResponse,
 )
 
@@ -27,6 +29,11 @@ StudentUser = Annotated[AuthUser, Depends(require_roles("student"))]
 @router.get("/learning-home", response_model=StudentLearningHomeResponse)
 def learning_home(user: StudentUser) -> StudentLearningHomeResponse:
     return get_student_learning_home(user)
+
+
+@router.get("/learning-page", response_model=StudentLearningPageResponse)
+def learning_page(user: StudentUser, profile_id: str | None = Query(default=None)) -> StudentLearningPageResponse:
+    return get_student_learning_page(user, profile_id=profile_id)
 
 
 @router.get("/experiment-groups/{parent_code}", response_model=StudentExperimentGroupResponse)

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from server.app.schemas import AgentChatMessage
 
 
-StudentAssistantContextType = Literal["learning_home", "experiment_group", "experiment_detail"]
+StudentAssistantContextType = Literal["learning_home", "experiment_group", "experiment_detail", "learning_profile", "learning_point"]
 
 
 class StudentAssistantAskRequest(BaseModel):

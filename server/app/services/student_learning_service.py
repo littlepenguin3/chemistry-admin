@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +13,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import text
 
 from server.app.auth import AuthUser
-from server.app.config import get_settings
+from server.app.config import ROOT, get_settings
 from server.app.database import db_session
 from server.app.media import is_student_visible_media
 from server.app.normalization import CHAPTER_AREA_MAP
@@ -20,8 +22,17 @@ from server.app.student_learning_schemas import (
     StudentExperimentGroupResponse,
     StudentExperimentGroupSummary,
     StudentExperimentPointSummary,
+    StudentLearningElementBadge,
     StudentLearningArea,
+    StudentLearningHero,
     StudentLearningHomeResponse,
+    StudentLearningPageResponse,
+    StudentLearningPointCard,
+    StudentLearningPointGroup,
+    StudentLearningProfile,
+    StudentLearningProfileSummary,
+    StudentLearningPropertyCard,
+    StudentLearningPropertySection,
     StudentVideoResource,
 )
 
@@ -41,6 +52,15 @@ PRETEST_AREA_IDS = {
     "f区": "f",
 }
 DEFAULT_RECOMMENDED_AREA_ID = "p"
+PROFILE_SEED_PATH = ROOT / "data" / "seed" / "student_learning" / "element_profiles.json"
+REQUIRED_PROFILE_CARD_KEYS = {
+    "atomic_number",
+    "electron_configuration",
+    "group",
+    "common_valence",
+    "elemental_state",
+    "redox",
+}
 
 
 @dataclass(frozen=True)
@@ -56,6 +76,11 @@ class ParentGroup:
 
 def _json(value: Any) -> str:
     return json.dumps(value if value is not None else {}, ensure_ascii=False, default=str)
+
+
+def _candidate_point_key(index: int, title: str) -> str:
+    digest = hashlib.sha1(title.strip().encode("utf-8")).hexdigest()[:8]
+    return f"candidate-{index + 1}-{digest}"
 
 
 def _student_id(user: AuthUser) -> str:
@@ -111,6 +136,102 @@ def _video_candidates(experiment: dict[str, Any]) -> list[str]:
             candidates.append(title)
             seen.add(title)
     return candidates
+
+
+@lru_cache(maxsize=1)
+def _student_learning_seed() -> dict[str, Any]:
+    return json.loads(PROFILE_SEED_PATH.read_text(encoding="utf-8-sig"))
+
+
+def _learning_profiles() -> list[dict[str, Any]]:
+    data = _student_learning_seed()
+    profiles = [item for item in data.get("profiles") or [] if isinstance(item, dict)]
+    return sorted(profiles, key=lambda item: (int(item.get("display_order") or 999), str(item.get("profile_id") or "")))
+
+
+def validate_student_learning_profiles() -> dict[str, Any]:
+    data = _student_learning_seed()
+    profiles = [item for item in data.get("profiles") or [] if isinstance(item, dict)]
+    errors: list[str] = []
+    enabled_count = 0
+    for index, profile in enumerate(profiles):
+        if not profile.get("enabled", True):
+            continue
+        enabled_count += 1
+        prefix = str(profile.get("profile_id") or f"profile[{index}]")
+        for key in ["profile_id", "chapter_id", "title", "hero", "property_cards", "property_sections", "elements"]:
+            if not profile.get(key):
+                errors.append(f"{prefix}: missing {key}")
+        card_keys = {
+            str(card.get("key") or "")
+            for card in profile.get("property_cards") or []
+            if isinstance(card, dict)
+        }
+        missing_cards = sorted(REQUIRED_PROFILE_CARD_KEYS - card_keys)
+        if missing_cards:
+            errors.append(f"{prefix}: missing property cards {', '.join(missing_cards)}")
+        for section in profile.get("property_sections") or []:
+            if not isinstance(section, dict):
+                errors.append(f"{prefix}: property section is not an object")
+                continue
+            if not section.get("key") or not section.get("title"):
+                errors.append(f"{prefix}: property section missing key/title")
+    return {
+        "ok": not errors,
+        "errors": errors,
+        "profile_count": len(profiles),
+        "enabled_profile_count": enabled_count,
+        "version": data.get("version"),
+    }
+
+
+def _profile_summary(profile: dict[str, Any]) -> StudentLearningProfileSummary:
+    return StudentLearningProfileSummary(
+        profile_id=str(profile.get("profile_id") or ""),
+        chapter_id=str(profile.get("chapter_id") or ""),
+        title=str(profile.get("title") or ""),
+        subtitle=str(profile.get("subtitle") or ""),
+        family_number=str(profile.get("family_number") or ""),
+        family_name=str(profile.get("family_name") or ""),
+        element_symbols=[str(item) for item in profile.get("element_symbols") or [] if str(item).strip()],
+    )
+
+
+def _property_section(section: dict[str, Any]) -> StudentLearningPropertySection:
+    return StudentLearningPropertySection(
+        key=str(section.get("key") or ""),
+        title=str(section.get("title") or ""),
+        subtitle=str(section.get("subtitle") or ""),
+        summary=str(section.get("summary") or ""),
+        formula=str(section.get("formula") or ""),
+        tone=str(section.get("tone") or "green"),
+    )
+
+
+def _property_cards(profile: dict[str, Any]) -> list[StudentLearningPropertyCard]:
+    return [
+        StudentLearningPropertyCard(
+            key=str(card.get("key") or ""),
+            label=str(card.get("label") or ""),
+            value=str(card.get("value") or ""),
+            description=str(card.get("description") or ""),
+        )
+        for card in profile.get("property_cards") or []
+        if isinstance(card, dict)
+    ]
+
+
+def _element_badges(profile: dict[str, Any]) -> list[StudentLearningElementBadge]:
+    return [
+        StudentLearningElementBadge(
+            symbol=str(element.get("symbol") or ""),
+            name=str(element.get("name") or ""),
+            atomic_number=int(element["atomic_number"]) if element.get("atomic_number") is not None else None,
+            state=str(element.get("state")) if element.get("state") else None,
+        )
+        for element in profile.get("elements") or []
+        if isinstance(element, dict)
+    ]
 
 
 def _media_resources(experiment: dict[str, Any], *, visible_only: bool = False) -> list[dict[str, Any]]:
@@ -523,6 +644,196 @@ def _student_video_resource(media: dict[str, Any]) -> StudentVideoResource:
         mime_type=str(media.get("mime_type")) if media.get("mime_type") else None,
         stream_path=f"/api/student/media/assets/{media_id}/stream" if media_id else None,
         thumbnail_path=f"/api/student/media/assets/{media_id}/thumbnail" if media_id and has_thumbnail else None,
+    )
+
+
+def _experiment_search_text(experiment: dict[str, Any]) -> str:
+    metadata = _metadata(experiment)
+    parts = [
+        experiment.get("code"),
+        experiment.get("title"),
+        experiment.get("summary"),
+        metadata.get("parent_code"),
+        metadata.get("parent_title"),
+        metadata.get("module_title"),
+        metadata.get("module_display_title"),
+        metadata.get("outline_group"),
+        *(_video_candidates(experiment)),
+    ]
+    return " ".join(str(part or "") for part in parts).lower()
+
+
+def _section_matches_experiment(section: dict[str, Any], experiment: dict[str, Any]) -> bool:
+    keywords = [str(item).strip().lower() for item in section.get("experiment_keywords") or [] if str(item).strip()]
+    if not keywords:
+        return True
+    text_value = _experiment_search_text(experiment)
+    return any(keyword in text_value for keyword in keywords)
+
+
+def _profile_experiments(profile: dict[str, Any], experiments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    chapter_id = str(profile.get("chapter_id") or "").strip()
+    matched = [experiment for experiment in experiments if chapter_id and chapter_id in _experiment_chapter_ids(experiment)]
+    if matched:
+        return matched
+    keywords = [
+        str(item).strip().lower()
+        for section in profile.get("property_sections") or []
+        if isinstance(section, dict)
+        for item in section.get("experiment_keywords") or []
+        if str(item).strip()
+    ]
+    if not keywords:
+        return []
+    return [
+        experiment
+        for experiment in experiments
+        if any(keyword in _experiment_search_text(experiment) for keyword in keywords)
+    ]
+
+
+def _candidate_point(experiment: dict[str, Any]) -> tuple[str | None, str | None]:
+    for media in _media_resources(experiment, visible_only=True):
+        point_key = str(media.get("point_key") or "").strip()
+        point_title = str(media.get("point_title") or media.get("title") or "").strip()
+        if point_key or point_title:
+            return point_key or point_title, point_title or point_key
+    candidates = _video_candidates(experiment)
+    if candidates:
+        return _candidate_point_key(0, candidates[0]), candidates[0]
+    return None, None
+
+
+def _learning_point_card(
+    experiment: dict[str, Any],
+    *,
+    section: dict[str, Any],
+) -> StudentLearningPointCard:
+    summary = _point_summary(experiment)
+    point_key, point_title = _candidate_point(experiment)
+    return StudentLearningPointCard(
+        **summary.model_dump(),
+        property_key=str(section.get("key") or ""),
+        property_title=str(section.get("title") or ""),
+        point_key=point_key,
+        point_title=point_title,
+        formula=str(section.get("formula")) if section.get("formula") else None,
+        videos=[_student_video_resource(media) for media in _media_resources(experiment, visible_only=True)],
+        video_candidates=_video_candidates(experiment),
+    )
+
+
+def _learning_groups_for_section(
+    *,
+    section: dict[str, Any],
+    experiments: list[dict[str, Any]],
+) -> list[StudentLearningPointGroup]:
+    matches = [experiment for experiment in experiments if _section_matches_experiment(section, experiment)]
+    if not matches:
+        matches = experiments[:]
+    buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for experiment in matches:
+        buckets[_parent_code(experiment)].append(experiment)
+
+    groups: list[StudentLearningPointGroup] = []
+    for parent_code, items in buckets.items():
+        ordered_items = sorted(items, key=lambda item: (int(item.get("display_order") or 999), str(item.get("code") or "")))
+        groups.append(
+            StudentLearningPointGroup(
+                property_key=str(section.get("key") or ""),
+                property_title=str(section.get("title") or ""),
+                parent_code=parent_code,
+                parent_title=_parent_title(ordered_items[0]),
+                points=[_learning_point_card(item, section=section) for item in ordered_items],
+            )
+        )
+    return sorted(groups, key=lambda group: (group.parent_code, group.property_key))
+
+
+def _select_learning_profile(
+    *,
+    profiles: list[dict[str, Any]],
+    profile_id: str | None,
+    session: Any,
+    user: AuthUser,
+) -> dict[str, Any] | None:
+    enabled = [profile for profile in profiles if profile.get("enabled", True)]
+    if not enabled:
+        return None
+    requested = str(profile_id or "").strip()
+    if requested:
+        match = next((profile for profile in enabled if str(profile.get("profile_id") or "") == requested), None)
+        if match:
+            return match
+
+    student_id = _student_id(user)
+    pretest_area_id = _latest_pretest_area_id(session, student_id)
+    mastery_chapter_id = _lowest_mastery_chapter_id(
+        session,
+        student_id=student_id,
+        area_id=pretest_area_id or DEFAULT_RECOMMENDED_AREA_ID,
+    )
+    if mastery_chapter_id:
+        match = next((profile for profile in enabled if str(profile.get("chapter_id") or "") == mastery_chapter_id), None)
+        if match:
+            return match
+    if pretest_area_id:
+        area_chapters = {
+            chapter_id
+            for chapter_id, chapter in CHAPTER_AREA_MAP.items()
+            if chapter.get("area_id") == pretest_area_id
+        }
+        match = next((profile for profile in enabled if str(profile.get("chapter_id") or "") in area_chapters), None)
+        if match:
+            return match
+    return enabled[0]
+
+
+def get_student_learning_page(user: AuthUser, profile_id: str | None = None) -> StudentLearningPageResponse:
+    profiles = _learning_profiles()
+    with db_session() as session:
+        active = _select_learning_profile(profiles=profiles, profile_id=profile_id, session=session, user=user)
+        experiments = _load_published_experiments(session)
+        if active:
+            _record_learning_event(
+                session,
+                user=user,
+                event_type="learning_profile_opened",
+                chapter_id=str(active.get("chapter_id") or "") or None,
+            )
+    if not active:
+        return StudentLearningPageResponse(recommended_profile_id=None, profiles=[], active_profile=None)
+
+    profile_experiments = _profile_experiments(active, experiments)
+    sections = [section for section in active.get("property_sections") or [] if isinstance(section, dict)]
+    related_groups = [
+        group
+        for section in sections
+        for group in _learning_groups_for_section(section=section, experiments=profile_experiments)
+    ]
+    hero = active.get("hero") if isinstance(active.get("hero"), dict) else {}
+    active_profile = StudentLearningProfile(
+        profile_id=str(active.get("profile_id") or ""),
+        chapter_id=str(active.get("chapter_id") or ""),
+        title=str(active.get("title") or ""),
+        subtitle=str(active.get("subtitle") or ""),
+        family_number=str(active.get("family_number") or ""),
+        family_name=str(active.get("family_name") or ""),
+        hero=StudentLearningHero(
+            eyebrow=str(hero.get("eyebrow") or ""),
+            title=str(hero.get("title") or active.get("title") or ""),
+            summary=str(hero.get("summary") or ""),
+        ),
+        element_symbols=[str(item) for item in active.get("element_symbols") or [] if str(item).strip()],
+        elements=_element_badges(active),
+        property_cards=_property_cards(active),
+        property_sections=[_property_section(section) for section in sections],
+        related_groups=related_groups,
+    )
+    return StudentLearningPageResponse(
+        recommended_profile_id=str(active.get("profile_id") or ""),
+        profiles=[_profile_summary(profile) for profile in profiles if profile.get("enabled", True)],
+        active_profile=active_profile,
     )
 
 

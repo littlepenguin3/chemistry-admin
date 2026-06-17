@@ -18,6 +18,17 @@ export type LoginResponse = {
   user: AuthUser;
 };
 
+export type StudentAppFeatureFlags = {
+  ai_assistant_enabled: boolean;
+  feedback_enabled: boolean;
+  student_ai_assistant_enabled: boolean;
+  rag_access_enabled: boolean;
+};
+
+export type StudentAppConfigResponse = {
+  features: StudentAppFeatureFlags;
+};
+
 export type PretestQuestionOption = {
   label?: string;
   key?: string;
@@ -87,6 +98,35 @@ export type StudentLearningHomeResponse = {
   groups: StudentExperimentGroupSummary[];
 };
 
+export type StudentLearningHero = {
+  eyebrow: string;
+  title: string;
+  summary: string;
+};
+
+export type StudentLearningElementBadge = {
+  symbol: string;
+  name: string;
+  atomic_number?: number | null;
+  state?: string | null;
+};
+
+export type StudentLearningPropertyCard = {
+  key: string;
+  label: string;
+  value: string;
+  description: string;
+};
+
+export type StudentLearningPropertySection = {
+  key: string;
+  title: string;
+  subtitle: string;
+  summary: string;
+  formula: string;
+  tone: string;
+};
+
 export type StudentExperimentPointSummary = {
   id: string;
   code: string;
@@ -122,6 +162,55 @@ export type StudentVideoResource = {
 export type StudentExperimentDetailResponse = StudentExperimentPointSummary & {
   video_candidates: string[];
   videos: StudentVideoResource[];
+};
+
+export type StudentLearningPointCard = StudentExperimentPointSummary & {
+  property_key: string;
+  property_title: string;
+  point_key?: string | null;
+  point_title?: string | null;
+  formula?: string | null;
+  videos: StudentVideoResource[];
+  video_candidates: string[];
+};
+
+export type StudentLearningPointGroup = {
+  property_key: string;
+  property_title: string;
+  parent_code: string;
+  parent_title: string;
+  points: StudentLearningPointCard[];
+};
+
+export type StudentLearningProfileSummary = {
+  profile_id: string;
+  chapter_id: string;
+  title: string;
+  subtitle: string;
+  family_number: string;
+  family_name: string;
+  element_symbols: string[];
+};
+
+export type StudentLearningProfile = {
+  profile_id: string;
+  chapter_id: string;
+  title: string;
+  subtitle: string;
+  family_number: string;
+  family_name: string;
+  hero: StudentLearningHero;
+  element_symbols: string[];
+  elements: StudentLearningElementBadge[];
+  property_cards: StudentLearningPropertyCard[];
+  property_sections: StudentLearningPropertySection[];
+  related_groups: StudentLearningPointGroup[];
+};
+
+export type StudentLearningPageResponse = {
+  recommended_profile_id?: string | null;
+  profiles: StudentLearningProfileSummary[];
+  active_profile?: StudentLearningProfile | null;
 };
 
 export type PosttestExperimentSummary = {
@@ -189,9 +278,20 @@ export type AgentChatMessage = {
   content: string;
 };
 
+export type StudentAssistantFinalMetadata = {
+  source_count?: number;
+  sources?: Array<{
+    title?: string | null;
+    section?: string | null;
+    chunk_id?: string | null;
+    score?: number | null;
+  }>;
+  [key: string]: unknown;
+};
+
 export type StudentAssistantAskRequest = {
   question: string;
-  context_type: "learning_home" | "experiment_group" | "experiment_detail";
+  context_type: "learning_home" | "experiment_group" | "experiment_detail" | "learning_profile" | "learning_point";
   context_title: string;
   context_summary: string;
   chapter_id?: string | null;
@@ -212,9 +312,38 @@ export type StudentAssistantStreamEvent =
   | { event: "status"; message?: string }
   | { event: "delta"; delta?: string }
   | { event: "replace"; answer?: string }
-  | { event: "final"; response?: unknown }
+  | { event: "final"; response?: StudentAssistantFinalMetadata | unknown }
   | { event: "error"; message?: string }
   | { event: string; [key: string]: unknown };
+
+export type StudentFeedbackSubmitRequest = {
+  feedback_type?: string;
+  content: string;
+  chapter_id?: string | null;
+  unit_id?: string | null;
+  knowledge_point_id?: string | null;
+  experiment_id?: string | null;
+  point_key?: string | null;
+  page_path?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type StudentFeedbackItem = {
+  id: string;
+  student_id: string;
+  class_id?: string | null;
+  feedback_type: string;
+  content: string;
+  status: string;
+  chapter_id?: string | null;
+  unit_id?: string | null;
+  knowledge_point_id?: string | null;
+  experiment_id?: string | null;
+  page_path?: string | null;
+  metadata?: Record<string, unknown>;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
 
 export const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const tokenKey = "chem_student_token";
@@ -372,6 +501,10 @@ export function loadCurrentUser(): Promise<AuthUser> {
   return api<AuthUser>("/api/auth/me");
 }
 
+export function getStudentAppConfig(): Promise<StudentAppConfigResponse> {
+  return api<StudentAppConfigResponse>("/api/student/app-config");
+}
+
 export function startStudentPretest(): Promise<StudentPretestResponse> {
   return postJson<StudentPretestResponse>("/api/student/pretest/start", {});
 }
@@ -385,6 +518,11 @@ export function submitStudentPretest(stage: 1 | 2, answers: StudentPretestAnswer
 
 export function getStudentLearningHome(): Promise<StudentLearningHomeResponse> {
   return api<StudentLearningHomeResponse>("/api/student/learning-home");
+}
+
+export function getStudentLearningPage(profileId?: string | null): Promise<StudentLearningPageResponse> {
+  const query = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : "";
+  return api<StudentLearningPageResponse>(`/api/student/learning-page${query}`);
 }
 
 export function getStudentExperimentGroup(parentCode: string): Promise<StudentExperimentGroupResponse> {
@@ -416,6 +554,10 @@ export function explainPosttestMistakes(sessionId: string): Promise<StudentAssis
   return postJson<StudentAssistantGeneratedResponse>("/api/student/assistant/posttest-mistakes", {
     session_id: sessionId,
   });
+}
+
+export function submitStudentFeedback(payload: StudentFeedbackSubmitRequest): Promise<StudentFeedbackItem> {
+  return postJson<StudentFeedbackItem>("/api/student/feedback", payload);
 }
 
 export function studentMediaUrl(path: string): string {

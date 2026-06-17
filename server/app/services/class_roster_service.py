@@ -909,7 +909,10 @@ def reset_student_password(
             .first()
         )
         if not row:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activated student not found")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Student account is not activated; use class initial-password settings for first login",
+            )
         session.execute(
             text(
                 """

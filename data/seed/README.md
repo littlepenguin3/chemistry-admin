@@ -10,6 +10,7 @@ Protected resource groups:
 - `question_bank/`: the current reviewed point-aware question bank with 2310 questions and its schema.
 - `point_evidence/`: the manually reviewed 300 point-to-canonical-chunk evidence bindings. The original path includes `video-point-default-evidence`, but the final reviewed JSONL is core learning evidence, not disposable video output.
 - `canonical_rag/`: mirrored canonical chunks and embeddings from `E:/chemistry-rag/data/rag_ready`, including 3637 chunks/embeddings.
+- `student_learning/`: explicit student-facing family and element learning profiles used by the H5 learning page; these display facts are curated seed data, not dynamically inferred from chunks.
 - `import_reports/`: current import/validation reports retained for auditability.
 - `manifests/core_resources.json`: count, size, and SHA256 manifest used as the cleanup guard.
 

@@ -67,3 +67,81 @@ class StudentExperimentGroupResponse(BaseModel):
 class StudentExperimentDetailResponse(StudentExperimentPointSummary):
     video_candidates: list[str] = Field(default_factory=list)
     videos: list[StudentVideoResource] = Field(default_factory=list)
+
+
+class StudentLearningHero(BaseModel):
+    eyebrow: str = ""
+    title: str
+    summary: str = ""
+
+
+class StudentLearningElementBadge(BaseModel):
+    symbol: str
+    name: str
+    atomic_number: int | None = None
+    state: str | None = None
+
+
+class StudentLearningPropertyCard(BaseModel):
+    key: str
+    label: str
+    value: str
+    description: str = ""
+
+
+class StudentLearningPropertySection(BaseModel):
+    key: str
+    title: str
+    subtitle: str = ""
+    summary: str = ""
+    formula: str = ""
+    tone: str = "green"
+
+
+class StudentLearningPointCard(StudentExperimentPointSummary):
+    property_key: str
+    property_title: str
+    point_key: str | None = None
+    point_title: str | None = None
+    formula: str | None = None
+    videos: list[StudentVideoResource] = Field(default_factory=list)
+    video_candidates: list[str] = Field(default_factory=list)
+
+
+class StudentLearningPointGroup(BaseModel):
+    property_key: str
+    property_title: str
+    parent_code: str
+    parent_title: str
+    points: list[StudentLearningPointCard] = Field(default_factory=list)
+
+
+class StudentLearningProfileSummary(BaseModel):
+    profile_id: str
+    chapter_id: str
+    title: str
+    subtitle: str = ""
+    family_number: str = ""
+    family_name: str = ""
+    element_symbols: list[str] = Field(default_factory=list)
+
+
+class StudentLearningProfile(BaseModel):
+    profile_id: str
+    chapter_id: str
+    title: str
+    subtitle: str = ""
+    family_number: str = ""
+    family_name: str = ""
+    hero: StudentLearningHero
+    element_symbols: list[str] = Field(default_factory=list)
+    elements: list[StudentLearningElementBadge] = Field(default_factory=list)
+    property_cards: list[StudentLearningPropertyCard] = Field(default_factory=list)
+    property_sections: list[StudentLearningPropertySection] = Field(default_factory=list)
+    related_groups: list[StudentLearningPointGroup] = Field(default_factory=list)
+
+
+class StudentLearningPageResponse(BaseModel):
+    recommended_profile_id: str | None = None
+    profiles: list[StudentLearningProfileSummary] = Field(default_factory=list)
+    active_profile: StudentLearningProfile | None = None

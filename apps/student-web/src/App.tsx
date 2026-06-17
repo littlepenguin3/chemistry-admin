@@ -32,20 +32,30 @@ import {
   PublicPosttestQuestion,
   PublicPretestQuestion,
   StudentAssistantAskRequest,
+  StudentAssistantFinalMetadata,
+  StudentAppConfigResponse,
+  StudentAppFeatureFlags,
   StudentExperimentDetailResponse,
   StudentExperimentGroupResponse,
   StudentExperimentGroupSummary,
   StudentLearningArea,
   StudentLearningHomeResponse,
+  StudentLearningPageResponse,
+  StudentLearningPointCard,
+  StudentLearningPointGroup,
+  StudentLearningProfile,
+  StudentLearningPropertySection,
   StudentPosttestReport,
   StudentPosttestResponse,
   changeStudentPassword,
   errorMessage,
   explainPosttestMistakes,
   generatePosttestAiSummary,
+  getStudentAppConfig,
   getStudentExperimentDetail,
   getStudentExperimentGroup,
   getStudentLearningHome,
+  getStudentLearningPage,
   getAuthToken,
   loadCurrentUser,
   logout,
@@ -55,6 +65,7 @@ import {
   streamStudentAssistantAsk,
   studentMediaUrl,
   studentLogin,
+  submitStudentFeedback,
   submitStudentPosttest,
   submitStudentPretest,
 } from "./api";
@@ -64,14 +75,39 @@ type ViewState = "checking" | "login" | "password" | "pretest-loading" | "pretes
 type AnswerMap = Record<string, string>;
 type AssessmentQuestion = PublicPretestQuestion | PublicPosttestQuestion;
 type AssistantContext = Omit<StudentAssistantAskRequest, "question" | "conversation_history"> & { prompts: string[] };
+type ChatMessage = AgentChatMessage & { metadata?: StudentAssistantFinalMetadata };
+type FeedbackContext = {
+  pagePath: string;
+  contextTitle: string;
+  chapterId?: string | null;
+  experimentId?: string | null;
+  pointKey?: string | null;
+  metadata?: Record<string, unknown>;
+};
 type AreaId = "p" | "s" | "d" | "ds" | "f";
 type PeriodicArea = "s区" | "p区" | "d区" | "ds区" | "f区";
 type LearningRoute =
-  | { screen: "home" }
-  | { screen: "group"; parentCode: string }
-  | { screen: "experiment"; parentCode: string; experimentId: string }
+  | { screen: "home"; profileId?: string | null; propertyKey?: string | null }
+  | {
+      screen: "point";
+      profileId?: string | null;
+      propertyKey?: string | null;
+      propertyTitle?: string | null;
+      experimentId: string;
+      pointKey?: string | null;
+      pointTitle?: string | null;
+    }
   | { screen: "posttest"; posttest: StudentPosttestResponse }
   | { screen: "summary"; report: StudentPosttestReport };
+
+const defaultStudentAppConfig: StudentAppConfigResponse = {
+  features: {
+    ai_assistant_enabled: true,
+    feedback_enabled: true,
+    student_ai_assistant_enabled: true,
+    rag_access_enabled: true,
+  },
+};
 
 const areaIdByPeriodicArea: Record<PeriodicArea, AreaId> = {
   "s区": "s",
@@ -542,11 +578,49 @@ function PasswordPanel({ user, onChanged }: { user: AuthUser; onChanged: (respon
   );
 }
 
+function assistantEnabled(features: StudentAppFeatureFlags): boolean {
+  return features.ai_assistant_enabled && features.student_ai_assistant_enabled;
+}
+
+function feedbackEnabled(features: StudentAppFeatureFlags): boolean {
+  return features.feedback_enabled;
+}
+
 function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [route, setRoute] = useState<LearningRoute>({ screen: "home" });
+  const [appConfig, setAppConfig] = useState<StudentAppConfigResponse>(defaultStudentAppConfig);
+  const [configError, setConfigError] = useState("");
   const [posttestLoading, setPosttestLoading] = useState(false);
   const [posttestSubmitting, setPosttestSubmitting] = useState(false);
   const [posttestError, setPosttestError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const refreshConfig = async () => {
+      try {
+        const response = await getStudentAppConfig();
+        if (!cancelled) {
+          setAppConfig(response);
+          setConfigError("");
+        }
+      } catch (requestError) {
+        if (!cancelled) setConfigError(errorMessage(requestError));
+      }
+    };
+    void refreshConfig();
+    const handleVisible = () => {
+      if (document.visibilityState !== "hidden") void refreshConfig();
+    };
+    window.addEventListener("focus", handleVisible);
+    document.addEventListener("visibilitychange", handleVisible);
+    const timer = window.setInterval(refreshConfig, 60_000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleVisible);
+      document.removeEventListener("visibilitychange", handleVisible);
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const finishLearning = async () => {
     setPosttestLoading(true);
@@ -577,27 +651,24 @@ function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => v
     }
   };
 
-  if (route.screen === "group") {
-    return (
-      <ExperimentGroupPanel
-        parentCode={route.parentCode}
-        onBack={() => setRoute({ screen: "home" })}
-        onSelectExperiment={(experimentId) => setRoute({ screen: "experiment", parentCode: route.parentCode, experimentId })}
-        onFinishLearning={finishLearning}
-        finishing={posttestLoading}
-        finishError={posttestError}
-      />
-    );
-  }
+  const canUseAssistant = assistantEnabled(appConfig.features);
+  const canUseFeedback = feedbackEnabled(appConfig.features);
 
-  if (route.screen === "experiment") {
+  if (route.screen === "point") {
     return (
       <ExperimentDetailPanel
         experimentId={route.experimentId}
-        onBack={() => setRoute({ screen: "group", parentCode: route.parentCode })}
+        profileId={route.profileId}
+        propertyKey={route.propertyKey}
+        propertyTitle={route.propertyTitle}
+        pointKey={route.pointKey}
+        pointTitle={route.pointTitle}
+        onBack={() => setRoute({ screen: "home", profileId: route.profileId, propertyKey: route.propertyKey })}
         onFinishLearning={finishLearning}
         finishing={posttestLoading}
         finishError={posttestError}
+        assistantEnabled={canUseAssistant}
+        feedbackEnabled={canUseFeedback}
       />
     );
   }
@@ -620,47 +691,87 @@ function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => v
   return (
     <LearningHomePanel
       user={user}
+      profileId={route.profileId}
+      initialPropertyKey={route.propertyKey}
       onLogout={onLogout}
-      onEnterGroup={(parentCode) => setRoute({ screen: "group", parentCode })}
+      onSelectPoint={(point) =>
+        setRoute({
+          screen: "point",
+          profileId: point.profileId,
+          propertyKey: point.propertyKey,
+          propertyTitle: point.propertyTitle,
+          experimentId: point.experimentId,
+          pointKey: point.pointKey,
+          pointTitle: point.pointTitle,
+        })
+      }
       onFinishLearning={finishLearning}
       finishing={posttestLoading}
       finishError={posttestError}
+      assistantEnabled={canUseAssistant}
+      feedbackEnabled={canUseFeedback}
+      configError={configError}
     />
   );
 }
 
 function LearningHomePanel({
   user,
+  profileId,
+  initialPropertyKey,
   onLogout,
-  onEnterGroup,
+  onSelectPoint,
   onFinishLearning,
   finishing,
   finishError,
+  assistantEnabled,
+  feedbackEnabled,
+  configError,
 }: {
   user: AuthUser;
+  profileId?: string | null;
+  initialPropertyKey?: string | null;
   onLogout: () => void;
-  onEnterGroup: (parentCode: string) => void;
+  onSelectPoint: (point: {
+    profileId: string;
+    propertyKey: string;
+    propertyTitle: string;
+    experimentId: string;
+    pointKey?: string | null;
+    pointTitle?: string | null;
+  }) => void;
   onFinishLearning: () => void;
   finishing: boolean;
   finishError: string;
+  assistantEnabled: boolean;
+  feedbackEnabled: boolean;
+  configError: string;
 }) {
-  const [home, setHome] = useState<StudentLearningHomeResponse | null>(null);
-  const [selectedArea, setSelectedArea] = useState<AreaId>("p");
-  const [selectedParentCode, setSelectedParentCode] = useState<string | null>(null);
+  const [page, setPage] = useState<StudentLearningPageResponse | null>(null);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(profileId || null);
+  const [selectedPropertyKey, setSelectedPropertyKey] = useState<string>(initialPropertyKey || "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setSelectedProfileId(profileId || null);
+  }, [profileId]);
+
+  useEffect(() => {
+    if (initialPropertyKey) setSelectedPropertyKey(initialPropertyKey);
+  }, [initialPropertyKey]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError("");
-    getStudentLearningHome()
+    getStudentLearningPage(selectedProfileId)
       .then((payload) => {
         if (cancelled) return;
-        setHome(payload);
-        const recommendedArea = normalizeAreaId(payload.recommended_area_id) || firstEnabledArea(payload.areas) || "p";
-        setSelectedArea(recommendedArea);
-        setSelectedParentCode(payload.recommended_parent_code || firstGroupForArea(payload.groups, recommendedArea)?.parent_code || null);
+        setPage(payload);
+        if (!selectedProfileId && payload.active_profile?.profile_id) {
+          setSelectedProfileId(payload.active_profile.profile_id);
+        }
       })
       .catch((requestError) => {
         if (!cancelled) setError(errorMessage(requestError));
@@ -671,30 +782,53 @@ function LearningHomePanel({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedProfileId]);
 
+  const profile = page?.active_profile || null;
   useEffect(() => {
-    if (!home) return;
-    const nextGroup = home.groups.find((group) => group.area_id === selectedArea && group.recommended) || firstGroupForArea(home.groups, selectedArea);
-    setSelectedParentCode(nextGroup?.parent_code || null);
-  }, [home, selectedArea]);
+    if (!profile) return;
+    const keys = profile.property_sections.map((section) => section.key);
+    const preferred = initialPropertyKey && keys.includes(initialPropertyKey) ? initialPropertyKey : selectedPropertyKey;
+    if (!preferred || !keys.includes(preferred)) {
+      setSelectedPropertyKey(keys[0] || "");
+    }
+  }, [profile, initialPropertyKey, selectedPropertyKey]);
 
-  const groups = home?.groups.filter((group) => group.area_id === selectedArea) || [];
-  const selectedGroup =
-    groups.find((group) => group.parent_code === selectedParentCode) || groups.find((group) => group.recommended) || groups[0] || null;
-  const selectedAreaName = home?.areas.find((area) => area.area_id === selectedArea)?.area_name || periodicAreaByAreaId[selectedArea];
-  const homeAssistantContext: AssistantContext | null = home
+  const selectedSection =
+    profile?.property_sections.find((section) => section.key === selectedPropertyKey) || profile?.property_sections[0] || null;
+  const relatedGroups = profile && selectedSection ? profile.related_groups.filter((group) => group.property_key === selectedSection.key) : [];
+  const relatedPointCount = relatedGroups.reduce((total, group) => total + group.points.length, 0);
+  const homeAssistantContext: AssistantContext | null = profile
     ? {
-        context_type: "learning_home",
-        context_title: `${selectedAreaName}实验学习`,
+        context_type: "learning_profile",
+        context_title: profile.title,
         context_summary: compactText([
-          `当前选区：${selectedAreaName}`,
-          selectedGroup ? `当前实验组：${stripExperimentPrefix(selectedGroup.parent_title)}` : null,
-          groups.length ? `开放实验组：${groups.map((group) => stripExperimentPrefix(group.parent_title)).join("、")}` : null,
-          `推荐区：${home.recommended_area_id || "未生成"}`,
+          profile.hero.summary,
+          `性质卡片：${profile.property_cards.map((card) => `${card.label} ${card.value}`).join("；")}`,
+          selectedSection ? `当前性质：${selectedSection.title} ${selectedSection.summary}` : null,
+          relatedGroups.length
+            ? `相关实验点：${relatedGroups.flatMap((group) => group.points.map((point) => point.point_title || point.title)).join("、")}`
+            : null,
         ]),
-        chapter_id: selectedGroup?.chapter_ids[0] || null,
-        prompts: ["我应该先学哪个实验？", `${selectedAreaName}怎么复习？`, "帮我规划本轮学习"],
+        chapter_id: profile.chapter_id,
+        prompts: [
+          selectedSection ? `${selectedSection.title}怎么理解？` : "这一章先学什么？",
+          "相关实验先看哪一个？",
+          `帮我整理${profile.family_name || profile.title}的记忆表`,
+        ],
+      }
+    : null;
+  const feedbackContext: FeedbackContext | null = profile
+    ? {
+        pagePath: `/student/learning/${profile.profile_id}`,
+        contextTitle: profile.title,
+        chapterId: profile.chapter_id,
+        metadata: {
+          screen: "learning_profile",
+          profile_id: profile.profile_id,
+          property_key: selectedSection?.key,
+          property_title: selectedSection?.title,
+        },
       }
     : null;
 
@@ -710,56 +844,235 @@ function LearningHomePanel({
         </button>
       </div>
 
-      {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载实验资源" /> : null}
+      {configError ? <div className="form-hint">设置刷新失败，当前页面会继续使用上一次配置：{configError}</div> : null}
+      {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载学习资源" /> : null}
       {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
-      {!loading && !error && home ? (
+      {!loading && !error && profile ? (
         <>
-          <PeriodicTable selectedArea={selectedArea} areas={home.areas} onSelectArea={setSelectedArea} />
+          <LearningProfileTabs page={page} activeProfileId={profile.profile_id} onSelectProfile={setSelectedProfileId} />
+          <LearningProfileHero profile={profile} />
+          <LearningPropertyCards profile={profile} />
 
-          <section className="selection-panel">
+          <section className="property-section-panel">
             <div className="selection-head">
-              <span style={{ "--area-color": areaSwatches[selectedArea] } as CSSProperties}>
+              <span style={{ "--area-color": "#087246" } as CSSProperties}>
                 <Layers3 size={18} />
               </span>
               <div>
-                <p>当前选区</p>
-                <h2>{home.areas.find((area) => area.area_id === selectedArea)?.area_name || periodicAreaByAreaId[selectedArea]}</h2>
+                <p>族元素的典型性质与实验</p>
+                <h2>{selectedSection?.title || "相关实验点"}</h2>
               </div>
             </div>
+            <div className="property-section-list">
+              {profile.property_sections.map((section) => (
+                <PropertySectionButton
+                  key={section.key}
+                  section={section}
+                  active={selectedSection?.key === section.key}
+                  onClick={() => setSelectedPropertyKey(section.key)}
+                />
+              ))}
+            </div>
+          </section>
 
-            {groups.length ? (
-              <div className="family-grid">
-                {groups.map((group) => (
-                  <ExperimentGroupCard
-                    key={group.parent_code}
+          <section className="point-list-panel">
+            <div className="point-list-head">
+              <div>
+                <p>{selectedSection?.formula || selectedSection?.summary || "视频与点位"}</p>
+                <h2>相关实验-点位</h2>
+              </div>
+              <span>{relatedPointCount} 个</span>
+            </div>
+            {relatedGroups.length ? (
+              <div className="point-group-stack">
+                {relatedGroups.map((group) => (
+                  <LearningPointGroupView
+                    key={`${group.property_key}-${group.parent_code}`}
                     group={group}
-                    selected={selectedGroup?.parent_code === group.parent_code}
-                    onSelect={() => setSelectedParentCode(group.parent_code)}
+                    profile={profile}
+                    onSelectPoint={onSelectPoint}
                   />
                 ))}
               </div>
             ) : (
               <div className="empty-learning-card">
                 <FlaskConical size={20} />
-                <span>该区实验暂未开放</span>
+                <span>该性质暂未匹配到开放实验点</span>
               </div>
             )}
           </section>
 
-          <button
-            className="primary-action full"
-            type="button"
-            disabled={!selectedGroup}
-            onClick={() => selectedGroup && onEnterGroup(selectedGroup.parent_code)}
-          >
-            <BookOpenCheck size={18} />
-            <span>进入实验</span>
-          </button>
           <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />
-          {homeAssistantContext ? <StudentAiChat context={homeAssistantContext} /> : null}
+          {assistantEnabled && homeAssistantContext ? <StudentAiChat context={homeAssistantContext} /> : null}
+          {feedbackEnabled && feedbackContext ? <StudentFeedbackFab context={feedbackContext} /> : null}
         </>
       ) : null}
     </section>
+  );
+}
+
+function LearningProfileTabs({
+  page,
+  activeProfileId,
+  onSelectProfile,
+}: {
+  page: StudentLearningPageResponse | null;
+  activeProfileId: string;
+  onSelectProfile: (profileId: string) => void;
+}) {
+  const profiles = page?.profiles || [];
+  if (profiles.length <= 1) return null;
+  return (
+    <div className="learning-profile-tabs" aria-label="学习章节">
+      {profiles.map((profile) => (
+        <button
+          key={profile.profile_id}
+          type="button"
+          className={profile.profile_id === activeProfileId ? "active" : ""}
+          onClick={() => onSelectProfile(profile.profile_id)}
+        >
+          <strong>{profile.family_number || profile.title}</strong>
+          <span>{profile.element_symbols.join(" ") || profile.family_name}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function LearningProfileHero({ profile }: { profile: StudentLearningProfile }) {
+  return (
+    <section className="profile-hero-card">
+      <div className="element-badge-row" aria-label="族内元素">
+        {profile.elements.map((element) => (
+          <div className="element-badge" key={element.symbol}>
+            <strong>{element.symbol}</strong>
+            <span>{element.name}</span>
+          </div>
+        ))}
+      </div>
+      <div className="profile-hero-copy">
+        <p>{profile.hero.eyebrow || profile.subtitle}</p>
+        <h2>{profile.hero.title}</h2>
+        <span>{profile.hero.summary}</span>
+      </div>
+    </section>
+  );
+}
+
+function LearningPropertyCards({ profile }: { profile: StudentLearningProfile }) {
+  return (
+    <section className="property-card-grid" aria-label="基础常识">
+      {profile.property_cards.map((card) => (
+        <article className="property-card" key={card.key}>
+          <p>{card.label}</p>
+          <strong>{card.value}</strong>
+          {card.description ? <span>{card.description}</span> : null}
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function PropertySectionButton({
+  section,
+  active,
+  onClick,
+}: {
+  section: StudentLearningPropertySection;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button className={active ? "property-section active" : "property-section"} type="button" aria-pressed={active} onClick={onClick}>
+      <div>
+        <strong>{section.title}</strong>
+        <span>{section.subtitle || section.summary}</span>
+      </div>
+      <ChevronRight size={17} />
+    </button>
+  );
+}
+
+function LearningPointGroupView({
+  group,
+  profile,
+  onSelectPoint,
+}: {
+  group: StudentLearningPointGroup;
+  profile: StudentLearningProfile;
+  onSelectPoint: (point: {
+    profileId: string;
+    propertyKey: string;
+    propertyTitle: string;
+    experimentId: string;
+    pointKey?: string | null;
+    pointTitle?: string | null;
+  }) => void;
+}) {
+  return (
+    <section className="point-group">
+      <div className="point-group-title">
+        <FlaskConical size={17} />
+        <strong>{stripExperimentPrefix(group.parent_title)}</strong>
+      </div>
+      <div className="point-card-grid">
+        {group.points.map((point) => (
+          <LearningPointCardView
+            key={`${point.id}-${point.property_key}-${point.point_key || point.title}`}
+            point={point}
+            profile={profile}
+            onSelectPoint={onSelectPoint}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function LearningPointCardView({
+  point,
+  profile,
+  onSelectPoint,
+}: {
+  point: StudentLearningPointCard;
+  profile: StudentLearningProfile;
+  onSelectPoint: (point: {
+    profileId: string;
+    propertyKey: string;
+    propertyTitle: string;
+    experimentId: string;
+    pointKey?: string | null;
+    pointTitle?: string | null;
+  }) => void;
+}) {
+  const video = point.videos[0] || null;
+  return (
+    <button
+      className="learning-point-card"
+      type="button"
+      onClick={() =>
+        onSelectPoint({
+          profileId: profile.profile_id,
+          propertyKey: point.property_key,
+          propertyTitle: point.property_title,
+          experimentId: point.id,
+          pointKey: point.point_key,
+          pointTitle: point.point_title || point.title,
+        })
+      }
+    >
+      <div className="point-thumb">
+        {video?.thumbnail_path ? <img src={studentMediaUrl(video.thumbnail_path)} alt="" /> : <PlayCircle size={30} />}
+        <span>{point.code}</span>
+      </div>
+      <div className="point-card-copy">
+        <p>{point.point_title || point.property_title}</p>
+        <h3>{stripExperimentPrefix(point.title)}</h3>
+        <span>
+          视频 {point.published_video_count || point.video_candidate_count} / 练习 {point.question_count}
+        </span>
+      </div>
+    </button>
   );
 }
 
@@ -962,16 +1275,30 @@ function ExperimentGroupPanel({
 
 function ExperimentDetailPanel({
   experimentId,
+  profileId,
+  propertyKey,
+  propertyTitle,
+  pointKey,
+  pointTitle,
   onBack,
   onFinishLearning,
   finishing,
   finishError,
+  assistantEnabled,
+  feedbackEnabled,
 }: {
   experimentId: string;
+  profileId?: string | null;
+  propertyKey?: string | null;
+  propertyTitle?: string | null;
+  pointKey?: string | null;
+  pointTitle?: string | null;
   onBack: () => void;
   onFinishLearning: () => void;
   finishing: boolean;
   finishError: string;
+  assistantEnabled: boolean;
+  feedbackEnabled: boolean;
 }) {
   const [detail, setDetail] = useState<StudentExperimentDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -996,27 +1323,46 @@ function ExperimentDetailPanel({
     };
   }, [experimentId]);
 
-  const video = detail?.videos[0] || null;
+  const video = detail?.videos.find((item) => pointKey && item.point_key === pointKey) || detail?.videos[0] || null;
+  const effectivePointTitle = pointTitle || video?.point_title || detail?.video_candidates[0] || detail?.title || "实验点位";
   const detailAssistantContext: AssistantContext | null = detail
     ? {
-        context_type: "experiment_detail",
-        context_title: detail.title,
+        context_type: "learning_point",
+        context_title: effectivePointTitle,
         context_summary: compactText([
+          propertyTitle ? `相关性质：${propertyTitle}` : null,
           `实验：${detail.title}`,
           detail.summary || null,
+          pointKey ? `点位标识：${pointKey}` : null,
           detail.video_candidates.length ? `观察点：${detail.video_candidates.join("、")}` : null,
           detail.videos.length ? `视频：${detail.videos.map((item) => item.point_title || item.title).join("、")}` : null,
         ]),
         chapter_id: detail.chapter_ids[0] || null,
         experiment_id: detail.id,
-        point_key: video?.point_key || detail.video_candidates[0] || null,
+        point_key: pointKey || video?.point_key || detail.video_candidates[0] || null,
         prompts: ["这个现象说明什么？", "帮我解释反应原理", "这个实验怎么记？"],
+      }
+    : null;
+  const feedbackContext: FeedbackContext | null = detail
+    ? {
+        pagePath: `/student/learning/${profileId || "profile"}/point/${detail.id}`,
+        contextTitle: effectivePointTitle,
+        chapterId: detail.chapter_ids[0] || null,
+        experimentId: detail.id,
+        pointKey: pointKey || video?.point_key || null,
+        metadata: {
+          screen: "learning_point",
+          profile_id: profileId,
+          property_key: propertyKey,
+          property_title: propertyTitle,
+          experiment_title: detail.title,
+        },
       }
     : null;
 
   return (
     <section className="learning-panel" aria-label="实验详情">
-      <PageBar title={detail?.title || "实验详情"} onBack={onBack} />
+      <PageBar title={effectivePointTitle} onBack={onBack} />
       {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载实验详情" /> : null}
       {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
       {detail ? (
@@ -1038,13 +1384,14 @@ function ExperimentDetailPanel({
           </section>
 
           <section className="experiment-detail-card">
-            <p>{detail.module_title || detail.parent_title}</p>
-            <h2>{detail.title}</h2>
+            <p>{propertyTitle || detail.module_title || detail.parent_title}</p>
+            <h2>{effectivePointTitle}</h2>
+            <small>{stripExperimentPrefix(detail.title)}</small>
             {detail.summary ? <span>{detail.summary}</span> : null}
           </section>
 
           <section className="detail-section">
-            <h3>实验观察点</h3>
+            <h3>实验观察与相关点位</h3>
             {detail.video_candidates.length ? (
               <div className="candidate-list">
                 {detail.video_candidates.map((candidate) => (
@@ -1070,7 +1417,8 @@ function ExperimentDetailPanel({
             </button>
           </section>
           <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />
-          {detailAssistantContext ? <StudentAiChat context={detailAssistantContext} /> : null}
+          {assistantEnabled && detailAssistantContext ? <StudentAiChat context={detailAssistantContext} /> : null}
+          {feedbackEnabled && feedbackContext ? <StudentFeedbackFab context={feedbackContext} /> : null}
         </>
       ) : null}
     </section>
@@ -1089,9 +1437,69 @@ function FinishLearningAction({ loading, error, onClick }: { loading: boolean; e
   );
 }
 
+function normalizeAssistantMetadata(value: unknown): StudentAssistantFinalMetadata | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  return value as StudentAssistantFinalMetadata;
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  return text.split(/(`[^`]+`|\*\*[^*]+?\*\*)/g).map((part, index) => {
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return <code key={`${part}-${index}`}>{part.slice(1, -1)}</code>;
+    }
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>;
+    }
+    return <span key={`${part}-${index}`}>{part}</span>;
+  });
+}
+
+function MarkdownLite({ content }: { content: string }) {
+  const lines = content.split(/\r?\n/);
+  return (
+    <div className="ai-markdown">
+      {lines.map((line, index) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div className="ai-markdown-gap" key={`gap-${index}`} />;
+        const bullet = trimmed.match(/^[-*]\s+(.+)$/);
+        const ordered = trimmed.match(/^\d+[.)]\s+(.+)$/);
+        if (bullet || ordered) {
+          return (
+            <p className="ai-markdown-bullet" key={`${trimmed}-${index}`}>
+              <i>{ordered ? "•" : "•"}</i>
+              <span>{renderInlineMarkdown((bullet || ordered)?.[1] || trimmed)}</span>
+            </p>
+          );
+        }
+        return <p key={`${trimmed}-${index}`}>{renderInlineMarkdown(trimmed)}</p>;
+      })}
+    </div>
+  );
+}
+
+function AssistantSourceSummary({ metadata }: { metadata?: StudentAssistantFinalMetadata }) {
+  const sources = Array.isArray(metadata?.sources) ? metadata.sources.slice(0, 3) : [];
+  const sourceCount = typeof metadata?.source_count === "number" ? metadata.source_count : sources.length;
+  if (!sourceCount && !sources.length) return null;
+  return (
+    <div className="ai-source-summary">
+      <span>引用来源 {sourceCount || sources.length}</span>
+      {sources.length ? (
+        <div>
+          {sources.map((source, index) => (
+            <small key={`${source.chunk_id || source.title || "source"}-${index}`}>
+              {source.title || source.section || source.chunk_id || "课程资料"}
+            </small>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function StudentAiChat({ context }: { context: AssistantContext }) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<AgentChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("idle");
@@ -1111,8 +1519,8 @@ function StudentAiChat({ context }: { context: AssistantContext }) {
   const submitQuestion = async (questionText?: string) => {
     const question = (questionText || input).trim();
     if (!question || loading) return;
-    const history = messages.slice(-10);
-    const nextMessages: AgentChatMessage[] = [...messages, { role: "user", content: question }, { role: "assistant", content: "" }];
+    const history = messages.slice(-10).map(({ role, content }) => ({ role, content }));
+    const nextMessages: ChatMessage[] = [...messages, { role: "user", content: question }, { role: "assistant", content: "" }];
     setMessages(nextMessages);
     setInput("");
     setLoading(true);
@@ -1154,6 +1562,16 @@ function StudentAiChat({ context }: { context: AssistantContext }) {
             throw new Error(typeof event.message === "string" ? event.message : "AI 请求失败");
           }
           if (event.event === "final") {
+            const metadata = normalizeAssistantMetadata(event.response);
+            if (metadata && typeof metadata.text === "string" && !answer.trim()) {
+              answer = metadata.text;
+            }
+            setMessages((current) => {
+              const updated = [...current];
+              const last = updated[updated.length - 1];
+              if (last?.role === "assistant") updated[updated.length - 1] = { ...last, content: answer || last.content, metadata };
+              return updated;
+            });
             setStatus("ai");
           }
         },
@@ -1212,7 +1630,14 @@ function StudentAiChat({ context }: { context: AssistantContext }) {
             ) : null}
             {messages.map((message, index) => (
               <div className={`ai-message ${message.role}`} key={`${message.role}-${index}`}>
-                {message.content || (message.role === "assistant" && loading ? "正在生成..." : "")}
+                {message.role === "assistant" ? (
+                  <>
+                    <MarkdownLite content={message.content || (loading ? "正在生成..." : "")} />
+                    <AssistantSourceSummary metadata={message.metadata} />
+                  </>
+                ) : (
+                  message.content
+                )}
               </div>
             ))}
           </div>
@@ -1242,6 +1667,103 @@ function StudentAiChat({ context }: { context: AssistantContext }) {
       <button className="ai-chat-toggle" type="button" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
         <MessageCircle size={18} />
         <span>问 AI</span>
+      </button>
+    </aside>
+  );
+}
+
+const feedbackTypes = [
+  { value: "content", label: "内容问题" },
+  { value: "experience", label: "体验问题" },
+  { value: "suggestion", label: "功能建议" },
+];
+
+function StudentFeedbackFab({ context }: { context: FeedbackContext }) {
+  const [open, setOpen] = useState(false);
+  const [feedbackType, setFeedbackType] = useState("content");
+  const [content, setContent] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setMessage("");
+    setError("");
+  }, [context.pagePath, context.experimentId, context.pointKey]);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = content.trim();
+    if (!trimmed || loading) return;
+    setLoading(true);
+    setMessage("");
+    setError("");
+    try {
+      await submitStudentFeedback({
+        feedback_type: feedbackType,
+        content: trimmed,
+        chapter_id: context.chapterId,
+        experiment_id: context.experimentId,
+        point_key: context.pointKey,
+        page_path: context.pagePath,
+        metadata: {
+          ...context.metadata,
+          context_title: context.contextTitle,
+          user_agent: window.navigator.userAgent,
+        },
+      });
+      setContent("");
+      setMessage("已收到反馈，老师后台可以看到。");
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <aside className={open ? "feedback-fab open" : "feedback-fab"}>
+      {open ? (
+        <form className="feedback-panel" onSubmit={submit} role="dialog" aria-label="页面反馈">
+          <header className="feedback-head">
+            <div>
+              <span>页面反馈</span>
+              <h2>{context.contextTitle}</h2>
+            </div>
+            <button type="button" onClick={() => setOpen(false)} aria-label="关闭反馈">
+              <X size={18} />
+            </button>
+          </header>
+          <div className="feedback-type-row">
+            {feedbackTypes.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                className={feedbackType === item.value ? "active" : ""}
+                onClick={() => setFeedbackType(item.value)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={content}
+            rows={4}
+            maxLength={4000}
+            placeholder="描述你在当前页面遇到的问题或建议"
+            onChange={(event) => setContent(event.target.value)}
+          />
+          {message ? <div className="form-hint">{message}</div> : null}
+          {error ? <div className="form-error">{error}</div> : null}
+          <button className="primary-action" type="submit" disabled={!content.trim() || loading}>
+            {loading ? <LoaderCircle className="spin" size={18} /> : <Send size={18} />}
+            <span>{loading ? "正在提交" : "提交反馈"}</span>
+          </button>
+        </form>
+      ) : null}
+      <button className="feedback-toggle" type="button" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+        <ClipboardList size={18} />
+        <span>反馈</span>
       </button>
     </aside>
   );

@@ -4,6 +4,7 @@ from server.app.services.student_learning_service import (
     _areas_for_groups,
     _build_parent_groups,
     _choose_recommendation,
+    validate_student_learning_profiles,
 )
 from server.tests.route_helpers import assert_route
 
@@ -40,8 +41,17 @@ def _experiment(
 
 def test_student_learning_routes_are_registered() -> None:
     assert_route("/api/student/learning-home", "GET")
+    assert_route("/api/student/learning-page", "GET")
     assert_route("/api/student/experiment-groups/{parent_code}", "GET")
     assert_route("/api/student/experiments/{experiment_id}", "GET")
+
+
+def test_student_learning_profile_seed_is_valid() -> None:
+    result = validate_student_learning_profiles()
+
+    assert result["ok"] is True
+    assert result["profile_count"] == 9
+    assert result["enabled_profile_count"] == 9
 
 
 def test_parent_groups_follow_experiment_parent_titles_and_hide_empty_f_area() -> None:
