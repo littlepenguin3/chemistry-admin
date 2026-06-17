@@ -21,9 +21,9 @@
 
 ## 4. Validation And Handoff
 
-- [ ] 4.1 Run OpenSpec strict validation for `production-quality-iteration-four`.
-- [ ] 4.2 Run frontend typecheck, frontend tests, production build, and build chunk report.
-- [ ] 4.3 Run backend/protected-resource checks only if touched files or imports make them relevant.
-- [ ] 4.4 Run opt-in e2e smoke if route boundaries or runtime behavior changed.
-- [ ] 4.5 Write final notes with completed work, validation results, remaining risks, and the next recommended slice.
-- [ ] 4.6 Commit coherent phases and push `codex/productionize-admin-platform`.
+- [x] 4.1 Run OpenSpec strict validation for `production-quality-iteration-four`.
+- [x] 4.2 Run frontend typecheck, frontend tests, production build, and build chunk report.
+- [x] 4.3 Run backend/protected-resource checks only if touched files or imports make them relevant.
+- [x] 4.4 Run opt-in e2e smoke if route boundaries or runtime behavior changed.
+- [x] 4.5 Write final notes with completed work, validation results, remaining risks, and the next recommended slice.
+- [x] 4.6 Commit coherent phases and push `codex/productionize-admin-platform`.
