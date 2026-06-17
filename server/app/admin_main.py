@@ -9,15 +9,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from server.app.admin import router as admin_router
 from server.app.auth import AuthUser, LoginResponse
 from server.app.auth import change_password, login, logout, me
 from server.app.config import get_settings
 from server.app.database import check_database_connection
 from server.app.repositories import get_repositories
 from server.app.routers.admin_analytics import router as admin_analytics_router
+from server.app.routers.admin_classes import router as admin_classes_router
+from server.app.routers.admin_curriculum_review import router as admin_curriculum_review_router
 from server.app.routers.admin_experiments import router as admin_experiments_router
+from server.app.routers.admin_feedback import router as admin_feedback_router
+from server.app.routers.admin_learning_assistant import router as admin_learning_assistant_router
 from server.app.routers.admin_learning_resources import router as admin_learning_resources_router
+from server.app.routers.admin_media import router as admin_media_router
+from server.app.routers.admin_platform import router as admin_platform_router
 from server.app.routers.admin_question_banks import router as admin_question_banks_router
 from server.app.routers.admin_question_drafts import router as admin_question_drafts_router
 from server.app.routers.admin_question_generation import router as admin_question_generation_router
@@ -55,10 +60,15 @@ auth_router.post("/logout")(logout)
 auth_router.post("/password")(change_password)
 
 app.include_router(auth_router)
-app.include_router(admin_router)
 app.include_router(admin_analytics_router)
+app.include_router(admin_classes_router)
+app.include_router(admin_curriculum_review_router)
 app.include_router(admin_experiments_router)
+app.include_router(admin_feedback_router)
+app.include_router(admin_learning_assistant_router)
 app.include_router(admin_learning_resources_router)
+app.include_router(admin_media_router)
+app.include_router(admin_platform_router)
 app.include_router(admin_question_banks_router)
 app.include_router(admin_question_drafts_router)
 app.include_router(admin_question_generation_router)

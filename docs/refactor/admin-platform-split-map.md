@@ -105,9 +105,9 @@ Current frontend extraction status:
 
 ## Backend Endpoint Map
 
-Source: `server/app/experiment_admin.py`.
+Source: `server/app/admin_main.py` plus feature-owned routers under `server/app/routers/`.
 
-Preserve these endpoint paths while extracting routers:
+The backend admin surface no longer uses `server/app/admin.py` or `server/app/experiment_admin.py` as endpoint owners. Preserve these endpoint paths while maintaining router ownership:
 
 | Lines | Endpoint Group | Paths | Target Router |
 | --- | --- | --- | --- |
@@ -120,6 +120,12 @@ Preserve these endpoint paths while extracting routers:
 | Split | Legacy draft generation endpoints | `/api/admin/question-banks/generate`, `/drafts*` | `server/app/routers/admin_question_generation.py`, `server/app/routers/admin_question_drafts.py` |
 | 4615 | Student submit API | `/api/experiment-questions/submit` | `server/app/routers/student_experiment_questions.py` |
 | 4832-5177 | Class analytics | `/api/admin/analytics/classes/*` | `server/app/routers/admin_analytics.py` |
+| Split | Platform settings and AI configuration | `/api/admin/platform-settings`, `/api/admin/ai-configuration` | `server/app/routers/admin_platform.py` |
+| Split | Learning assistant admin and RAG assets | `/api/admin/learning-assistant/*`, `/api/admin/rag-assets` | `server/app/routers/admin_learning_assistant.py` |
+| Split | Feedback management | `/api/admin/feedback*` | `server/app/routers/admin_feedback.py` plus `server/app/services/feedback_service.py` |
+| Split | Classes, registration, roster, students | `/api/admin/classes*`, `/api/admin/registration-settings` | `server/app/routers/admin_classes.py` plus `server/app/services/class_roster_service.py` |
+| Split | Curriculum versions and review items | `/api/admin/curriculum/versions*`, `/api/admin/review/items*` | `server/app/routers/admin_curriculum_review.py` |
+| Split | Media assets, processing, duplicates, bindings | `/api/admin/media/*` | `server/app/routers/admin_media.py` plus `server/app/media.py` |
 
 Current extraction status:
 
@@ -133,16 +139,28 @@ Current extraction status:
 - Done: question generation `/api/admin/question-banks/generate` -> `server/app/routers/admin_question_generation.py`, `server/app/services/question_generation_service.py`.
 - Done: point-aware suggestions `/api/admin/question-banks/point-aware-suggestions` -> `server/app/routers/admin_point_aware_questions.py`, `server/app/services/point_aware_question_service.py`.
 - Done: question workbench sessions/candidates -> `server/app/routers/admin_question_workbench.py`, `server/app/services/question_workbench_service.py`.
-- Remaining: `server/app/experiment_admin.py` is now a compatibility stub only; backend endpoint groups have moved.
+- Done: platform settings and AI configuration -> `server/app/routers/admin_platform.py`.
+- Done: learning assistant runtime/debug endpoints and RAG asset file serving -> `server/app/routers/admin_learning_assistant.py`.
+- Done: feedback summary/list/detail/update -> `server/app/routers/admin_feedback.py`, `server/app/services/feedback_service.py`.
+- Done: classes, registration settings, roster import, student CRUD, and password reset -> `server/app/routers/admin_classes.py`, `server/app/services/class_roster_service.py`.
+- Done: curriculum versions and review item actions -> `server/app/routers/admin_curriculum_review.py`.
+- Done: media assets/uploads/processing/duplicates/file serving/bindings -> `server/app/routers/admin_media.py`, `server/app/media.py`.
+- Done: `server/app/admin.py` and the old empty `server/app/experiment_admin.py` compatibility stub have been removed.
 
-Pydantic request models are centralized in `server/app/experiment_admin_schemas.py` during this refactor. A later naming cleanup may move them into `server/app/schemas/experiment_admin.py` or feature-specific schema modules:
+Pydantic request models for the experiment/question-bank/workbench family remain centralized in `server/app/experiment_admin_schemas.py`. Newer admin domains keep models closer to their owning router or service:
+
+- `server/app/services/class_roster_service.py`: class, registration, roster, and student request/response models.
+- `server/app/routers/admin_media.py`: media request models.
+- `server/app/routers/admin_learning_assistant.py`: admin learning-assistant debug request model.
+- `server/app/routers/admin_curriculum_review.py`: curriculum/review request models.
+
+A later naming cleanup may move these into a package-style schema layout if `server/app/schemas.py` is converted into a package. Current experiment/question-bank/workbench models include:
 
 - `ExperimentCreateRequest`, `ExperimentUpdateRequest`, `ExperimentChapterBinding`
 - `QuestionRequest`, `QuestionUpdateRequest`, `GenerationRequest`
 - `QuestionBankAssistantRequest`, `PointAwareSuggestionRequest`
 - `WorkbenchSessionRequest`, `WorkbenchMessageRequest`, `DraftUpdateRequest`
 - `ExperimentQuestionSubmitRequest`, `ExperimentAnswer`
-- media binding request models
 
 ## Backend Service Extraction Map
 
@@ -157,6 +175,8 @@ Prefer service extraction before router moves when helper functions are shared b
 - `services/question_workbench_service.py`: RAG gate, session context, evidence package retrieval, turn/candidate lifecycle.
 - `services/analytics_service.py`: class dashboard, student report, weak points, exports.
 - `services/student_experiment_service.py`: submit answers, grade attempts, progress/events.
+- `services/feedback_service.py`: feedback visibility filters, summary counts, list queries, visible detail loading, status/internal-note updates.
+- `services/class_roster_service.py`: class CRUD, teacher assignment, registration settings, roster import, student CRUD, password reset, class access checks.
 
 ## Agent Helper Split
 
@@ -169,6 +189,7 @@ Prefer service extraction before router moves when helper functions are shared b
 
 - Keep `admin_main.py` router inclusion stable during extraction.
 - Each extracted router should preserve the same prefix and tags or include compatibility aliases.
+- `server/app/admin.py` and `server/app/experiment_admin.py` should not be reintroduced as endpoint owners.
 - Move tests or add focused regression tests immediately after moving an endpoint group.
 - Run `python scripts/validate_production_resources.py` before and after refactor phases that touch import/resource code.
 - Run backend tests for moved endpoints before starting the next endpoint group.

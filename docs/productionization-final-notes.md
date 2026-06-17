@@ -71,9 +71,9 @@ Frontend:
 
 Backend:
 
-- `server/app/experiment_admin.py` is a compatibility stub.
+- `server/app/admin.py` and the old empty `server/app/experiment_admin.py` compatibility stub have been removed; admin endpoints are owned by feature routers.
 - Admin endpoint groups moved into focused routers under `server/app/routers/`.
-- Domain logic moved into services under `server/app/services/`, including question bank, point-aware questions, workbench sessions, learning resources, analytics, media/experiments, student submissions, and agent RAG/output helpers.
+- Domain logic moved into services under `server/app/services/`, including question bank, point-aware questions, workbench sessions, learning resources, analytics, media/experiments, feedback management, class/roster management, student submissions, and agent RAG/output helpers.
 - Endpoint paths, request/response shapes, permissions, and current database effects are intended to remain equivalent.
 
 Operations:
