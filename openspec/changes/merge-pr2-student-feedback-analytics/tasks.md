@@ -79,4 +79,4 @@
 - [x] 9.3 Confirm PR2's useful files were either integrated or intentionally omitted with rationale.
 - [x] 9.4 Commit the integration in coherent commits or one clearly named merge/integration commit.
 - [x] 9.5 Push the integration branch.
-- [ ] 9.6 Open a PR against `main` summarizing conflict decisions, tests run, and remaining risks.
+- [x] 9.6 Open a PR against `main` summarizing conflict decisions, tests run, and remaining risks.
