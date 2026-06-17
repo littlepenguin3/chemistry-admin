@@ -137,6 +137,43 @@ const mockLearningPage = {
   },
 };
 
+const mockLearningHome = {
+  recommended_area_id: "p",
+  recommended_parent_code: "19-1",
+  areas: [
+    {
+      area_id: "p",
+      area_name: "p区元素",
+      enabled: true,
+      parent_codes: ["19-1"],
+      experiment_count: 1,
+      published_video_count: 0,
+      question_count: 10,
+    },
+  ],
+  groups: [
+    {
+      parent_code: "19-1",
+      parent_title: "实验 19-1 卤素",
+      area_id: "p",
+      area_name: "p区元素",
+      chapter_ids: ["CH17"],
+      experiment_count: 1,
+      published_video_count: 0,
+      question_count: 10,
+      recommended: true,
+    },
+  ],
+};
+
+const mockExperimentGroup = {
+  parent_code: "19-1",
+  parent_title: "实验 19-1 卤素",
+  area_id: "p",
+  area_name: "p区元素",
+  experiments: [mockLearningPoint],
+};
+
 const mockPosttest = {
   status: "in_progress",
   session_id: "mobile-qa-posttest",
@@ -299,13 +336,6 @@ async function waitForAny(page, selectors, timeout = 10000) {
   throw new Error(`Timed out waiting for any selector: ${selectors.join(", ")}`);
 }
 
-async function forceClickIfAttached(page, selector) {
-  const target = page.locator(selector).first();
-  if ((await target.count()) === 0) return false;
-  await target.click({ force: true });
-  return true;
-}
-
 async function submitVisibleAssessment(page) {
   const questionCards = page.locator("article.question-card");
   const questionCount = await questionCards.count();
@@ -324,6 +354,11 @@ async function submitVisibleAssessment(page) {
   const submitButton = page.getByRole("button", { name: "提交答案" }).first();
   await submitButton.waitFor({ state: "visible", timeout: 10000 });
   await submitButton.click();
+}
+
+async function clickStudentTab(page, label) {
+  await page.locator(".student-bottom-nav button").filter({ hasText: label }).first().click({ force: true });
+  await page.locator(".student-app-header h1").filter({ hasText: label }).first().waitFor({ state: "visible", timeout: 10000 });
 }
 
 function jsonResponse(payload, status = 200) {
@@ -359,7 +394,9 @@ async function installMockApi(page) {
       }),
     ),
   );
+  await page.route("**/api/student/learning-home", (route) => route.fulfill(jsonResponse(mockLearningHome)));
   await page.route("**/api/student/learning-page**", (route) => route.fulfill(jsonResponse(mockLearningPage)));
+  await page.route("**/api/student/experiment-groups/19-1", (route) => route.fulfill(jsonResponse(mockExperimentGroup)));
   await page.route("**/api/student/experiments/EXP_19_1_01", (route) =>
     route.fulfill(
       jsonResponse({
@@ -449,57 +486,22 @@ async function loginIfConfigured(page) {
 
 async function checkAuthenticatedFlows(page, viewportName) {
   await assertNoHorizontalOverflow(page, `${viewportName}: learning home`);
-  await page.locator(".learning-topbar").first().waitFor({ state: "visible", timeout: 10000 });
-  await waitForAny(
-    page,
-    [".chapter-entry-card", ".chapter-context-card", ".selected-element-panel", ".learning-point-card", ".empty-learning-card"],
-    15000,
-  );
-  if (await page.locator(".chapter-entry-card").first().isVisible().catch(() => false)) {
-    const firstChapterCard = page.locator(".chapter-entry-card").first();
-    await firstChapterCard.scrollIntoViewIfNeeded();
-    await firstChapterCard.click({ force: true });
-    await waitForAny(page, [".chapter-context-card", ".selected-element-panel", ".learning-point-card", ".empty-learning-card"], 15000);
-    if (!(await page.locator(".chapter-context-card").first().isVisible().catch(() => false))) {
-      await page.waitForFunction(
-        () => document.querySelector(".chapter-context-card") || !document.querySelector(".chapter-entry-card"),
-        null,
-        { timeout: 15000 },
-      );
-    }
+  const nav = page.getByRole("navigation", { name: "学生端主导航" });
+  await nav.waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".student-app-header").first().waitFor({ state: "visible", timeout: 10000 });
+  const obsoleteFloatingCount = await page.locator(".ai-chat-toggle, .feedback-toggle, .ai-chat-fab, .feedback-fab").count();
+  if (obsoleteFloatingCount > 0) {
+    throw new Error(`${viewportName}: obsolete floating AI/feedback entries are still rendered`);
   }
-  await page.locator(".chapter-context-card").first().waitFor({ state: "visible", timeout: 10000 });
-  await page.locator(".chapter-view-switcher").first().waitFor({ state: "visible", timeout: 10000 });
-  await waitForAny(page, [".selected-element-panel", ".element-chip"], 15000);
-  await assertElementChipRowBalanced(page, `${viewportName}: element chips`);
-  const secondElementChip = page.locator(".element-chip").nth(1);
-  if (await secondElementChip.isVisible().catch(() => false)) {
-    await secondElementChip.click();
-    await page.locator(".selected-element-panel").first().waitFor({ state: "visible", timeout: 10000 });
-  }
-  await page.locator(".chapter-view-switcher button").nth(1).click();
-  await waitForAny(page, [".learning-point-card", ".empty-learning-card"], 15000);
-  await page.locator(".chapter-view-switcher button").nth(0).click();
-  await page.locator(".selected-element-panel").first().waitFor({ state: "visible", timeout: 10000 });
-  await page.locator(".chapter-view-switcher button").nth(1).click();
-  await waitForAny(page, [".learning-point-card", ".empty-learning-card"], 15000);
-  await page.locator(".ai-chat-toggle").first().waitFor({ state: "attached", timeout: 15000 });
-  await page.locator(".feedback-toggle").first().waitFor({ state: "attached", timeout: 15000 });
-  await assertNoOverlap(page, `${viewportName}: closed floating entries`, [".ai-chat-fab", ".feedback-fab", ".chapter-view-switcher"]);
 
-  if (!(await forceClickIfAttached(page, ".ai-chat-toggle"))) {
-    throw new Error(`${viewportName}: AI chat toggle is not attached`);
-  }
+  await clickStudentTab(page, "问答");
   await page.locator(".ai-chat-panel").first().waitFor({ state: "visible", timeout: 10000 });
-  await assertNoHorizontalOverflow(page, `${viewportName}: ai panel`);
-  await assertNoOverlap(page, `${viewportName}: ai panel`, [".ai-chat-fab", ".feedback-fab", ".finish-action"]);
-  await forceClickIfAttached(page, ".ai-chat-toggle");
+  await assertNoHorizontalOverflow(page, `${viewportName}: assistant tab`);
+  await assertNoOverlap(page, `${viewportName}: assistant compose`, [".student-bottom-nav", ".ai-chat-compose"]);
 
-  if (!(await forceClickIfAttached(page, ".feedback-toggle"))) {
-    throw new Error(`${viewportName}: feedback toggle is not attached`);
-  }
-  await page.locator(".feedback-panel").first().waitFor({ state: "visible", timeout: 10000 });
-  await assertNoHorizontalOverflow(page, `${viewportName}: feedback panel`);
+  await clickStudentTab(page, "我的");
+  await page.locator(".profile-feedback-panel").first().waitFor({ state: "visible", timeout: 10000 });
+  await assertNoHorizontalOverflow(page, `${viewportName}: profile tab`);
   const feedbackFile = {
     name: "mobile-feedback.png",
     mimeType: "image/png",
@@ -515,12 +517,51 @@ async function checkAuthenticatedFlows(page, viewportName) {
   await page.locator(".feedback-panel textarea").first().fill("移动端反馈附件 QA");
   await page.getByRole("button", { name: "提交反馈" }).first().click();
   await page.getByText("已收到反馈，老师后台可以看到。").first().waitFor({ state: "visible", timeout: 10000 });
-  await assertNoOverlap(page, `${viewportName}: feedback panel`, [".ai-chat-fab", ".feedback-fab", ".finish-action"]);
-  await forceClickIfAttached(page, ".feedback-toggle");
+  await assertNoOverlap(page, `${viewportName}: profile feedback submit`, [".student-bottom-nav", ".profile-feedback-panel .primary-action"]);
+
+  await clickStudentTab(page, "实验");
+  await page.locator(".experiment-module-card").first().waitFor({ state: "visible", timeout: 10000 });
+  await assertNoHorizontalOverflow(page, `${viewportName}: experiments tab`);
+
+  await clickStudentTab(page, "学习");
+  await waitForAny(
+    page,
+    [".chapter-entry-card", ".chapter-context-card", ".selected-element-panel", ".learning-point-card", ".empty-learning-card"],
+    15000,
+  );
+  if (await page.locator(".chapter-entry-card").first().isVisible().catch(() => false)) {
+    const firstChapterCard = page.locator(".chapter-entry-card").first();
+    await firstChapterCard.evaluate((element) => element.scrollIntoView({ block: "center", inline: "nearest" }));
+    await firstChapterCard.click();
+    await waitForAny(page, [".chapter-context-card", ".selected-element-panel", ".learning-point-card", ".empty-learning-card"], 15000);
+    if (!(await page.locator(".chapter-context-card").first().isVisible().catch(() => false))) {
+      await page.waitForFunction(
+        () => document.querySelector(".chapter-context-card") || !document.querySelector(".chapter-entry-card"),
+        null,
+        { timeout: 15000 },
+      );
+    }
+  }
+  await page.locator(".chapter-context-card").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".chapter-view-switcher").first().waitFor({ state: "visible", timeout: 10000 });
+  await assertNoOverlap(page, `${viewportName}: local chapter switcher`, [".student-bottom-nav", ".chapter-view-switcher"]);
+  await waitForAny(page, [".selected-element-panel", ".element-chip"], 15000);
+  await assertElementChipRowBalanced(page, `${viewportName}: element chips`);
+  const secondElementChip = page.locator(".element-chip").nth(1);
+  if (await secondElementChip.isVisible().catch(() => false)) {
+    await secondElementChip.click();
+    await page.locator(".selected-element-panel").first().waitFor({ state: "visible", timeout: 10000 });
+  }
+  await page.locator(".chapter-view-switcher button").nth(1).click();
+  await waitForAny(page, [".learning-point-card", ".empty-learning-card"], 15000);
+  await page.locator(".chapter-view-switcher button").nth(0).click();
+  await page.locator(".selected-element-panel").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".chapter-view-switcher button").nth(1).click();
+  await waitForAny(page, [".learning-point-card", ".empty-learning-card"], 15000);
 
   const finishAction = page.locator(".finish-action").first();
   if (await finishAction.isVisible().catch(() => false)) {
-    await assertNoOverlap(page, `${viewportName}: finish action`, [".ai-chat-fab", ".feedback-fab", ".finish-action", ".chapter-view-switcher"]);
+    await assertNoOverlap(page, `${viewportName}: finish action`, [".student-bottom-nav", ".finish-action", ".chapter-view-switcher"]);
   }
 
   const pointCard = page.locator(".learning-point-card").first();
@@ -528,7 +569,7 @@ async function checkAuthenticatedFlows(page, viewportName) {
     await pointCard.click();
     await waitForAny(page, [".video-stage", ".experiment-detail-card", ".learning-state"], 15000);
     await assertNoHorizontalOverflow(page, `${viewportName}: point detail`);
-    await assertNoOverlap(page, `${viewportName}: point detail`, [".ai-chat-fab", ".feedback-fab", ".finish-action"]);
+    await assertNoOverlap(page, `${viewportName}: point detail action`, [".student-bottom-nav", ".finish-action"]);
     await page.locator(".finish-action").first().click();
     await page.locator(".assessment-panel").first().waitFor({ state: "visible", timeout: 10000 });
     await submitVisibleAssessment(page);

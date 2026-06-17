@@ -232,6 +232,43 @@ const learningPage: StudentLearningPageResponse = {
   },
 };
 
+const learningHome = {
+  recommended_area_id: "p",
+  recommended_parent_code: "19-1",
+  areas: [
+    {
+      area_id: "p",
+      area_name: "p区元素",
+      enabled: true,
+      parent_codes: ["19-1"],
+      experiment_count: 1,
+      published_video_count: 0,
+      question_count: 10,
+    },
+  ],
+  groups: [
+    {
+      parent_code: "19-1",
+      parent_title: "实验 19-1 卤素",
+      area_id: "p",
+      area_name: "p区元素",
+      chapter_ids: ["CH17"],
+      experiment_count: 1,
+      published_video_count: 0,
+      question_count: 10,
+      recommended: true,
+    },
+  ],
+};
+
+const experimentGroup = {
+  parent_code: "19-1",
+  parent_title: "实验 19-1 卤素",
+  area_id: "p",
+  area_name: "p区元素",
+  experiments: [learningPoint],
+};
+
 const experimentDetail: StudentExperimentDetailResponse = {
   id: learningPoint.id,
   code: learningPoint.code,
@@ -374,7 +411,9 @@ describe("student app e2e flow", () => {
     apiMocks.startStudentPretest.mockResolvedValue(pretestResponse);
     apiMocks.submitStudentPretest.mockResolvedValue(completedPretestResponse);
     apiMocks.getStudentAppConfig.mockResolvedValue(appConfig);
+    apiMocks.getStudentLearningHome.mockResolvedValue(learningHome);
     apiMocks.getStudentLearningPage.mockResolvedValue(learningPage);
+    apiMocks.getStudentExperimentGroup.mockResolvedValue(experimentGroup);
     apiMocks.getStudentExperimentDetail.mockResolvedValue(experimentDetail);
     apiMocks.startStudentPosttest.mockResolvedValue(posttestResponse);
     apiMocks.submitStudentPosttest.mockResolvedValue({ status: "completed", report });
@@ -394,6 +433,47 @@ describe("student app e2e flow", () => {
 
     expect(await screen.findByRole("heading", { name: "课前摸底暂未接入" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "跳过课前摸底" }));
+
+    const nav = await screen.findByRole("navigation", { name: "学生端主导航" });
+    expect(within(nav).getByRole("button", { name: "学习" })).toHaveClass("active");
+    expect(within(nav).getByRole("button", { name: "实验" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "问答" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "测评" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "我的" })).toBeInTheDocument();
+    expect(document.querySelector(".brand-rail")).toBeNull();
+
+    fireEvent.click(within(nav).getByRole("button", { name: "问答" }));
+    expect(await screen.findByRole("heading", { name: "问答" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "AI 学习助手对话" })).toBeInTheDocument();
+    expect(screen.getByText("可以询问课程知识、实验现象、复习顺序和错题思路。")).toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole("button", { name: "我的" }));
+    expect(await screen.findByRole("heading", { name: "我的" })).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: "学生端反馈" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "内容问题" }));
+    fireEvent.change(screen.getByPlaceholderText("描述你遇到的问题或建议，可以配一张截图"), {
+      target: { value: "希望移动端导航更清楚" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "提交反馈" }));
+    await waitFor(() => expect(apiMocks.submitStudentFeedback).toHaveBeenCalledTimes(1));
+    expect(apiMocks.submitStudentFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feedback_type: "content",
+        content: "希望移动端导航更清楚",
+        metadata: expect.objectContaining({ screen: "profile_feedback" }),
+      }),
+    );
+    expect(await screen.findByText("已收到反馈，老师后台可以看到。")).toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole("button", { name: "实验" }));
+    expect(await screen.findByRole("heading", { name: "实验" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /卤素/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /卤素/ }));
+    expect(await screen.findByRole("heading", { name: "卤素" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "带着本组实验去问答" }));
+    expect(await screen.findByRole("heading", { name: "问答" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "卤素" }).length).toBeGreaterThan(0);
+    fireEvent.click(within(nav).getByRole("button", { name: "学习" }));
 
     const periodic = await screen.findByRole("region", { name: "元素周期表选择区" });
     expect(within(periodic).getByRole("button", { name: "p区元素，推荐学习区域，推荐17族" })).toHaveTextContent("推荐学习17族");
@@ -445,6 +525,7 @@ describe("student app e2e flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "完成学习" }));
 
     expect(await screen.findByRole("heading", { name: "请完成学习后测" })).toBeInTheDocument();
+    expect(within(screen.getByRole("navigation", { name: "学生端主导航" })).getByRole("button", { name: "测评" })).toHaveClass("active");
     await submitVisibleAssessment();
 
     expect(await screen.findByRole("heading", { name: "本轮实验报告" })).toBeInTheDocument();
@@ -457,26 +538,32 @@ describe("student app e2e flow", () => {
     expect(document.querySelector(".mistake-ai-answer ol.ai-md-list")).not.toBeNull();
     expect(document.querySelector(".mistake-ai-answer .katex")).not.toBeNull();
     expect(screen.queryByText("---")).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "反馈" }));
-    expect(screen.getByRole("dialog", { name: "页面反馈" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "内容问题" }));
-    fireEvent.change(screen.getByPlaceholderText("描述你在当前页面遇到的问题或建议"), {
-      target: { value: "报告里的错题讲解建议再清楚一点" },
+  it("hides assistant and profile feedback entries when app config disables them", async () => {
+    apiMocks.getStudentAppConfig.mockResolvedValue({
+      features: {
+        ai_assistant_enabled: false,
+        feedback_enabled: false,
+        student_ai_assistant_enabled: false,
+        rag_access_enabled: true,
+      },
     });
-    fireEvent.click(screen.getByRole("button", { name: "提交反馈" }));
 
-    await waitFor(() => expect(apiMocks.submitStudentFeedback).toHaveBeenCalledTimes(1));
-    expect(apiMocks.submitStudentFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({
-        feedback_type: "content",
-        content: "报告里的错题讲解建议再清楚一点",
-        metadata: expect.objectContaining({
-          screen: "posttest_report",
-          session_id: "posttest-session-e2e",
-        }),
-      }),
-    );
-    expect(await screen.findByText("已收到反馈，老师后台可以看到。")).toBeInTheDocument();
+    render(<App />);
+
+    fireEvent.change(await screen.findByPlaceholderText("请输入学号"), { target: { value: "20249999" } });
+    fireEvent.change(screen.getByPlaceholderText("请输入密码"), { target: { value: "Codex2026!" } });
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    expect(await screen.findByRole("heading", { name: "课前摸底暂未接入" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "跳过课前摸底" }));
+
+    const nav = await screen.findByRole("navigation", { name: "学生端主导航" });
+    expect(within(nav).queryByRole("button", { name: "问答" })).not.toBeInTheDocument();
+    fireEvent.click(within(nav).getByRole("button", { name: "我的" }));
+    expect(await screen.findByRole("heading", { name: "我的" })).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "学生端反馈" })).not.toBeInTheDocument();
+    expect(screen.getByText("反馈入口已关闭")).toBeInTheDocument();
   });
 });

@@ -31,11 +31,9 @@ import {
   MobileButton,
   MobileEmptyState,
   MobileField,
-  MobileFloatingOverlay,
   MobileIconButton,
   MobileStatus,
   MobileTextArea,
-  useFloatingOverlayState,
 } from "./mobile/primitives";
 import {
   AgentChatMessage,
@@ -103,6 +101,7 @@ type FeedbackContext = {
 type AreaId = "p" | "s" | "ds" | "d" | "f" | "integrated";
 type ChapterLearningView = "facts" | "experiments";
 type PeriodicArea = "s区" | "p区" | "d区" | "ds区" | "f区";
+type StudentTab = "learn" | "experiments" | "assistant" | "assessment" | "profile";
 type LearningRoute =
   | { screen: "entry" }
   | {
@@ -122,9 +121,15 @@ type LearningRoute =
       experimentId: string;
       pointKey?: string | null;
       pointTitle?: string | null;
-    }
+    };
+type AssessmentRoute =
+  | { screen: "home" }
   | { screen: "posttest"; posttest: StudentPosttestResponse }
   | { screen: "summary"; report: StudentPosttestReport };
+type ExperimentTabRoute =
+  | { screen: "overview" }
+  | { screen: "group"; parentCode: string }
+  | { screen: "detail"; parentCode?: string | null; experimentId: string };
 
 const defaultStudentAppConfig: StudentAppConfigResponse = {
   features: {
@@ -410,15 +415,17 @@ function App() {
 
   return (
     <main className={view === "pretest" ? "app-shell assessment-shell" : view === "home" ? "app-shell learning-shell" : "app-shell"}>
-      <section className="brand-rail" aria-label="中山大学化学学院">
-        <div className="brand-seal">
-          <img src={logoUrl} alt="中山大学校徽" />
-        </div>
-        <div>
-          <p>中山大学化学学院</p>
-          <h1>元素实验</h1>
-        </div>
-      </section>
+      {view === "home" ? null : (
+        <section className="brand-rail" aria-label="中山大学化学学院">
+          <div className="brand-seal">
+            <img src={logoUrl} alt="中山大学校徽" />
+          </div>
+          <div>
+            <p>中山大学化学学院</p>
+            <h1>元素实验</h1>
+          </div>
+        </section>
+      )}
 
       {view === "checking" ? <LoadingPanel text="正在恢复登录状态" /> : null}
       {view === "login" ? <LoginPanel sessionError={sessionError} onLogin={acceptLogin} /> : null}
@@ -728,7 +735,11 @@ function feedbackEnabled(features: StudentAppFeatureFlags): boolean {
 }
 
 function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
-  const [route, setRoute] = useState<LearningRoute>({ screen: "entry" });
+  const [activeTab, setActiveTab] = useState<StudentTab>("learn");
+  const [learningRoute, setLearningRoute] = useState<LearningRoute>({ screen: "entry" });
+  const [assessmentRoute, setAssessmentRoute] = useState<AssessmentRoute>({ screen: "home" });
+  const [experimentRoute, setExperimentRoute] = useState<ExperimentTabRoute>({ screen: "overview" });
+  const [assistantContext, setAssistantContext] = useState<AssistantContext>(() => defaultAssistantContext());
   const [appConfig, setAppConfig] = useState<StudentAppConfigResponse>(defaultStudentAppConfig);
   const [configError, setConfigError] = useState("");
   const [posttestLoading, setPosttestLoading] = useState(false);
@@ -768,7 +779,8 @@ function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => v
     setPosttestError("");
     try {
       const response = await startStudentPosttest();
-      setRoute({ screen: "posttest", posttest: response });
+      setAssessmentRoute({ screen: "posttest", posttest: response });
+      setActiveTab("assessment");
     } catch (requestError) {
       setPosttestError(errorMessage(requestError));
     } finally {
@@ -784,7 +796,8 @@ function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => v
         posttest.session_id,
         Object.entries(answers).map(([questionId, answer]) => ({ question_id: questionId, answer })),
       );
-      setRoute({ screen: "summary", report: response.report });
+      setAssessmentRoute({ screen: "summary", report: response.report });
+      setActiveTab("assessment");
     } catch (requestError) {
       setPosttestError(errorMessage(requestError));
     } finally {
@@ -795,143 +808,378 @@ function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => v
   const canUseAssistant = assistantEnabled(appConfig.features);
   const canUseFeedback = feedbackEnabled(appConfig.features);
 
-  if (route.screen === "point") {
+  useEffect(() => {
+    if (!canUseAssistant && activeTab === "assistant") {
+      setActiveTab("learn");
+    }
+  }, [activeTab, canUseAssistant]);
+
+  const switchTab = (tab: StudentTab) => {
+    if (tab === "assistant" && !canUseAssistant) return;
+    setActiveTab(tab);
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+  };
+
+  const openAssistant = (context: AssistantContext) => {
+    if (!canUseAssistant) return;
+    setAssistantContext(context);
+    setActiveTab("assistant");
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+  };
+
+  const renderLearning = () => {
+    if (learningRoute.screen === "point") {
+      return (
+        <ExperimentDetailPanel
+          experimentId={learningRoute.experimentId}
+          profileId={learningRoute.profileId}
+          propertyKey={learningRoute.propertyKey}
+          propertyTitle={learningRoute.propertyTitle}
+          elementSymbol={learningRoute.elementSymbol}
+          chapterView={learningRoute.chapterView}
+          pointKey={learningRoute.pointKey}
+          pointTitle={learningRoute.pointTitle}
+          onBack={() =>
+            setLearningRoute({
+              screen: "chapter",
+              profileId: learningRoute.profileId,
+              propertyKey: learningRoute.propertyKey,
+              elementSymbol: learningRoute.elementSymbol,
+              chapterView: learningRoute.chapterView || "experiments",
+            })
+          }
+          onFinishLearning={finishLearning}
+          finishing={posttestLoading}
+          finishError={posttestError}
+          assistantEnabled={canUseAssistant}
+          onOpenAssistant={openAssistant}
+        />
+      );
+    }
+
+    if (learningRoute.screen === "entry") {
+      return (
+        <LearningEntryPanel
+          onSelectProfile={(profileId) => setLearningRoute({ screen: "chapter", profileId })}
+        />
+      );
+    }
+
     return (
-      <ExperimentDetailPanel
-        experimentId={route.experimentId}
-        profileId={route.profileId}
-        propertyKey={route.propertyKey}
-        propertyTitle={route.propertyTitle}
-        elementSymbol={route.elementSymbol}
-        chapterView={route.chapterView}
-        pointKey={route.pointKey}
-        pointTitle={route.pointTitle}
-        onBack={() =>
-          setRoute({
-            screen: "chapter",
-            profileId: route.profileId,
-            propertyKey: route.propertyKey,
-            elementSymbol: route.elementSymbol,
-            chapterView: route.chapterView || "experiments",
+      <LearningHomePanel
+        profileId={learningRoute.profileId}
+        initialPropertyKey={learningRoute.propertyKey}
+        initialElementSymbol={learningRoute.elementSymbol}
+        initialChapterView={learningRoute.chapterView}
+        onSwitchChapter={() => setLearningRoute({ screen: "entry" })}
+        onSelectPoint={(point) =>
+          setLearningRoute({
+            screen: "point",
+            profileId: point.profileId,
+            propertyKey: point.propertyKey,
+            propertyTitle: point.propertyTitle,
+            elementSymbol: point.elementSymbol,
+            chapterView: point.chapterView,
+            experimentId: point.experimentId,
+            pointKey: point.pointKey,
+            pointTitle: point.pointTitle,
           })
         }
         onFinishLearning={finishLearning}
         finishing={posttestLoading}
         finishError={posttestError}
         assistantEnabled={canUseAssistant}
-        feedbackEnabled={canUseFeedback}
+        onOpenAssistant={openAssistant}
       />
     );
-  }
+  };
 
-  if (route.screen === "posttest") {
+  const renderExperiments = () => {
+    if (experimentRoute.screen === "group") {
+      return (
+        <ExperimentGroupPanel
+          parentCode={experimentRoute.parentCode}
+          onBack={() => setExperimentRoute({ screen: "overview" })}
+          onSelectExperiment={(experimentId) => setExperimentRoute({ screen: "detail", parentCode: experimentRoute.parentCode, experimentId })}
+          onFinishLearning={finishLearning}
+          finishing={posttestLoading}
+          finishError={posttestError}
+          assistantEnabled={canUseAssistant}
+          onOpenAssistant={openAssistant}
+        />
+      );
+    }
+    if (experimentRoute.screen === "detail") {
+      return (
+        <ExperimentDetailPanel
+          experimentId={experimentRoute.experimentId}
+          onBack={() =>
+            setExperimentRoute(experimentRoute.parentCode ? { screen: "group", parentCode: experimentRoute.parentCode } : { screen: "overview" })
+          }
+          onFinishLearning={finishLearning}
+          finishing={posttestLoading}
+          finishError={posttestError}
+          assistantEnabled={canUseAssistant}
+          onOpenAssistant={openAssistant}
+        />
+      );
+    }
     return (
-      <>
+      <ExperimentsOverviewPanel
+        onSelectGroup={(parentCode) => setExperimentRoute({ screen: "group", parentCode })}
+      />
+    );
+  };
+
+  const renderAssessment = () => {
+    if (assessmentRoute.screen === "posttest") {
+      return (
         <PosttestPanel
-          posttest={route.posttest}
+          posttest={assessmentRoute.posttest}
           submitting={posttestSubmitting}
           error={posttestError}
-          onSubmit={(answers) => submitPosttest(route.posttest, answers)}
+          onSubmit={(answers) => submitPosttest(assessmentRoute.posttest, answers)}
         />
-        {canUseFeedback ? (
-          <StudentFeedbackFab
-            context={{
-              pagePath: "/student/posttest",
-              contextTitle: "学习后测",
-              metadata: {
-                screen: "posttest",
-                session_id: route.posttest.session_id,
-                experiment_ids: route.posttest.experiments.map((experiment) => experiment.id),
-                question_count: route.posttest.questions.length,
-              },
-            }}
-          />
-        ) : null}
-      </>
-    );
-  }
+      );
+    }
+    if (assessmentRoute.screen === "summary") {
+      return (
+        <PosttestSummaryPanel
+          report={assessmentRoute.report}
+          onContinue={() => {
+            setAssessmentRoute({ screen: "home" });
+            setLearningRoute({ screen: "entry" });
+            setActiveTab("learn");
+          }}
+        />
+      );
+    }
+    return <AssessmentHomePanel />;
+  };
 
-  if (route.screen === "summary") {
-    return (
-      <>
-        <PosttestSummaryPanel report={route.report} onContinue={() => setRoute({ screen: "entry" })} />
-        {canUseFeedback ? (
-          <StudentFeedbackFab
-            context={{
-              pagePath: "/student/posttest/report",
-              contextTitle: "本轮实验报告",
-              metadata: {
-                screen: "posttest_report",
-                session_id: route.report.session_id,
-                experiment_ids: route.report.experiments.map((experiment) => experiment.id),
-                score: route.report.score,
-              },
-            }}
-          />
-        ) : null}
-      </>
-    );
-  }
-
-  if (route.screen === "entry") {
-    return (
-      <LearningEntryPanel
-        user={user}
-        onLogout={onLogout}
-        onSelectProfile={(profileId) => setRoute({ screen: "chapter", profileId })}
-        feedbackEnabled={canUseFeedback}
-      />
-    );
-  }
+  const activeMeta = studentTabMeta[activeTab];
+  const navItems = studentTabItems(canUseAssistant);
+  const content =
+    activeTab === "learn"
+      ? renderLearning()
+      : activeTab === "experiments"
+        ? renderExperiments()
+        : activeTab === "assistant"
+          ? <StudentAiChatTab context={assistantContext} onResetContext={() => setAssistantContext(defaultAssistantContext())} />
+          : activeTab === "assessment"
+            ? renderAssessment()
+            : <ProfileTabPanel user={user} feedbackEnabled={canUseFeedback} onLogout={onLogout} />;
 
   return (
-    <LearningHomePanel
-      user={user}
-      profileId={route.screen === "chapter" ? route.profileId : null}
-      initialPropertyKey={route.screen === "chapter" ? route.propertyKey : null}
-      initialElementSymbol={route.screen === "chapter" ? route.elementSymbol : null}
-      initialChapterView={route.screen === "chapter" ? route.chapterView : null}
-      onLogout={onLogout}
-      onSwitchChapter={() => setRoute({ screen: "entry" })}
-      onSelectPoint={(point) =>
-        setRoute({
-          screen: "point",
-          profileId: point.profileId,
-          propertyKey: point.propertyKey,
-          propertyTitle: point.propertyTitle,
-          elementSymbol: point.elementSymbol,
-          chapterView: point.chapterView,
-          experimentId: point.experimentId,
-          pointKey: point.pointKey,
-          pointTitle: point.pointTitle,
-        })
-      }
-      onFinishLearning={finishLearning}
-      finishing={posttestLoading}
-      finishError={posttestError}
-      assistantEnabled={canUseAssistant}
-      feedbackEnabled={canUseFeedback}
-      configError={configError}
-    />
+    <section className="student-app-shell" aria-label="学生学习应用">
+      <StudentAppHeader title={activeMeta.title} subtitle={activeMeta.subtitle} user={user} />
+      {configError ? <div className="form-hint app-config-hint">配置刷新失败，当前页面会继续使用上一次配置：{configError}</div> : null}
+      <div className="student-tab-content">{content}</div>
+      <StudentBottomNav items={navItems} activeTab={activeTab} onChange={switchTab} />
+    </section>
+  );
+}
+
+function defaultAssistantContext(): AssistantContext {
+  return {
+    context_type: "learning_home",
+    context_title: "AI 学习助手",
+    context_summary: "学生端全局课程问答入口",
+    prompts: ["我应该先复习哪一块？", "帮我解释一个无机化学实验现象", "怎样把元素性质和实验联系起来？"],
+  };
+}
+
+const studentTabMeta: Record<StudentTab, { title: string; subtitle: string }> = {
+  learn: { title: "学习", subtitle: "章节与元素周期表" },
+  experiments: { title: "实验", subtitle: "资源与点位" },
+  assistant: { title: "问答", subtitle: "AI 学习助手" },
+  assessment: { title: "测评", subtitle: "后测与报告" },
+  profile: { title: "我的", subtitle: "账号与反馈" },
+};
+
+function studentTabItems(canUseAssistant: boolean): Array<{ key: StudentTab; label: string; icon: ReactNode }> {
+  return [
+    { key: "learn", label: "学习", icon: <BookOpenCheck size={20} /> },
+    { key: "experiments", label: "实验", icon: <FlaskConical size={20} /> },
+    ...(canUseAssistant ? [{ key: "assistant" as const, label: "问答", icon: <MessageCircle size={20} /> }] : []),
+    { key: "assessment", label: "测评", icon: <ClipboardList size={20} /> },
+    { key: "profile", label: "我的", icon: <UserRound size={20} /> },
+  ];
+}
+
+function StudentAppHeader({ title, subtitle, user }: { title: string; subtitle: string; user: AuthUser }) {
+  return (
+    <header className="student-app-header">
+      <div>
+        <p>{subtitle}</p>
+        <h1>{title}</h1>
+      </div>
+      <span>{user.display_name || user.student_id || user.username}</span>
+    </header>
+  );
+}
+
+function StudentBottomNav({
+  items,
+  activeTab,
+  onChange,
+}: {
+  items: Array<{ key: StudentTab; label: string; icon: ReactNode }>;
+  activeTab: StudentTab;
+  onChange: (tab: StudentTab) => void;
+}) {
+  return (
+    <nav className="student-bottom-nav" aria-label="学生端主导航">
+      {items.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          className={activeTab === item.key ? "active" : ""}
+          aria-current={activeTab === item.key ? "page" : undefined}
+          onClick={() => onChange(item.key)}
+        >
+          {item.icon}
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function AssessmentHomePanel() {
+  return (
+    <section className="learning-panel assessment-home-panel" aria-label="测评">
+      <section className="tab-empty-card">
+        <span className="panel-icon">
+          <ClipboardList size={20} />
+        </span>
+        <div>
+          <p>当前测评</p>
+          <h2>完成章节学习后进入后测</h2>
+          <span>后测会根据本次学习的实验点生成，完成后这里会显示报告和错题讲解。</span>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function ExperimentsOverviewPanel({ onSelectGroup }: { onSelectGroup: (parentCode: string) => void }) {
+  const [home, setHome] = useState<StudentLearningHomeResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    getStudentLearningHome()
+      .then((payload) => {
+        if (!cancelled) setHome(payload);
+      })
+      .catch((requestError) => {
+        if (!cancelled) setError(errorMessage(requestError));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <section className="learning-panel experiments-overview-panel" aria-label="实验资源">
+      {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载实验资源" /> : null}
+      {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
+      {home ? (
+        <>
+          <section className="resource-overview-card">
+            <div>
+              <p>实验资源</p>
+              <h2>{home.groups.length} 个实验模块</h2>
+              <span>
+                {home.areas.filter((area) => area.enabled).length} 个学习区域 / {home.groups.reduce((total, group) => total + group.question_count, 0)} 道配套题
+              </span>
+            </div>
+            <FlaskConical size={24} />
+          </section>
+          <div className="experiment-module-list">
+            {home.groups.map((group) => (
+              <button className={group.recommended ? "experiment-module-card recommended" : "experiment-module-card"} key={group.parent_code} type="button" onClick={() => onSelectGroup(group.parent_code)}>
+                {group.recommended ? <em>推荐学习</em> : null}
+                <div>
+                  <p>{group.area_name}</p>
+                  <h3>{stripExperimentPrefix(group.parent_title)}</h3>
+                  <span>
+                    {group.experiment_count} 个点位 / {group.published_video_count} 个视频 / {group.question_count} 道题
+                  </span>
+                </div>
+                <ChevronRight size={18} />
+              </button>
+            ))}
+          </div>
+          {!home.groups.length ? (
+            <MobileEmptyState className="empty-learning-card" icon={<FlaskConical size={20} />}>
+              <span>暂无可学习的实验模块</span>
+            </MobileEmptyState>
+          ) : null}
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function ProfileTabPanel({
+  user,
+  feedbackEnabled,
+  onLogout,
+}: {
+  user: AuthUser;
+  feedbackEnabled: boolean;
+  onLogout: () => void;
+}) {
+  return (
+    <section className="learning-panel profile-tab-panel" aria-label="我的">
+      <section className="profile-card">
+        <span className="panel-icon">
+          <UserRound size={20} />
+        </span>
+        <div>
+          <p>{user.student_id || user.username}</p>
+          <h2>{user.display_name}</h2>
+          {user.class_name ? <small>{user.class_name}</small> : null}
+        </div>
+      </section>
+      {feedbackEnabled ? (
+        <StudentFeedbackForm
+          context={{
+            pagePath: "/student/profile/feedback",
+            contextTitle: "学生端反馈",
+            metadata: { screen: "profile_feedback" },
+          }}
+        />
+      ) : (
+        <MobileEmptyState className="empty-learning-card" icon={<ClipboardList size={20} />}>
+          <span>反馈入口已关闭</span>
+        </MobileEmptyState>
+      )}
+      <MobileButton className="secondary-action full profile-logout-action" type="button" variant="secondary" onClick={onLogout}>
+        <LogOut size={18} />
+        <span>退出登录</span>
+      </MobileButton>
+    </section>
   );
 }
 
 function LearningEntryPanel({
-  user,
-  onLogout,
   onSelectProfile,
-  feedbackEnabled,
 }: {
-  user: AuthUser;
-  onLogout: () => void;
   onSelectProfile: (profileId: string) => void;
-  feedbackEnabled: boolean;
 }) {
   const [page, setPage] = useState<StudentLearningPageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedArea, setSelectedArea] = useState<AreaId>("p");
-  const { activeOverlay, toggleOverlay } = useFloatingOverlayState();
 
   useEffect(() => {
     let cancelled = false;
@@ -972,28 +1220,12 @@ function LearningEntryPanel({
     });
     return symbols;
   }, [selectedAreaProfiles]);
-  const feedbackContext: FeedbackContext = {
-    pagePath: "/student/learning",
-    contextTitle: "元素周期表章节入口",
-    metadata: { screen: "learning_entry" },
-  };
-
   useEffect(() => {
     if (recommendedArea) setSelectedArea(recommendedArea);
   }, [recommendedArea]);
 
   return (
     <section className="learning-panel" aria-label="元素周期表章节入口">
-      <div className="learning-topbar">
-        <div>
-          <p>{user.student_id || user.username}</p>
-          <h2>{user.display_name}</h2>
-        </div>
-        <MobileIconButton className="icon-action" type="button" onClick={onLogout} aria-label="退出登录">
-          <LogOut size={18} />
-        </MobileIconButton>
-      </div>
-
       {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载学习章节" /> : null}
       {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
       {!loading && !error ? (
@@ -1051,13 +1283,6 @@ function LearningEntryPanel({
             )}
           </section>
 
-          {feedbackEnabled && activeOverlay !== "assistant" ? (
-            <StudentFeedbackFab
-              context={feedbackContext}
-              open={activeOverlay === "feedback"}
-              onOpenChange={(isOpen) => toggleOverlay("feedback", isOpen)}
-            />
-          ) : null}
         </>
       ) : null}
     </section>
@@ -1123,27 +1348,22 @@ function ElementTileContent({ element }: { element: StudentLearningElementBadge 
 }
 
 function LearningHomePanel({
-  user,
   profileId,
   initialPropertyKey,
   initialElementSymbol,
   initialChapterView,
-  onLogout,
   onSwitchChapter,
   onSelectPoint,
   onFinishLearning,
   finishing,
   finishError,
   assistantEnabled,
-  feedbackEnabled,
-  configError,
+  onOpenAssistant,
 }: {
-  user: AuthUser;
   profileId?: string | null;
   initialPropertyKey?: string | null;
   initialElementSymbol?: string | null;
   initialChapterView?: ChapterLearningView | null;
-  onLogout: () => void;
   onSwitchChapter: () => void;
   onSelectPoint: (point: {
     profileId: string;
@@ -1159,8 +1379,7 @@ function LearningHomePanel({
   finishing: boolean;
   finishError: string;
   assistantEnabled: boolean;
-  feedbackEnabled: boolean;
-  configError: string;
+  onOpenAssistant: (context: AssistantContext) => void;
 }) {
   const [page, setPage] = useState<StudentLearningPageResponse | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(profileId || null);
@@ -1170,7 +1389,6 @@ function LearningHomePanel({
   const chapterScrollPositions = useRef<Record<ChapterLearningView, number>>({ facts: 0, experiments: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { activeOverlay, resetOverlay, toggleOverlay } = useFloatingOverlayState();
 
   useEffect(() => {
     setSelectedProfileId(profileId || null);
@@ -1187,10 +1405,6 @@ function LearningHomePanel({
   useEffect(() => {
     if (initialChapterView) setActiveChapterView(initialChapterView);
   }, [initialChapterView]);
-
-  useEffect(() => {
-    resetOverlay();
-  }, [selectedProfileId, selectedPropertyKey, selectedElementSymbol, activeChapterView, resetOverlay]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1277,40 +1491,18 @@ function LearningHomePanel({
         ],
       }
     : null;
-  const feedbackContext: FeedbackContext | null = profile
-    ? {
-        pagePath: `/student/learning/${profile.profile_id}`,
-        contextTitle: profile.title,
-        chapterId: profile.chapter_id,
-        metadata: {
-          screen: "learning_profile",
-          chapter_view: activeChapterView,
-          profile_id: profile.profile_id,
-          element_symbol: activeChapterView === "facts" ? selectedElement?.symbol : undefined,
-          property_key: activeChapterView === "facts" ? selectedSection?.key : undefined,
-          property_title: activeChapterView === "facts" ? selectedSection?.title : undefined,
-        },
-      }
-    : null;
-
   return (
     <section className="learning-panel" aria-label="实验学习">
-      <div className="learning-topbar">
-        <div>
-          <p>{user.student_id || user.username}</p>
-          <h2>{user.display_name}</h2>
-        </div>
-        <MobileIconButton className="icon-action" type="button" onClick={onLogout} aria-label="退出登录">
-          <LogOut size={18} />
-        </MobileIconButton>
-      </div>
-
-      {configError ? <div className="form-hint">设置刷新失败，当前页面会继续使用上一次配置：{configError}</div> : null}
       {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载学习资源" /> : null}
       {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
       {!loading && !error && profile ? (
         <>
-          <LearningChapterHeader profile={profile} onSwitchChapter={onSwitchChapter} />
+          <LearningChapterHeader
+            profile={profile}
+            onSwitchChapter={onSwitchChapter}
+            assistantContext={assistantEnabled ? homeAssistantContext : null}
+            onOpenAssistant={onOpenAssistant}
+          />
           <ChapterViewSwitcher activeView={activeChapterView} experimentCount={relatedPointCount} onChange={changeChapterView} />
 
           {activeChapterView === "facts" ? (
@@ -1333,23 +1525,8 @@ function LearningHomePanel({
               finishing={finishing}
               finishError={finishError}
               onFinishLearning={onFinishLearning}
-              floatingOverlayOpen={Boolean(activeOverlay)}
             />
           )}
-          {assistantEnabled && homeAssistantContext && activeOverlay !== "feedback" ? (
-            <StudentAiChat
-              context={homeAssistantContext}
-              open={activeOverlay === "assistant"}
-              onOpenChange={(isOpen) => toggleOverlay("assistant", isOpen)}
-            />
-          ) : null}
-          {feedbackEnabled && feedbackContext && activeOverlay !== "assistant" ? (
-            <StudentFeedbackFab
-              context={feedbackContext}
-              open={activeOverlay === "feedback"}
-              onOpenChange={(isOpen) => toggleOverlay("feedback", isOpen)}
-            />
-          ) : null}
         </>
       ) : null}
     </section>
@@ -1469,7 +1646,6 @@ function LearningExperimentsView({
   finishing,
   finishError,
   onFinishLearning,
-  floatingOverlayOpen,
 }: {
   profile: StudentLearningProfile;
   groups: StudentLearningChapterExperimentGroup[];
@@ -1488,7 +1664,6 @@ function LearningExperimentsView({
   finishing: boolean;
   finishError: string;
   onFinishLearning: () => void;
-  floatingOverlayOpen: boolean;
 }) {
   return (
     <div className="chapter-view-panel experiments-view" data-view="experiments">
@@ -1518,7 +1693,7 @@ function LearningExperimentsView({
           </MobileEmptyState>
         )}
       </section>
-      {floatingOverlayOpen ? null : <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />}
+      <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />
     </div>
   );
 }
@@ -1551,7 +1726,17 @@ function LearningProfileTabs({
   );
 }
 
-function LearningChapterHeader({ profile, onSwitchChapter }: { profile: StudentLearningProfile; onSwitchChapter: () => void }) {
+function LearningChapterHeader({
+  profile,
+  onSwitchChapter,
+  assistantContext,
+  onOpenAssistant,
+}: {
+  profile: StudentLearningProfile;
+  onSwitchChapter: () => void;
+  assistantContext?: AssistantContext | null;
+  onOpenAssistant: (context: AssistantContext) => void;
+}) {
   return (
     <section className="chapter-context-card" aria-label="当前章节">
       <div className="chapter-context-copy">
@@ -1566,10 +1751,18 @@ function LearningChapterHeader({ profile, onSwitchChapter }: { profile: StudentL
           {profile.hero.summary ? <small>{profile.hero.summary}</small> : null}
         </div>
       </div>
-      <MobileButton className="chapter-switch-action" type="button" variant="ghost" fullWidth={false} onClick={onSwitchChapter}>
-        <Atom size={17} />
-        <span>换章节</span>
-      </MobileButton>
+      <div className="chapter-context-actions">
+        {assistantContext ? (
+          <MobileButton className="chapter-switch-action" type="button" variant="ghost" fullWidth={false} onClick={() => onOpenAssistant(assistantContext)}>
+            <MessageCircle size={17} />
+            <span>问答</span>
+          </MobileButton>
+        ) : null}
+        <MobileButton className="chapter-switch-action" type="button" variant="ghost" fullWidth={false} onClick={onSwitchChapter}>
+          <Atom size={17} />
+          <span>换章节</span>
+        </MobileButton>
+      </div>
     </section>
   );
 }
@@ -2052,6 +2245,8 @@ function ExperimentGroupPanel({
   onFinishLearning,
   finishing,
   finishError,
+  assistantEnabled,
+  onOpenAssistant,
 }: {
   parentCode: string;
   onBack: () => void;
@@ -2059,6 +2254,8 @@ function ExperimentGroupPanel({
   onFinishLearning: () => void;
   finishing: boolean;
   finishError: string;
+  assistantEnabled: boolean;
+  onOpenAssistant: (context: AssistantContext) => void;
 }) {
   const [group, setGroup] = useState<StudentExperimentGroupResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2082,6 +2279,20 @@ function ExperimentGroupPanel({
       cancelled = true;
     };
   }, [parentCode]);
+
+  const assistantContext: AssistantContext | null = group
+    ? {
+        context_type: "experiment_group",
+        context_title: stripExperimentPrefix(group.parent_title),
+        context_summary: compactText([
+          `实验组：${group.parent_title}`,
+          `所属区域：${group.area_name}`,
+          `实验点：${group.experiments.map((experiment) => experiment.title).join("、")}`,
+        ]),
+        chapter_id: group.experiments[0]?.chapter_ids[0] || null,
+        prompts: ["这一组实验重点是什么？", "我应该按什么顺序看？", "这些实验会考什么现象？"],
+      }
+    : null;
 
   return (
     <section className="learning-panel" aria-label="实验列表">
@@ -2108,22 +2319,13 @@ function ExperimentGroupPanel({
           ))}
         </div>
       ) : null}
-      {group ? <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} /> : null}
-      {group ? (
-        <StudentAiChat
-          context={{
-            context_type: "experiment_group",
-            context_title: stripExperimentPrefix(group.parent_title),
-            context_summary: compactText([
-              `实验组：${group.parent_title}`,
-              `所属区域：${group.area_name}`,
-              `实验点：${group.experiments.map((experiment) => experiment.title).join("、")}`,
-            ]),
-            chapter_id: group.experiments[0]?.chapter_ids[0] || null,
-            prompts: ["这一组实验重点是什么？", "我应该按什么顺序看？", "这些实验会考什么现象？"],
-          }}
-        />
+      {group && assistantEnabled && assistantContext ? (
+        <MobileButton className="secondary-action full context-assistant-action" type="button" variant="secondary" onClick={() => onOpenAssistant(assistantContext)}>
+          <MessageCircle size={18} />
+          <span>带着本组实验去问答</span>
+        </MobileButton>
       ) : null}
+      {group ? <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} /> : null}
     </section>
   );
 }
@@ -2142,7 +2344,7 @@ function ExperimentDetailPanel({
   finishing,
   finishError,
   assistantEnabled,
-  feedbackEnabled,
+  onOpenAssistant,
 }: {
   experimentId: string;
   profileId?: string | null;
@@ -2157,12 +2359,11 @@ function ExperimentDetailPanel({
   finishing: boolean;
   finishError: string;
   assistantEnabled: boolean;
-  feedbackEnabled: boolean;
+  onOpenAssistant: (context: AssistantContext) => void;
 }) {
   const [detail, setDetail] = useState<StudentExperimentDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { activeOverlay, resetOverlay, toggleOverlay } = useFloatingOverlayState();
 
   useEffect(() => {
     let cancelled = false;
@@ -2182,10 +2383,6 @@ function ExperimentDetailPanel({
       cancelled = true;
     };
   }, [experimentId]);
-
-  useEffect(() => {
-    resetOverlay();
-  }, [experimentId, propertyKey, pointKey, resetOverlay]);
 
   const video = detail?.videos.find((item) => pointKey && item.point_key === pointKey) || detail?.videos[0] || null;
   const effectivePointTitle = pointTitle || video?.point_title || detail?.video_candidates[0] || detail?.title || "实验点位";
@@ -2209,25 +2406,6 @@ function ExperimentDetailPanel({
         prompts: ["这个现象说明什么？", "帮我解释反应原理", "这个实验怎么记？"],
       }
     : null;
-  const feedbackContext: FeedbackContext | null = detail
-    ? {
-        pagePath: `/student/learning/${profileId || "profile"}/point/${detail.id}`,
-        contextTitle: effectivePointTitle,
-        chapterId: detail.chapter_ids[0] || null,
-        experimentId: detail.id,
-        pointKey: pointKey || video?.point_key || null,
-        metadata: {
-          screen: "learning_point",
-          chapter_view: chapterView || "experiments",
-          profile_id: profileId,
-          element_symbol: elementSymbol,
-          property_key: propertyKey,
-          property_title: propertyTitle,
-          experiment_title: detail.title,
-        },
-      }
-    : null;
-
   return (
     <section className="learning-panel" aria-label="实验详情">
       <PageBar title={effectivePointTitle} onBack={onBack} />
@@ -2284,21 +2462,13 @@ function ExperimentDetailPanel({
               <span>暂未开放</span>
             </button>
           </section>
-          {activeOverlay ? null : <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />}
-          {assistantEnabled && detailAssistantContext && activeOverlay !== "feedback" ? (
-            <StudentAiChat
-              context={detailAssistantContext}
-              open={activeOverlay === "assistant"}
-              onOpenChange={(isOpen) => toggleOverlay("assistant", isOpen)}
-            />
+          {assistantEnabled && detailAssistantContext ? (
+            <MobileButton className="secondary-action full context-assistant-action" type="button" variant="secondary" onClick={() => onOpenAssistant(detailAssistantContext)}>
+              <MessageCircle size={18} />
+              <span>带着这个点位去问答</span>
+            </MobileButton>
           ) : null}
-          {feedbackEnabled && feedbackContext && activeOverlay !== "assistant" ? (
-            <StudentFeedbackFab
-              context={feedbackContext}
-              open={activeOverlay === "feedback"}
-              onOpenChange={(isOpen) => toggleOverlay("feedback", isOpen)}
-            />
-          ) : null}
+          <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />
         </>
       ) : null}
     </section>
@@ -2377,31 +2547,40 @@ function AssistantSourceSummary({ metadata }: { metadata?: StudentAssistantFinal
   );
 }
 
-function StudentAiChat({
+function StudentAiChatTab({ context, onResetContext }: { context: AssistantContext; onResetContext: () => void }) {
+  const hasContextHandoff = context.context_type !== "learning_home" || context.context_title !== "AI 学习助手";
+  return (
+    <section className="learning-panel assistant-tab-panel" aria-label="AI 学习助手">
+      <section className="assistant-intro-card">
+        <span className="panel-icon">
+          <Bot size={20} />
+        </span>
+        <div>
+          <p>AI 学习助手</p>
+          <h2>{context.context_title}</h2>
+          <span>{hasContextHandoff ? "已带入当前学习上下文，也可以随时切回全局问答。" : "可以询问课程知识、实验现象、复习顺序和错题思路。"}</span>
+        </div>
+        {hasContextHandoff ? (
+          <button type="button" className="assistant-context-clear" onClick={onResetContext} aria-label="清除当前问答上下文">
+            <X size={17} />
+          </button>
+        ) : null}
+      </section>
+      <StudentAiChatPanel context={context} />
+    </section>
+  );
+}
+
+function StudentAiChatPanel({
   context,
-  open: controlledOpen,
-  onOpenChange,
 }: {
   context: AssistantContext;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
 }) {
-  const [localOpen, setLocalOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("idle");
   const streamRef = useRef<HTMLDivElement>(null);
-  const open = controlledOpen ?? localOpen;
-
-  const setOpen = (nextOpen: boolean | ((current: boolean) => boolean)) => {
-    const resolved = typeof nextOpen === "function" ? nextOpen(open) : nextOpen;
-    if (onOpenChange) {
-      onOpenChange(resolved);
-    } else {
-      setLocalOpen(resolved);
-    }
-  };
 
   useEffect(() => {
     setMessages([]);
@@ -2411,8 +2590,13 @@ function StudentAiChat({
   }, [context.context_type, context.context_title, context.experiment_id, context.chapter_id]);
 
   useEffect(() => {
-    streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight });
-  }, [messages, loading, open]);
+    if (!streamRef.current) return;
+    if (typeof streamRef.current.scrollTo === "function") {
+      streamRef.current.scrollTo({ top: streamRef.current.scrollHeight });
+      return;
+    }
+    streamRef.current.scrollTop = streamRef.current.scrollHeight;
+  }, [messages, loading]);
 
   const submitQuestion = async (questionText?: string) => {
     const question = (questionText || input).trim();
@@ -2503,70 +2687,59 @@ function StudentAiChat({
   };
 
   return (
-    <MobileFloatingOverlay family="assistant" open={open} className="ai-chat-fab">
-      {open ? (
-        <section className="ai-chat-panel" role="dialog" aria-label="AI 学习助手">
-          <header className="ai-chat-head">
-            <div>
-              <span>
-                <Sparkles size={14} />
-                当前内容
-              </span>
-              <h2>{context.context_title}</h2>
-            </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="关闭 AI 助手">
-              <X size={18} />
-            </button>
-          </header>
+    <section className="ai-chat-panel" role="region" aria-label="AI 学习助手对话">
+      <header className="ai-chat-head">
+        <div>
+          <span>
+            <Sparkles size={14} />
+            当前内容
+          </span>
+          <h2>{context.context_title}</h2>
+        </div>
+      </header>
 
-          <div className="ai-chat-stream" aria-live="polite" ref={streamRef}>
-            {!messages.length ? (
-              <div className="ai-empty-bubble">
-                <Bot size={18} />
-                <p>可以问我这一页里的实验现象、原理、复习顺序和知识点。</p>
-              </div>
-            ) : null}
-            {messages.map((message, index) => (
-              <div className={`ai-message ${message.role}`} key={`${message.role}-${index}`}>
-                {message.role === "assistant" ? (
-                  <>
-                    <MarkdownLite content={message.content || (loading ? "正在生成..." : "")} />
-                    <AssistantSourceSummary metadata={message.metadata} />
-                  </>
-                ) : (
-                  message.content
-                )}
-              </div>
-            ))}
+      <div className="ai-chat-stream" aria-live="polite" ref={streamRef}>
+        {!messages.length ? (
+          <div className="ai-empty-bubble">
+            <Bot size={18} />
+            <p>可以问我实验现象、原理、复习顺序和知识点。</p>
           </div>
-
-          <div className="ai-quick-prompts" aria-label="快捷问题">
-            {context.prompts.map((prompt) => (
-              <button type="button" key={prompt} disabled={loading} onClick={() => void submitQuestion(prompt)}>
-                {prompt}
-              </button>
-            ))}
+        ) : null}
+        {messages.map((message, index) => (
+          <div className={`ai-message ${message.role}`} key={`${message.role}-${index}`}>
+            {message.role === "assistant" ? (
+              <>
+                <MarkdownLite content={message.content || (loading ? "正在生成..." : "")} />
+                <AssistantSourceSummary metadata={message.metadata} />
+              </>
+            ) : (
+              message.content
+            )}
           </div>
+        ))}
+      </div>
 
-          <form className="ai-chat-compose" onSubmit={handleSubmit}>
-            <MobileField
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="问当前学习内容"
-              aria-label="输入给 AI 的问题"
-            />
-            <button type="submit" disabled={!input.trim() || loading} aria-label="发送问题">
-              {loading ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}
-            </button>
-          </form>
-          <div className="ai-chat-status">{assistantStatusLabel(status, loading)}</div>
-        </section>
-      ) : null}
-      <MobileButton fullWidth={false} className="ai-chat-toggle" type="button" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        <MessageCircle size={18} />
-        <span>问 AI</span>
-      </MobileButton>
-    </MobileFloatingOverlay>
+      <div className="ai-quick-prompts" aria-label="快捷问题">
+        {context.prompts.map((prompt) => (
+          <button type="button" key={prompt} disabled={loading} onClick={() => void submitQuestion(prompt)}>
+            {prompt}
+          </button>
+        ))}
+      </div>
+
+      <form className="ai-chat-compose" onSubmit={handleSubmit}>
+        <MobileField
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="问当前学习内容"
+          aria-label="输入给 AI 的问题"
+        />
+        <button type="submit" disabled={!input.trim() || loading} aria-label="发送问题">
+          {loading ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}
+        </button>
+      </form>
+      <div className="ai-chat-status">{assistantStatusLabel(status, loading)}</div>
+    </section>
   );
 }
 
@@ -2576,16 +2749,7 @@ const feedbackTypes = [
   { value: "suggestion", label: "功能建议" },
 ];
 
-function StudentFeedbackFab({
-  context,
-  open: controlledOpen,
-  onOpenChange,
-}: {
-  context: FeedbackContext;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-}) {
-  const [localOpen, setLocalOpen] = useState(false);
+function StudentFeedbackForm({ context }: { context: FeedbackContext }) {
   const [feedbackType, setFeedbackType] = useState("content");
   const [content, setContent] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -2594,16 +2758,6 @@ function StudentFeedbackFab({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const open = controlledOpen ?? localOpen;
-
-  const setOpen = (nextOpen: boolean | ((current: boolean) => boolean)) => {
-    const resolved = typeof nextOpen === "function" ? nextOpen(open) : nextOpen;
-    if (onOpenChange) {
-      onOpenChange(resolved);
-    } else {
-      setLocalOpen(resolved);
-    }
-  };
 
   useEffect(() => {
     setMessage("");
@@ -2672,69 +2826,58 @@ function StudentFeedbackFab({
   };
 
   return (
-    <MobileFloatingOverlay family="feedback" open={open} className="feedback-fab">
-      {open ? (
-        <form className="feedback-panel" onSubmit={submit} role="dialog" aria-label="页面反馈">
-          <header className="feedback-head">
-            <div>
-              <span>页面反馈</span>
-              <h2>{context.contextTitle}</h2>
-            </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="关闭反馈">
-              <X size={18} />
-            </button>
-          </header>
-          <div className="feedback-type-row">
-            {feedbackTypes.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                className={feedbackType === item.value ? "active" : ""}
-                onClick={() => setFeedbackType(item.value)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <MobileTextArea
-            value={content}
-            rows={4}
-            maxLength={4000}
-            placeholder="描述你在当前页面遇到的问题或建议"
-            onChange={(event) => setContent(event.target.value)}
-          />
-          <div className="feedback-attachment-row">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(event) => selectAttachment(event.target.files?.[0] ?? null)}
-            />
-            <button type="button" disabled={loading} onClick={() => fileInputRef.current?.click()}>
-              <Paperclip size={15} />
-              <span>{attachment ? "更换图片" : "添加截图"}</span>
-            </button>
-            {attachment ? (
-              <button type="button" className="feedback-file-pill" disabled={loading} onClick={clearAttachment}>
-                <span>{attachment.name}</span>
-                <Trash2 size={14} />
-              </button>
-            ) : null}
-          </div>
-          {attachmentError ? <div className="form-error">{attachmentError}</div> : null}
-          {message ? <div className="form-hint">{message}</div> : null}
-          {error ? <div className="form-error">{error}</div> : null}
-          <MobileButton className="primary-action" type="submit" loading={loading} disabled={!content.trim() || Boolean(attachmentError)}>
-            {loading ? <LoaderCircle className="spin" size={18} /> : <Send size={18} />}
-            <span>{loading ? "正在提交" : "提交反馈"}</span>
-          </MobileButton>
-        </form>
-      ) : null}
-      <MobileButton fullWidth={false} className="feedback-toggle" type="button" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        <ClipboardList size={18} />
-        <span>反馈</span>
+    <form className="feedback-panel profile-feedback-panel" onSubmit={submit} aria-label="学生端反馈">
+      <header className="feedback-head">
+        <div>
+          <span>反馈</span>
+          <h2>{context.contextTitle}</h2>
+        </div>
+      </header>
+      <div className="feedback-type-row">
+        {feedbackTypes.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            className={feedbackType === item.value ? "active" : ""}
+            onClick={() => setFeedbackType(item.value)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <MobileTextArea
+        value={content}
+        rows={4}
+        maxLength={4000}
+        placeholder="描述你遇到的问题或建议，可以配一张截图"
+        onChange={(event) => setContent(event.target.value)}
+      />
+      <div className="feedback-attachment-row">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={(event) => selectAttachment(event.target.files?.[0] ?? null)}
+        />
+        <button type="button" disabled={loading} onClick={() => fileInputRef.current?.click()}>
+          <Paperclip size={15} />
+          <span>{attachment ? "更换图片" : "添加截图"}</span>
+        </button>
+        {attachment ? (
+          <button type="button" className="feedback-file-pill" disabled={loading} onClick={clearAttachment}>
+            <span>{attachment.name}</span>
+            <Trash2 size={14} />
+          </button>
+        ) : null}
+      </div>
+      {attachmentError ? <div className="form-error">{attachmentError}</div> : null}
+      {message ? <div className="form-hint feedback-success">{message}</div> : null}
+      {error ? <div className="form-error">{error}</div> : null}
+      <MobileButton className="primary-action" type="submit" loading={loading} disabled={!content.trim() || Boolean(attachmentError)}>
+        {loading ? <LoaderCircle className="spin" size={18} /> : <Send size={18} />}
+        <span>{loading ? "正在提交" : "提交反馈"}</span>
       </MobileButton>
-    </MobileFloatingOverlay>
+    </form>
   );
 }
 
