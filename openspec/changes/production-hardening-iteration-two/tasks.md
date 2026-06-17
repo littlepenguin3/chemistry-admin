@@ -49,10 +49,10 @@
 
 ## 7. Migration And Operations Polish
 
-- [ ] 7.1 Confirm no existing migration files are renamed, removed, reordered, or rewritten during this pass.
-- [ ] 7.2 If media lifecycle work needs schema changes, add the next migration as `014_...` or later.
-- [ ] 7.3 Update operations docs to restate migration numbering policy, media lifecycle policy, CI gates, and local smoke-test steps.
-- [ ] 7.4 Remove or rotate the temporary local smoke admin account if it is no longer needed, or document it as local-only test data.
+- [x] 7.1 Confirm no existing migration files are renamed, removed, reordered, or rewritten during this pass.
+- [x] 7.2 If media lifecycle work needs schema changes, add the next migration as `014_...` or later.
+- [x] 7.3 Update operations docs to restate migration numbering policy, media lifecycle policy, CI gates, and local smoke-test steps.
+- [x] 7.4 Remove or rotate the temporary local smoke admin account if it is no longer needed, or document it as local-only test data.
 
 ## 8. Final Verification And Handoff
 

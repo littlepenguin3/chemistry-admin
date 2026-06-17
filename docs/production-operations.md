@@ -82,6 +82,30 @@ docker compose --profile rag up --build
 
 The `rag` profile expects local BGE model files mounted at `E:/models/BAAI` and exposes `/health` on port `8010`.
 
+## Media Lifecycle Operations
+
+`data/media` is operational upload state, not protected seed data. It can be backed up, archived, or cleaned only with database consistency in mind because `media_assets`, `media_bindings`, processing jobs, and review rows may still reference local files.
+
+Inspect the current media lifecycle state with a dry run:
+
+```powershell
+python scripts/media_lifecycle_cleanup.py --json --limit 500 --orphan-limit 200
+```
+
+The script reports asset dependency counts, missing files, existing referenced files, and unreferenced orphan files. Database-backed asset deletion intentionally refuses by default:
+
+```powershell
+python scripts/media_lifecycle_cleanup.py --delete-asset-files
+```
+
+Only unreferenced orphan files under `MEDIA_ROOT` may be removed directly:
+
+```powershell
+python scripts/media_lifecycle_cleanup.py --delete-orphans --limit 500 --orphan-limit 200
+```
+
+Before deleting media for production, back up any media that should remain available and confirm the admin UI shows missing or partial files intentionally instead of broken playback links. See `docs/production-media-cleanup.md` for the detailed cleanup procedure.
+
 ## One-Command Validation
 
 Run the full local validation chain with frontend dependency installation:
@@ -101,6 +125,38 @@ python scripts/validate_production_readiness.py --skip-frontend
 ```
 
 Skipping frontend validation is acceptable only for a scoped backend/resource phase. A production release gate should run the full command.
+
+## Local Smoke Tests
+
+After rebuilding the backend and optional RAG service, verify the runtime before handoff:
+
+```powershell
+docker compose --profile rag up -d --build backend bge-rag
+Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod http://localhost:8010/health
+```
+
+Run representative authenticated API checks:
+
+```powershell
+# Log in with a local-only admin account, then reuse the bearer token.
+Invoke-RestMethod http://localhost:8000/api/admin/media/assets?limit=3 -Headers @{ Authorization = "Bearer <token>" }
+Invoke-RestMethod http://localhost:8000/api/admin/learning-assistant/ask -Method Post -Headers @{ Authorization = "Bearer <token>" } -ContentType "application/json" -Body '{"question":"Explain a representative experiment point.","allow_rag_lookup":false}'
+```
+
+Browser-smoke the main admin paths after the frontend dev or preview server is running:
+
+- `/admin/overview`
+- `/admin/videos`
+- `/admin/learning-assistant`
+- `/admin/question-banks`
+- `/admin/analytics`
+
+## Local Smoke Admin Account
+
+Temporary admin accounts created for smoke testing, such as `codex_smoke_admin`, are local-only developer database state. They are not seed data, are not protected resources, and must not be shipped or documented with shared passwords.
+
+Production environments should create named administrator accounts through the deployment bootstrap or identity-management process, then rotate or remove any smoke-only credentials before real users are admitted. For local test databases, recreate a smoke admin with `scripts/bootstrap_admin.py` and a local password manager entry when needed.
 
 ## Restore From Declared Resources
 
