@@ -89,6 +89,49 @@ async function assertNoOverlap(page, label, selectors) {
   }
 }
 
+async function assertElementChipRowBalanced(page, label) {
+  const metrics = await page.evaluate(() => {
+    const row = document.querySelector(".element-chip-row");
+    if (!row) return null;
+
+    const chips = Array.from(row.querySelectorAll(".element-chip")).filter((chip) => {
+      const rect = chip.getBoundingClientRect();
+      const style = window.getComputedStyle(chip);
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    });
+    if (chips.length < 2) return null;
+
+    const rowRect = row.getBoundingClientRect();
+    const firstRect = chips[0].getBoundingClientRect();
+    const lastRect = chips[chips.length - 1].getBoundingClientRect();
+    const chipRects = chips.map((chip) => chip.getBoundingClientRect());
+
+    return {
+      chipCount: chips.length,
+      rowWidth: rowRect.width,
+      leftInset: firstRect.left - rowRect.left,
+      rightInset: rowRect.right - lastRect.right,
+      minChipHeight: Math.min(...chipRects.map((rect) => rect.height)),
+      minChipWidth: Math.min(...chipRects.map((rect) => rect.width)),
+    };
+  });
+
+  if (!metrics) return;
+  if (metrics.minChipHeight < 44 || metrics.minChipWidth < 44) {
+    throw new Error(
+      `${label}: element chip touch size too small ${metrics.minChipWidth.toFixed(1)}x${metrics.minChipHeight.toFixed(1)}`,
+    );
+  }
+
+  const imbalance = Math.abs(metrics.leftInset - metrics.rightInset);
+  const tolerance = Math.max(12, metrics.rowWidth * 0.06);
+  if (imbalance > tolerance) {
+    throw new Error(
+      `${label}: element row is not balanced for ${metrics.chipCount} chips, left ${metrics.leftInset.toFixed(1)}px vs right ${metrics.rightInset.toFixed(1)}px`,
+    );
+  }
+}
+
 async function waitForAny(page, selectors, timeout = 10000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -139,9 +182,42 @@ async function loginIfConfigured(page) {
 async function checkAuthenticatedFlows(page, viewportName) {
   await assertNoHorizontalOverflow(page, `${viewportName}: learning home`);
   await page.locator(".learning-topbar").first().waitFor({ state: "visible", timeout: 10000 });
+  await waitForAny(
+    page,
+    [".chapter-entry-card", ".chapter-context-card", ".selected-element-panel", ".learning-point-card", ".empty-learning-card"],
+    15000,
+  );
+  if (await page.locator(".chapter-entry-card").first().isVisible().catch(() => false)) {
+    const firstChapterCard = page.locator(".chapter-entry-card").first();
+    await firstChapterCard.scrollIntoViewIfNeeded();
+    await firstChapterCard.click({ force: true });
+    await waitForAny(page, [".chapter-context-card", ".selected-element-panel", ".learning-point-card", ".empty-learning-card"], 15000);
+    if (!(await page.locator(".chapter-context-card").first().isVisible().catch(() => false))) {
+      await page.waitForFunction(
+        () => document.querySelector(".chapter-context-card") || !document.querySelector(".chapter-entry-card"),
+        null,
+        { timeout: 15000 },
+      );
+    }
+  }
+  await page.locator(".chapter-context-card").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".chapter-view-switcher").first().waitFor({ state: "visible", timeout: 10000 });
+  await waitForAny(page, [".selected-element-panel", ".element-chip"], 15000);
+  await assertElementChipRowBalanced(page, `${viewportName}: element chips`);
+  const secondElementChip = page.locator(".element-chip").nth(1);
+  if (await secondElementChip.isVisible().catch(() => false)) {
+    await secondElementChip.click();
+    await page.locator(".selected-element-panel").first().waitFor({ state: "visible", timeout: 10000 });
+  }
+  await page.locator(".chapter-view-switcher button").nth(1).click();
+  await waitForAny(page, [".learning-point-card", ".empty-learning-card"], 15000);
+  await page.locator(".chapter-view-switcher button").nth(0).click();
+  await page.locator(".selected-element-panel").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".chapter-view-switcher button").nth(1).click();
   await waitForAny(page, [".learning-point-card", ".empty-learning-card"], 15000);
   await page.locator(".ai-chat-toggle").first().waitFor({ state: "attached", timeout: 15000 });
   await page.locator(".feedback-toggle").first().waitFor({ state: "attached", timeout: 15000 });
+  await assertNoOverlap(page, `${viewportName}: closed floating entries`, [".ai-chat-fab", ".feedback-fab", ".chapter-view-switcher"]);
 
   if (!(await forceClickIfAttached(page, ".ai-chat-toggle"))) {
     throw new Error(`${viewportName}: AI chat toggle is not attached`);
@@ -162,7 +238,7 @@ async function checkAuthenticatedFlows(page, viewportName) {
   const finishAction = page.locator(".finish-action").first();
   if (await finishAction.isVisible().catch(() => false)) {
     await finishAction.scrollIntoViewIfNeeded();
-    await assertNoOverlap(page, `${viewportName}: finish action`, [".ai-chat-fab", ".feedback-fab", ".finish-action"]);
+    await assertNoOverlap(page, `${viewportName}: finish action`, [".ai-chat-fab", ".feedback-fab", ".finish-action", ".chapter-view-switcher"]);
   }
 
   const pointCard = page.locator(".learning-point-card").first();

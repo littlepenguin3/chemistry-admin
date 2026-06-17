@@ -15,21 +15,107 @@
         "title": "卤素：强氧化性与成盐能力",
         "summary": "从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。"
       },
-      "element_symbols": ["F", "Cl", "Br", "I", "At"],
+      "element_symbols": [
+        "F",
+        "Cl",
+        "Br",
+        "I",
+        "At"
+      ],
       "elements": [
-        {"symbol": "F", "name": "氟", "atomic_number": 9, "state": "淡黄色气体"},
-        {"symbol": "Cl", "name": "氯", "atomic_number": 17, "state": "黄绿色气体"},
-        {"symbol": "Br", "name": "溴", "atomic_number": 35, "state": "红棕色液体"},
-        {"symbol": "I", "name": "碘", "atomic_number": 53, "state": "紫黑色固体"},
-        {"symbol": "At", "name": "砹", "atomic_number": 85, "state": "放射性固体"}
+        {
+          "symbol": "F",
+          "name": "氟",
+          "atomic_number": 9,
+          "state": "淡黄色气体",
+          "group_label": "17 / 卤素",
+          "electron_configuration": "[He]2s2 2p5",
+          "common_valence": "-1",
+          "redox_tendency": "F: X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反",
+          "note": "氟: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。"
+        },
+        {
+          "symbol": "Cl",
+          "name": "氯",
+          "atomic_number": 17,
+          "state": "黄绿色气体",
+          "group_label": "17 / 卤素",
+          "electron_configuration": "[Ne]3s2 3p5",
+          "common_valence": "-1, 0, +1, +3, +5, +7",
+          "redox_tendency": "Cl: X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反",
+          "note": "氯: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。"
+        },
+        {
+          "symbol": "Br",
+          "name": "溴",
+          "atomic_number": 35,
+          "state": "红棕色液体",
+          "group_label": "17 / 卤素",
+          "electron_configuration": "[Ar]3d10 4s2 4p5",
+          "common_valence": "-1, 0, +1, +3, +5",
+          "redox_tendency": "Br: X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反",
+          "note": "溴: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。"
+        },
+        {
+          "symbol": "I",
+          "name": "碘",
+          "atomic_number": 53,
+          "state": "紫黑色固体",
+          "group_label": "17 / 卤素",
+          "electron_configuration": "[Kr]4d10 5s2 5p5",
+          "common_valence": "-1, 0, +1, +5, +7",
+          "redox_tendency": "I: X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反",
+          "note": "碘: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。"
+        },
+        {
+          "symbol": "At",
+          "name": "砹",
+          "atomic_number": 85,
+          "state": "放射性固体",
+          "group_label": "17 / 卤素",
+          "electron_configuration": "[Xe]4f14 5d10 6s2 6p5",
+          "common_valence": "-1, +1",
+          "redox_tendency": "At: X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反",
+          "note": "砹: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。"
+        }
       ],
       "property_cards": [
-        {"key": "atomic_number", "label": "原子序数", "value": "F 9 / Cl 17 / Br 35 / I 53 / At 85", "description": "同族自上而下原子序数增大。"},
-        {"key": "electron_configuration", "label": "电子排布", "value": "ns²np⁵", "description": "最外层差 1 个电子达到稀有气体构型。"},
-        {"key": "group", "label": "所属族", "value": "17族 / VIIA", "description": "典型非金属主族元素。"},
-        {"key": "common_valence", "label": "常见化合价", "value": "-1，0；Cl/Br/I 可有 +1、+3、+5、+7", "description": "氟通常只显 -1 价。"},
-        {"key": "elemental_state", "label": "单质状态", "value": "气体、液体、固体均有", "description": "颜色加深，熔沸点升高。"},
-        {"key": "redox", "label": "氧化性/还原性", "value": "X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反", "description": "置换实验可直接比较。"}
+        {
+          "key": "atomic_number",
+          "label": "原子序数",
+          "value": "F 9 / Cl 17 / Br 35 / I 53 / At 85",
+          "description": "同族自上而下原子序数增大。"
+        },
+        {
+          "key": "electron_configuration",
+          "label": "电子排布",
+          "value": "ns²np⁵",
+          "description": "最外层差 1 个电子达到稀有气体构型。"
+        },
+        {
+          "key": "group",
+          "label": "所属族",
+          "value": "17族 / VIIA",
+          "description": "典型非金属主族元素。"
+        },
+        {
+          "key": "common_valence",
+          "label": "常见化合价",
+          "value": "-1，0；Cl/Br/I 可有 +1、+3、+5、+7",
+          "description": "氟通常只显 -1 价。"
+        },
+        {
+          "key": "elemental_state",
+          "label": "单质状态",
+          "value": "气体、液体、固体均有",
+          "description": "颜色加深，熔沸点升高。"
+        },
+        {
+          "key": "redox",
+          "label": "氧化性/还原性",
+          "value": "X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反",
+          "description": "置换实验可直接比较。"
+        }
       ],
       "property_sections": [
         {
@@ -39,7 +125,13 @@
           "summary": "Cl₂ 可氧化 Br⁻、I⁻；Br₂ 可氧化 I⁻，置换顺序是卤素氧化性最直观的证据。",
           "formula": "F₂ > Cl₂ > Br₂ > I₂ > At₂",
           "tone": "green",
-          "experiment_keywords": ["氧化性", "置换", "次氯酸", "氯酸", "含氧酸盐"]
+          "experiment_keywords": [
+            "氧化性",
+            "置换",
+            "次氯酸",
+            "氯酸",
+            "含氧酸盐"
+          ]
         },
         {
           "key": "reducing",
@@ -48,7 +140,13 @@
           "summary": "I⁻ 最容易被氧化，浓硫酸与不同卤化物反应可体现卤离子还原性差异。",
           "formula": "F⁻ < Cl⁻ < Br⁻ < I⁻ < At⁻",
           "tone": "blue",
-          "experiment_keywords": ["还原性", "浓硫酸", "KI", "KBr", "KCl"]
+          "experiment_keywords": [
+            "还原性",
+            "浓硫酸",
+            "KI",
+            "KBr",
+            "KCl"
+          ]
         },
         {
           "key": "silver_halides",
@@ -57,9 +155,47 @@
           "summary": "AgCl、AgBr、AgI 的颜色、溶解性和感光性是卤离子检验的重要依据。",
           "formula": "Ag⁺ + X⁻ → AgX↓",
           "tone": "gold",
-          "experiment_keywords": ["卤化银", "感光", "AgCl", "AgBr", "AgI"]
+          "experiment_keywords": [
+            "卤化银",
+            "感光",
+            "AgCl",
+            "AgBr",
+            "AgI"
+          ]
         }
-      ]
+      ],
+      "default_element_symbol": "Cl",
+      "family_common_properties": [
+        {
+          "key": "family_redox_trend",
+          "label": "氧化性/还原性",
+          "value": "X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反",
+          "description": "置换实验可直接比较。",
+          "tone": "green"
+        },
+        {
+          "key": "valence_pattern",
+          "label": "常见化合价",
+          "value": "-1，0；Cl/Br/I 可有 +1、+3、+5、+7",
+          "description": "氟通常只显 -1 价。",
+          "tone": "gold"
+        },
+        {
+          "key": "elemental_state_trend",
+          "label": "单质状态",
+          "value": "气体、液体、固体均有",
+          "description": "颜色加深，熔沸点升高。",
+          "tone": "blue"
+        },
+        {
+          "key": "experiment_focus",
+          "label": "实验主线",
+          "value": "氧化性 / 还原性 / 与金属离子反应",
+          "description": "从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。",
+          "tone": "green"
+        }
+      ],
+      "reference_media": []
     },
     {
       "profile_id": "chalcogens-16",
@@ -75,26 +211,170 @@
         "title": "氧族：氧化还原与含氧酸盐",
         "summary": "氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。"
       },
-      "element_symbols": ["O", "S", "Se", "Te"],
+      "element_symbols": [
+        "O",
+        "S",
+        "Se",
+        "Te"
+      ],
       "elements": [
-        {"symbol": "O", "name": "氧", "atomic_number": 8, "state": "无色气体"},
-        {"symbol": "S", "name": "硫", "atomic_number": 16, "state": "黄色固体"},
-        {"symbol": "Se", "name": "硒", "atomic_number": 34, "state": "固体"},
-        {"symbol": "Te", "name": "碲", "atomic_number": 52, "state": "固体"}
+        {
+          "symbol": "O",
+          "name": "氧",
+          "atomic_number": 8,
+          "state": "无色气体",
+          "group_label": "16 / 氧族元素",
+          "electron_configuration": "[He]2s2 2p4",
+          "common_valence": "-2, -1, 0",
+          "redox_tendency": "O: O₃、H₂O₂、S₂O₈²⁻ 可显氧化性；SO₂、SO₃²⁻ 常显还原性",
+          "note": "氧: 氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。"
+        },
+        {
+          "symbol": "S",
+          "name": "硫",
+          "atomic_number": 16,
+          "state": "黄色固体",
+          "group_label": "16 / 氧族元素",
+          "electron_configuration": "[Ne]3s2 3p4",
+          "common_valence": "-2, 0, +4, +6",
+          "redox_tendency": "S: O₃、H₂O₂、S₂O₈²⁻ 可显氧化性；SO₂、SO₃²⁻ 常显还原性",
+          "note": "硫: 氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。"
+        },
+        {
+          "symbol": "Se",
+          "name": "硒",
+          "atomic_number": 34,
+          "state": "固体",
+          "group_label": "16 / 氧族元素",
+          "electron_configuration": "[Ar]3d10 4s2 4p4",
+          "common_valence": "-2, 0, +4, +6",
+          "redox_tendency": "Se: O₃、H₂O₂、S₂O₈²⁻ 可显氧化性；SO₂、SO₃²⁻ 常显还原性",
+          "note": "硒: 氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。"
+        },
+        {
+          "symbol": "Te",
+          "name": "碲",
+          "atomic_number": 52,
+          "state": "固体",
+          "group_label": "16 / 氧族元素",
+          "electron_configuration": "[Kr]4d10 5s2 5p4",
+          "common_valence": "-2, 0, +4, +6",
+          "redox_tendency": "Te: O₃、H₂O₂、S₂O₈²⁻ 可显氧化性；SO₂、SO₃²⁻ 常显还原性",
+          "note": "碲: 氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。"
+        }
       ],
       "property_cards": [
-        {"key": "atomic_number", "label": "原子序数", "value": "O 8 / S 16 / Se 34 / Te 52", "description": "同族自上而下金属性增强。"},
-        {"key": "electron_configuration", "label": "电子排布", "value": "ns²np⁴", "description": "最外层有 6 个价电子。"},
-        {"key": "group", "label": "所属族", "value": "16族 / VIA", "description": "氧族主族元素。"},
-        {"key": "common_valence", "label": "常见化合价", "value": "-2，0，+4，+6；氧常见 -2", "description": "过氧化物中氧为 -1。"},
-        {"key": "elemental_state", "label": "单质状态", "value": "氧为气体，硫及以下多为固体", "description": "硫有多种同素异形体。"},
-        {"key": "redox", "label": "氧化性/还原性", "value": "O₃、H₂O₂、S₂O₈²⁻ 可显氧化性；SO₂、SO₃²⁻ 常显还原性", "description": "介质条件会改变反应方向。"}
+        {
+          "key": "atomic_number",
+          "label": "原子序数",
+          "value": "O 8 / S 16 / Se 34 / Te 52",
+          "description": "同族自上而下金属性增强。"
+        },
+        {
+          "key": "electron_configuration",
+          "label": "电子排布",
+          "value": "ns²np⁴",
+          "description": "最外层有 6 个价电子。"
+        },
+        {
+          "key": "group",
+          "label": "所属族",
+          "value": "16族 / VIA",
+          "description": "氧族主族元素。"
+        },
+        {
+          "key": "common_valence",
+          "label": "常见化合价",
+          "value": "-2，0，+4，+6；氧常见 -2",
+          "description": "过氧化物中氧为 -1。"
+        },
+        {
+          "key": "elemental_state",
+          "label": "单质状态",
+          "value": "氧为气体，硫及以下多为固体",
+          "description": "硫有多种同素异形体。"
+        },
+        {
+          "key": "redox",
+          "label": "氧化性/还原性",
+          "value": "O₃、H₂O₂、S₂O₈²⁻ 可显氧化性；SO₂、SO₃²⁻ 常显还原性",
+          "description": "介质条件会改变反应方向。"
+        }
       ],
       "property_sections": [
-        {"key": "peroxide", "title": "过氧化氢", "subtitle": "既可氧化又可还原", "summary": "H₂O₂ 在不同反应对象和介质中可表现氧化性、还原性或分解反应。", "formula": "H₂O₂ ⇌ 氧化剂 / 还原剂", "tone": "green", "experiment_keywords": ["过氧化氢", "H₂O₂", "鉴定", "性质"]},
-        {"key": "sulfur_oxide", "title": "硫的氧化物", "subtitle": "SO₂ 的还原性与氧化性", "summary": "SO₂ 可使酸性高锰酸钾褪色，也能与 H₂S 发生氧化还原反应。", "formula": "SO₂ + 还原/氧化体系", "tone": "blue", "experiment_keywords": ["二氧化硫", "SO2", "硫的氧化物"]},
-        {"key": "oxo_salts", "title": "含氧酸盐", "subtitle": "硫代硫酸盐、过二硫酸盐", "summary": "S₂O₃²⁻ 和 S₂O₈²⁻ 是观察硫元素不同氧化态转化的典型体系。", "formula": "S₂O₃²⁻ / S₂O₈²⁻", "tone": "gold", "experiment_keywords": ["硫代硫酸", "过二硫酸", "含氧酸盐"]}
-      ]
+        {
+          "key": "peroxide",
+          "title": "过氧化氢",
+          "subtitle": "既可氧化又可还原",
+          "summary": "H₂O₂ 在不同反应对象和介质中可表现氧化性、还原性或分解反应。",
+          "formula": "H₂O₂ ⇌ 氧化剂 / 还原剂",
+          "tone": "green",
+          "experiment_keywords": [
+            "过氧化氢",
+            "H₂O₂",
+            "鉴定",
+            "性质"
+          ]
+        },
+        {
+          "key": "sulfur_oxide",
+          "title": "硫的氧化物",
+          "subtitle": "SO₂ 的还原性与氧化性",
+          "summary": "SO₂ 可使酸性高锰酸钾褪色，也能与 H₂S 发生氧化还原反应。",
+          "formula": "SO₂ + 还原/氧化体系",
+          "tone": "blue",
+          "experiment_keywords": [
+            "二氧化硫",
+            "SO2",
+            "硫的氧化物"
+          ]
+        },
+        {
+          "key": "oxo_salts",
+          "title": "含氧酸盐",
+          "subtitle": "硫代硫酸盐、过二硫酸盐",
+          "summary": "S₂O₃²⁻ 和 S₂O₈²⁻ 是观察硫元素不同氧化态转化的典型体系。",
+          "formula": "S₂O₃²⁻ / S₂O₈²⁻",
+          "tone": "gold",
+          "experiment_keywords": [
+            "硫代硫酸",
+            "过二硫酸",
+            "含氧酸盐"
+          ]
+        }
+      ],
+      "default_element_symbol": "S",
+      "family_common_properties": [
+        {
+          "key": "family_redox_trend",
+          "label": "氧化性/还原性",
+          "value": "O₃、H₂O₂、S₂O₈²⁻ 可显氧化性；SO₂、SO₃²⁻ 常显还原性",
+          "description": "介质条件会改变反应方向。",
+          "tone": "green"
+        },
+        {
+          "key": "valence_pattern",
+          "label": "常见化合价",
+          "value": "-2，0，+4，+6；氧常见 -2",
+          "description": "过氧化物中氧为 -1。",
+          "tone": "gold"
+        },
+        {
+          "key": "elemental_state_trend",
+          "label": "单质状态",
+          "value": "氧为气体，硫及以下多为固体",
+          "description": "硫有多种同素异形体。",
+          "tone": "blue"
+        },
+        {
+          "key": "experiment_focus",
+          "label": "实验主线",
+          "value": "过氧化氢 / 硫的氧化物 / 含氧酸盐",
+          "description": "氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。",
+          "tone": "green"
+        }
+      ],
+      "reference_media": []
     },
     {
       "profile_id": "pnictogens-15",
@@ -105,28 +385,184 @@
       "subtitle": "氮、磷、砷、锑、铋",
       "family_number": "15",
       "family_name": "氮族元素",
-      "hero": {"eyebrow": "p区元素性质", "title": "氮族：多氧化态与含氧酸盐", "summary": "氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。"},
-      "element_symbols": ["N", "P", "As", "Sb", "Bi"],
+      "hero": {
+        "eyebrow": "p区元素性质",
+        "title": "氮族：多氧化态与含氧酸盐",
+        "summary": "氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。"
+      },
+      "element_symbols": [
+        "N",
+        "P",
+        "As",
+        "Sb",
+        "Bi"
+      ],
       "elements": [
-        {"symbol": "N", "name": "氮", "atomic_number": 7, "state": "无色气体"},
-        {"symbol": "P", "name": "磷", "atomic_number": 15, "state": "固体"},
-        {"symbol": "As", "name": "砷", "atomic_number": 33, "state": "固体"},
-        {"symbol": "Sb", "name": "锑", "atomic_number": 51, "state": "固体"},
-        {"symbol": "Bi", "name": "铋", "atomic_number": 83, "state": "固体"}
+        {
+          "symbol": "N",
+          "name": "氮",
+          "atomic_number": 7,
+          "state": "无色气体",
+          "group_label": "15 / 氮族元素",
+          "electron_configuration": "[He]2s2 2p3",
+          "common_valence": "-3, 0, +3, +5",
+          "redox_tendency": "N: 硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化",
+          "note": "氮: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。"
+        },
+        {
+          "symbol": "P",
+          "name": "磷",
+          "atomic_number": 15,
+          "state": "固体",
+          "group_label": "15 / 氮族元素",
+          "electron_configuration": "[Ne]3s2 3p3",
+          "common_valence": "-3, 0, +3, +5",
+          "redox_tendency": "P: 硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化",
+          "note": "磷: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。"
+        },
+        {
+          "symbol": "As",
+          "name": "砷",
+          "atomic_number": 33,
+          "state": "固体",
+          "group_label": "15 / 氮族元素",
+          "electron_configuration": "[Ar]3d10 4s2 4p3",
+          "common_valence": "-3, 0, +3, +5",
+          "redox_tendency": "As: 硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化",
+          "note": "砷: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。"
+        },
+        {
+          "symbol": "Sb",
+          "name": "锑",
+          "atomic_number": 51,
+          "state": "固体",
+          "group_label": "15 / 氮族元素",
+          "electron_configuration": "[Kr]4d10 5s2 5p3",
+          "common_valence": "-3, 0, +3, +5",
+          "redox_tendency": "Sb: 硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化",
+          "note": "锑: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。"
+        },
+        {
+          "symbol": "Bi",
+          "name": "铋",
+          "atomic_number": 83,
+          "state": "固体",
+          "group_label": "15 / 氮族元素",
+          "electron_configuration": "[Xe]4f14 5d10 6s2 6p3",
+          "common_valence": "0, +3, +5",
+          "redox_tendency": "Bi: 硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化",
+          "note": "铋: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。"
+        }
       ],
       "property_cards": [
-        {"key": "atomic_number", "label": "原子序数", "value": "N 7 / P 15 / As 33 / Sb 51 / Bi 83", "description": "自上而下金属性增强。"},
-        {"key": "electron_configuration", "label": "电子排布", "value": "ns²np³", "description": "价层半充满构型。"},
-        {"key": "group", "label": "所属族", "value": "15族 / VA", "description": "氮族主族元素。"},
-        {"key": "common_valence", "label": "常见化合价", "value": "-3，0，+3，+5", "description": "惰性电子对效应使重元素 +3 更稳定。"},
-        {"key": "elemental_state", "label": "单质状态", "value": "氮为气体，其余多为固体", "description": "磷存在白磷、红磷等同素异形体。"},
-        {"key": "redox", "label": "氧化性/还原性", "value": "硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化", "description": "反应与介质酸碱性密切相关。"}
+        {
+          "key": "atomic_number",
+          "label": "原子序数",
+          "value": "N 7 / P 15 / As 33 / Sb 51 / Bi 83",
+          "description": "自上而下金属性增强。"
+        },
+        {
+          "key": "electron_configuration",
+          "label": "电子排布",
+          "value": "ns²np³",
+          "description": "价层半充满构型。"
+        },
+        {
+          "key": "group",
+          "label": "所属族",
+          "value": "15族 / VA",
+          "description": "氮族主族元素。"
+        },
+        {
+          "key": "common_valence",
+          "label": "常见化合价",
+          "value": "-3，0，+3，+5",
+          "description": "惰性电子对效应使重元素 +3 更稳定。"
+        },
+        {
+          "key": "elemental_state",
+          "label": "单质状态",
+          "value": "氮为气体，其余多为固体",
+          "description": "磷存在白磷、红磷等同素异形体。"
+        },
+        {
+          "key": "redox",
+          "label": "氧化性/还原性",
+          "value": "硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化",
+          "description": "反应与介质酸碱性密切相关。"
+        }
       ],
       "property_sections": [
-        {"key": "nitrite", "title": "亚硝酸及其盐", "subtitle": "氧化性与还原性并存", "summary": "NO₂⁻ 处于中间氧化态，遇不同反应物可表现氧化性或还原性。", "formula": "NO₂⁻ ⇌ NO / NO₃⁻", "tone": "green", "experiment_keywords": ["亚硝酸", "亚硝酸盐"]},
-        {"key": "nitrate", "title": "硝酸及硝酸盐", "subtitle": "强氧化性与检验", "summary": "硝酸根检验和硝酸盐氧化性是氮族实验的重要点位。", "formula": "NO₃⁻", "tone": "blue", "experiment_keywords": ["硝酸", "硝酸根", "硝酸盐"]},
-        {"key": "phosphorus", "title": "磷及磷酸盐", "subtitle": "含氧酸盐与沉淀", "summary": "磷酸盐沉淀和酸碱性体现 P(V) 化合物的稳定性。", "formula": "PO₄³⁻", "tone": "gold", "experiment_keywords": ["磷", "磷酸"]}
-      ]
+        {
+          "key": "nitrite",
+          "title": "亚硝酸及其盐",
+          "subtitle": "氧化性与还原性并存",
+          "summary": "NO₂⁻ 处于中间氧化态，遇不同反应物可表现氧化性或还原性。",
+          "formula": "NO₂⁻ ⇌ NO / NO₃⁻",
+          "tone": "green",
+          "experiment_keywords": [
+            "亚硝酸",
+            "亚硝酸盐"
+          ]
+        },
+        {
+          "key": "nitrate",
+          "title": "硝酸及硝酸盐",
+          "subtitle": "强氧化性与检验",
+          "summary": "硝酸根检验和硝酸盐氧化性是氮族实验的重要点位。",
+          "formula": "NO₃⁻",
+          "tone": "blue",
+          "experiment_keywords": [
+            "硝酸",
+            "硝酸根",
+            "硝酸盐"
+          ]
+        },
+        {
+          "key": "phosphorus",
+          "title": "磷及磷酸盐",
+          "subtitle": "含氧酸盐与沉淀",
+          "summary": "磷酸盐沉淀和酸碱性体现 P(V) 化合物的稳定性。",
+          "formula": "PO₄³⁻",
+          "tone": "gold",
+          "experiment_keywords": [
+            "磷",
+            "磷酸"
+          ]
+        }
+      ],
+      "default_element_symbol": "N",
+      "family_common_properties": [
+        {
+          "key": "family_redox_trend",
+          "label": "氧化性/还原性",
+          "value": "硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化",
+          "description": "反应与介质酸碱性密切相关。",
+          "tone": "green"
+        },
+        {
+          "key": "valence_pattern",
+          "label": "常见化合价",
+          "value": "-3，0，+3，+5",
+          "description": "惰性电子对效应使重元素 +3 更稳定。",
+          "tone": "gold"
+        },
+        {
+          "key": "elemental_state_trend",
+          "label": "单质状态",
+          "value": "氮为气体，其余多为固体",
+          "description": "磷存在白磷、红磷等同素异形体。",
+          "tone": "blue"
+        },
+        {
+          "key": "experiment_focus",
+          "label": "实验主线",
+          "value": "亚硝酸及其盐 / 硝酸及硝酸盐 / 磷及磷酸盐",
+          "description": "氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。",
+          "tone": "green"
+        }
+      ],
+      "reference_media": []
     },
     {
       "profile_id": "carbon-group-14",
@@ -137,26 +573,160 @@
       "subtitle": "碳、硅、锡、铅",
       "family_number": "14",
       "family_name": "碳族元素",
-      "hero": {"eyebrow": "p区元素性质", "title": "碳族：共价骨架与 +2/+4 氧化态", "summary": "碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。"},
-      "element_symbols": ["C", "Si", "Sn", "Pb"],
+      "hero": {
+        "eyebrow": "p区元素性质",
+        "title": "碳族：共价骨架与 +2/+4 氧化态",
+        "summary": "碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。"
+      },
+      "element_symbols": [
+        "C",
+        "Si",
+        "Sn",
+        "Pb"
+      ],
       "elements": [
-        {"symbol": "C", "name": "碳", "atomic_number": 6, "state": "固体"},
-        {"symbol": "Si", "name": "硅", "atomic_number": 14, "state": "固体"},
-        {"symbol": "Sn", "name": "锡", "atomic_number": 50, "state": "固体"},
-        {"symbol": "Pb", "name": "铅", "atomic_number": 82, "state": "固体"}
+        {
+          "symbol": "C",
+          "name": "碳",
+          "atomic_number": 6,
+          "state": "固体",
+          "group_label": "14 / 碳族元素",
+          "electron_configuration": "[He]2s2 2p2",
+          "common_valence": "-4, 0, +2, +4",
+          "redox_tendency": "C: Sn(II) 常有还原性，Pb(IV) 可有氧化性",
+          "note": "碳: 碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。"
+        },
+        {
+          "symbol": "Si",
+          "name": "硅",
+          "atomic_number": 14,
+          "state": "固体",
+          "group_label": "14 / 碳族元素",
+          "electron_configuration": "[Ne]3s2 3p2",
+          "common_valence": "-4, 0, +4",
+          "redox_tendency": "Si: Sn(II) 常有还原性，Pb(IV) 可有氧化性",
+          "note": "硅: 碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。"
+        },
+        {
+          "symbol": "Sn",
+          "name": "锡",
+          "atomic_number": 50,
+          "state": "固体",
+          "group_label": "14 / 碳族元素",
+          "electron_configuration": "[Kr]4d10 5s2 5p2",
+          "common_valence": "0, +2, +4",
+          "redox_tendency": "Sn: Sn(II) 常有还原性，Pb(IV) 可有氧化性",
+          "note": "锡: 碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。"
+        },
+        {
+          "symbol": "Pb",
+          "name": "铅",
+          "atomic_number": 82,
+          "state": "固体",
+          "group_label": "14 / 碳族元素",
+          "electron_configuration": "[Xe]4f14 5d10 6s2 6p2",
+          "common_valence": "0, +2, +4",
+          "redox_tendency": "Pb: Sn(II) 常有还原性，Pb(IV) 可有氧化性",
+          "note": "铅: 碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。"
+        }
       ],
       "property_cards": [
-        {"key": "atomic_number", "label": "原子序数", "value": "C 6 / Si 14 / Sn 50 / Pb 82", "description": "从非金属逐渐过渡到金属。"},
-        {"key": "electron_configuration", "label": "电子排布", "value": "ns²np²", "description": "常形成四价共价结构。"},
-        {"key": "group", "label": "所属族", "value": "14族 / IVA", "description": "碳族主族元素。"},
-        {"key": "common_valence", "label": "常见化合价", "value": "-4，0，+2，+4", "description": "重元素 +2 稳定性增强。"},
-        {"key": "elemental_state", "label": "单质状态", "value": "常温多为固体", "description": "碳、硅具有典型共价网络结构。"},
-        {"key": "redox", "label": "氧化性/还原性", "value": "Sn(II) 常有还原性，Pb(IV) 可有氧化性", "description": "氧化态稳定性随周期变化。"}
+        {
+          "key": "atomic_number",
+          "label": "原子序数",
+          "value": "C 6 / Si 14 / Sn 50 / Pb 82",
+          "description": "从非金属逐渐过渡到金属。"
+        },
+        {
+          "key": "electron_configuration",
+          "label": "电子排布",
+          "value": "ns²np²",
+          "description": "常形成四价共价结构。"
+        },
+        {
+          "key": "group",
+          "label": "所属族",
+          "value": "14族 / IVA",
+          "description": "碳族主族元素。"
+        },
+        {
+          "key": "common_valence",
+          "label": "常见化合价",
+          "value": "-4，0，+2，+4",
+          "description": "重元素 +2 稳定性增强。"
+        },
+        {
+          "key": "elemental_state",
+          "label": "单质状态",
+          "value": "常温多为固体",
+          "description": "碳、硅具有典型共价网络结构。"
+        },
+        {
+          "key": "redox",
+          "label": "氧化性/还原性",
+          "value": "Sn(II) 常有还原性，Pb(IV) 可有氧化性",
+          "description": "氧化态稳定性随周期变化。"
+        }
       ],
       "property_sections": [
-        {"key": "silicate", "title": "硅酸盐生成", "subtitle": "水中花园", "summary": "难溶性硅酸盐生成可形成彩色枝状结构，是硅酸盐沉淀与膜扩散的典型观察。", "formula": "Mⁿ⁺ + SiO₃²⁻ → 硅酸盐", "tone": "green", "experiment_keywords": ["水中花园", "硅酸盐"]},
-        {"key": "tin_lead", "title": "锡铅氧化态", "subtitle": "+2/+4 稳定性", "summary": "锡、铅化合物体现碳族重元素氧化态稳定性的差异。", "formula": "Sn²⁺ / Pb²⁺", "tone": "blue", "experiment_keywords": ["锡", "铅", "氧化态"]}
-      ]
+        {
+          "key": "silicate",
+          "title": "硅酸盐生成",
+          "subtitle": "水中花园",
+          "summary": "难溶性硅酸盐生成可形成彩色枝状结构，是硅酸盐沉淀与膜扩散的典型观察。",
+          "formula": "Mⁿ⁺ + SiO₃²⁻ → 硅酸盐",
+          "tone": "green",
+          "experiment_keywords": [
+            "水中花园",
+            "硅酸盐"
+          ]
+        },
+        {
+          "key": "tin_lead",
+          "title": "锡铅氧化态",
+          "subtitle": "+2/+4 稳定性",
+          "summary": "锡、铅化合物体现碳族重元素氧化态稳定性的差异。",
+          "formula": "Sn²⁺ / Pb²⁺",
+          "tone": "blue",
+          "experiment_keywords": [
+            "锡",
+            "铅",
+            "氧化态"
+          ]
+        }
+      ],
+      "default_element_symbol": "C",
+      "family_common_properties": [
+        {
+          "key": "family_redox_trend",
+          "label": "氧化性/还原性",
+          "value": "Sn(II) 常有还原性，Pb(IV) 可有氧化性",
+          "description": "氧化态稳定性随周期变化。",
+          "tone": "green"
+        },
+        {
+          "key": "valence_pattern",
+          "label": "常见化合价",
+          "value": "-4，0，+2，+4",
+          "description": "重元素 +2 稳定性增强。",
+          "tone": "gold"
+        },
+        {
+          "key": "elemental_state_trend",
+          "label": "单质状态",
+          "value": "常温多为固体",
+          "description": "碳、硅具有典型共价网络结构。",
+          "tone": "blue"
+        },
+        {
+          "key": "experiment_focus",
+          "label": "实验主线",
+          "value": "硅酸盐生成 / 锡铅氧化态",
+          "description": "碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。",
+          "tone": "green"
+        }
+      ],
+      "reference_media": []
     },
     {
       "profile_id": "boron-group-13",
@@ -167,26 +737,161 @@
       "subtitle": "硼、铝、镓、铟、铊",
       "family_number": "13",
       "family_name": "硼族元素",
-      "hero": {"eyebrow": "p区元素性质", "title": "硼族：缺电子与两性", "summary": "硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。"},
-      "element_symbols": ["B", "Al", "Ga", "In", "Tl"],
+      "hero": {
+        "eyebrow": "p区元素性质",
+        "title": "硼族：缺电子与两性",
+        "summary": "硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。"
+      },
+      "element_symbols": [
+        "B",
+        "Al",
+        "Ga",
+        "In",
+        "Tl"
+      ],
       "elements": [
-        {"symbol": "B", "name": "硼", "atomic_number": 5, "state": "固体"},
-        {"symbol": "Al", "name": "铝", "atomic_number": 13, "state": "银白色固体"},
-        {"symbol": "Ga", "name": "镓", "atomic_number": 31, "state": "低熔点金属"},
-        {"symbol": "In", "name": "铟", "atomic_number": 49, "state": "金属固体"},
-        {"symbol": "Tl", "name": "铊", "atomic_number": 81, "state": "金属固体"}
+        {
+          "symbol": "B",
+          "name": "硼",
+          "atomic_number": 5,
+          "state": "固体",
+          "group_label": "13 / 硼族元素",
+          "electron_configuration": "[He]2s2 2p1",
+          "common_valence": "0, +3",
+          "redox_tendency": "B: 铝单质还原性强，铝氢氧化物显两性",
+          "note": "硼: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。"
+        },
+        {
+          "symbol": "Al",
+          "name": "铝",
+          "atomic_number": 13,
+          "state": "银白色固体",
+          "group_label": "13 / 硼族元素",
+          "electron_configuration": "[Ne]3s2 3p1",
+          "common_valence": "0, +3",
+          "redox_tendency": "Al: 铝单质还原性强，铝氢氧化物显两性",
+          "note": "铝: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。"
+        },
+        {
+          "symbol": "Ga",
+          "name": "镓",
+          "atomic_number": 31,
+          "state": "低熔点金属",
+          "group_label": "13 / 硼族元素",
+          "electron_configuration": "[Ar]3d10 4s2 4p1",
+          "common_valence": "0, +3",
+          "redox_tendency": "Ga: 铝单质还原性强，铝氢氧化物显两性",
+          "note": "镓: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。"
+        },
+        {
+          "symbol": "In",
+          "name": "铟",
+          "atomic_number": 49,
+          "state": "金属固体",
+          "group_label": "13 / 硼族元素",
+          "electron_configuration": "[Kr]4d10 5s2 5p1",
+          "common_valence": "0, +1, +3",
+          "redox_tendency": "In: 铝单质还原性强，铝氢氧化物显两性",
+          "note": "铟: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。"
+        },
+        {
+          "symbol": "Tl",
+          "name": "铊",
+          "atomic_number": 81,
+          "state": "金属固体",
+          "group_label": "13 / 硼族元素",
+          "electron_configuration": "[Xe]4f14 5d10 6s2 6p1",
+          "common_valence": "0, +1, +3",
+          "redox_tendency": "Tl: 铝单质还原性强，铝氢氧化物显两性",
+          "note": "铊: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。"
+        }
       ],
       "property_cards": [
-        {"key": "atomic_number", "label": "原子序数", "value": "B 5 / Al 13 / Ga 31 / In 49 / Tl 81", "description": "自上而下金属性增强。"},
-        {"key": "electron_configuration", "label": "电子排布", "value": "ns²np¹", "description": "价电子数为 3。"},
-        {"key": "group", "label": "所属族", "value": "13族 / IIIA", "description": "硼族主族元素。"},
-        {"key": "common_valence", "label": "常见化合价", "value": "+3；Tl 常见 +1", "description": "惰性电子对效应使 +1 稳定性增强。"},
-        {"key": "elemental_state", "label": "单质状态", "value": "硼为类金属，其余多为金属", "description": "铝表面易形成致密氧化膜。"},
-        {"key": "redox", "label": "氧化性/还原性", "value": "铝单质还原性强，铝氢氧化物显两性", "description": "实验常观察沉淀生成和溶解。"}
+        {
+          "key": "atomic_number",
+          "label": "原子序数",
+          "value": "B 5 / Al 13 / Ga 31 / In 49 / Tl 81",
+          "description": "自上而下金属性增强。"
+        },
+        {
+          "key": "electron_configuration",
+          "label": "电子排布",
+          "value": "ns²np¹",
+          "description": "价电子数为 3。"
+        },
+        {
+          "key": "group",
+          "label": "所属族",
+          "value": "13族 / IIIA",
+          "description": "硼族主族元素。"
+        },
+        {
+          "key": "common_valence",
+          "label": "常见化合价",
+          "value": "+3；Tl 常见 +1",
+          "description": "惰性电子对效应使 +1 稳定性增强。"
+        },
+        {
+          "key": "elemental_state",
+          "label": "单质状态",
+          "value": "硼为类金属，其余多为金属",
+          "description": "铝表面易形成致密氧化膜。"
+        },
+        {
+          "key": "redox",
+          "label": "氧化性/还原性",
+          "value": "铝单质还原性强，铝氢氧化物显两性",
+          "description": "实验常观察沉淀生成和溶解。"
+        }
       ],
       "property_sections": [
-        {"key": "aluminum_amphoteric", "title": "铝的两性", "subtitle": "氢氧化铝沉淀与溶解", "summary": "Al(OH)₃ 可溶于酸和强碱，是两性氢氧化物的代表。", "formula": "Al(OH)₃ + 酸/碱", "tone": "green", "experiment_keywords": ["铝", "硼", "两性", "氢氧化铝"]}
-      ]
+        {
+          "key": "aluminum_amphoteric",
+          "title": "铝的两性",
+          "subtitle": "氢氧化铝沉淀与溶解",
+          "summary": "Al(OH)₃ 可溶于酸和强碱，是两性氢氧化物的代表。",
+          "formula": "Al(OH)₃ + 酸/碱",
+          "tone": "green",
+          "experiment_keywords": [
+            "铝",
+            "硼",
+            "两性",
+            "氢氧化铝"
+          ]
+        }
+      ],
+      "default_element_symbol": "Al",
+      "family_common_properties": [
+        {
+          "key": "family_redox_trend",
+          "label": "氧化性/还原性",
+          "value": "铝单质还原性强，铝氢氧化物显两性",
+          "description": "实验常观察沉淀生成和溶解。",
+          "tone": "green"
+        },
+        {
+          "key": "valence_pattern",
+          "label": "常见化合价",
+          "value": "+3；Tl 常见 +1",
+          "description": "惰性电子对效应使 +1 稳定性增强。",
+          "tone": "gold"
+        },
+        {
+          "key": "elemental_state_trend",
+          "label": "单质状态",
+          "value": "硼为类金属，其余多为金属",
+          "description": "铝表面易形成致密氧化膜。",
+          "tone": "blue"
+        },
+        {
+          "key": "experiment_focus",
+          "label": "实验主线",
+          "value": "铝的两性",
+          "description": "硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。",
+          "tone": "green"
+        }
+      ],
+      "reference_media": []
     },
     {
       "profile_id": "alkali-alkaline-earth",
@@ -197,28 +902,183 @@
       "subtitle": "IA 与 IIA 元素",
       "family_number": "1/2",
       "family_name": "碱金属和碱土金属",
-      "hero": {"eyebrow": "s区元素性质", "title": "s区：活泼金属与焰色反应", "summary": "碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"},
-      "element_symbols": ["Li", "Na", "K", "Mg", "Ca", "Ba"],
+      "hero": {
+        "eyebrow": "s区元素性质",
+        "title": "s区：活泼金属与焰色反应",
+        "summary": "碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+      },
+      "element_symbols": [
+        "Li",
+        "Na",
+        "K",
+        "Mg",
+        "Ca",
+        "Ba"
+      ],
       "elements": [
-        {"symbol": "Li", "name": "锂", "atomic_number": 3, "state": "银白色固体"},
-        {"symbol": "Na", "name": "钠", "atomic_number": 11, "state": "银白色固体"},
-        {"symbol": "K", "name": "钾", "atomic_number": 19, "state": "银白色固体"},
-        {"symbol": "Mg", "name": "镁", "atomic_number": 12, "state": "银白色固体"},
-        {"symbol": "Ca", "name": "钙", "atomic_number": 20, "state": "银白色固体"},
-        {"symbol": "Ba", "name": "钡", "atomic_number": 56, "state": "银白色固体"}
+        {
+          "symbol": "Li",
+          "name": "锂",
+          "atomic_number": 3,
+          "state": "银白色固体",
+          "group_label": "1/2 / 碱金属和碱土金属",
+          "electron_configuration": "[He]2s1",
+          "common_valence": "0, +1",
+          "redox_tendency": "Li: 单质还原性强，IA 自上而下增强",
+          "note": "锂: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+        },
+        {
+          "symbol": "Na",
+          "name": "钠",
+          "atomic_number": 11,
+          "state": "银白色固体",
+          "group_label": "1/2 / 碱金属和碱土金属",
+          "electron_configuration": "[Ne]3s1",
+          "common_valence": "0, +1",
+          "redox_tendency": "Na: 单质还原性强，IA 自上而下增强",
+          "note": "钠: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+        },
+        {
+          "symbol": "K",
+          "name": "钾",
+          "atomic_number": 19,
+          "state": "银白色固体",
+          "group_label": "1/2 / 碱金属和碱土金属",
+          "electron_configuration": "[Ar]4s1",
+          "common_valence": "0, +1",
+          "redox_tendency": "K: 单质还原性强，IA 自上而下增强",
+          "note": "钾: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+        },
+        {
+          "symbol": "Mg",
+          "name": "镁",
+          "atomic_number": 12,
+          "state": "银白色固体",
+          "group_label": "1/2 / 碱金属和碱土金属",
+          "electron_configuration": "[Ne]3s2",
+          "common_valence": "0, +2",
+          "redox_tendency": "Mg: 单质还原性强，IA 自上而下增强",
+          "note": "镁: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+        },
+        {
+          "symbol": "Ca",
+          "name": "钙",
+          "atomic_number": 20,
+          "state": "银白色固体",
+          "group_label": "1/2 / 碱金属和碱土金属",
+          "electron_configuration": "[Ar]4s2",
+          "common_valence": "0, +2",
+          "redox_tendency": "Ca: 单质还原性强，IA 自上而下增强",
+          "note": "钙: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+        },
+        {
+          "symbol": "Ba",
+          "name": "钡",
+          "atomic_number": 56,
+          "state": "银白色固体",
+          "group_label": "1/2 / 碱金属和碱土金属",
+          "electron_configuration": "[Xe]6s2",
+          "common_valence": "0, +2",
+          "redox_tendency": "Ba: 单质还原性强，IA 自上而下增强",
+          "note": "钡: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+        }
       ],
       "property_cards": [
-        {"key": "atomic_number", "label": "原子序数", "value": "Li 3 / Na 11 / K 19；Mg 12 / Ca 20 / Ba 56", "description": "IA、IIA 两列元素。"},
-        {"key": "electron_configuration", "label": "电子排布", "value": "IA: ns¹；IIA: ns²", "description": "最外层 s 电子决定强还原性。"},
-        {"key": "group", "label": "所属族", "value": "1族与2族", "description": "典型 s 区金属。"},
-        {"key": "common_valence", "label": "常见化合价", "value": "IA: +1；IIA: +2", "description": "离子化合物多见。"},
-        {"key": "elemental_state", "label": "单质状态", "value": "常温为活泼金属固体", "description": "碱金属需隔绝空气和水保存。"},
-        {"key": "redox", "label": "氧化性/还原性", "value": "单质还原性强，IA 自上而下增强", "description": "与水、氧气反应活泼。"}
+        {
+          "key": "atomic_number",
+          "label": "原子序数",
+          "value": "Li 3 / Na 11 / K 19；Mg 12 / Ca 20 / Ba 56",
+          "description": "IA、IIA 两列元素。"
+        },
+        {
+          "key": "electron_configuration",
+          "label": "电子排布",
+          "value": "IA: ns¹；IIA: ns²",
+          "description": "最外层 s 电子决定强还原性。"
+        },
+        {
+          "key": "group",
+          "label": "所属族",
+          "value": "1族与2族",
+          "description": "典型 s 区金属。"
+        },
+        {
+          "key": "common_valence",
+          "label": "常见化合价",
+          "value": "IA: +1；IIA: +2",
+          "description": "离子化合物多见。"
+        },
+        {
+          "key": "elemental_state",
+          "label": "单质状态",
+          "value": "常温为活泼金属固体",
+          "description": "碱金属需隔绝空气和水保存。"
+        },
+        {
+          "key": "redox",
+          "label": "氧化性/还原性",
+          "value": "单质还原性强，IA 自上而下增强",
+          "description": "与水、氧气反应活泼。"
+        }
       ],
       "property_sections": [
-        {"key": "activity", "title": "金属活泼性", "subtitle": "与水/酸反应差异", "summary": "比较碱金属、碱土金属活泼性可观察气体、热量和溶液碱性变化。", "formula": "M + H₂O → MOH/M(OH)₂ + H₂", "tone": "green", "experiment_keywords": ["活泼性", "碱金属", "碱土金属"]},
-        {"key": "flame", "title": "焰色反应", "subtitle": "离子识别", "summary": "Na、K、Ca、Ba 等离子具有特征焰色，是无机定性分析的重要观察。", "formula": "特征发射光谱", "tone": "gold", "experiment_keywords": ["焰色"]}
-      ]
+        {
+          "key": "activity",
+          "title": "金属活泼性",
+          "subtitle": "与水/酸反应差异",
+          "summary": "比较碱金属、碱土金属活泼性可观察气体、热量和溶液碱性变化。",
+          "formula": "M + H₂O → MOH/M(OH)₂ + H₂",
+          "tone": "green",
+          "experiment_keywords": [
+            "活泼性",
+            "碱金属",
+            "碱土金属"
+          ]
+        },
+        {
+          "key": "flame",
+          "title": "焰色反应",
+          "subtitle": "离子识别",
+          "summary": "Na、K、Ca、Ba 等离子具有特征焰色，是无机定性分析的重要观察。",
+          "formula": "特征发射光谱",
+          "tone": "gold",
+          "experiment_keywords": [
+            "焰色"
+          ]
+        }
+      ],
+      "default_element_symbol": "Na",
+      "family_common_properties": [
+        {
+          "key": "family_redox_trend",
+          "label": "氧化性/还原性",
+          "value": "单质还原性强，IA 自上而下增强",
+          "description": "与水、氧气反应活泼。",
+          "tone": "green"
+        },
+        {
+          "key": "valence_pattern",
+          "label": "常见化合价",
+          "value": "IA: +1；IIA: +2",
+          "description": "离子化合物多见。",
+          "tone": "gold"
+        },
+        {
+          "key": "elemental_state_trend",
+          "label": "单质状态",
+          "value": "常温为活泼金属固体",
+          "description": "碱金属需隔绝空气和水保存。",
+          "tone": "blue"
+        },
+        {
+          "key": "experiment_focus",
+          "label": "实验主线",
+          "value": "金属活泼性 / 焰色反应",
+          "description": "碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。",
+          "tone": "green"
+        }
+      ],
+      "reference_media": []
     },
     {
       "profile_id": "ds-block",
@@ -229,28 +1089,185 @@
       "subtitle": "Cu、Ag、Zn、Cd、Hg",
       "family_number": "11/12",
       "family_name": "铜锌副族元素",
-      "hero": {"eyebrow": "ds区元素性质", "title": "ds区：沉淀、配合物与价态转化", "summary": "铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。"},
-      "element_symbols": ["Cu", "Ag", "Zn", "Cd", "Hg"],
+      "hero": {
+        "eyebrow": "ds区元素性质",
+        "title": "ds区：沉淀、配合物与价态转化",
+        "summary": "铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。"
+      },
+      "element_symbols": [
+        "Cu",
+        "Ag",
+        "Zn",
+        "Cd",
+        "Hg"
+      ],
       "elements": [
-        {"symbol": "Cu", "name": "铜", "atomic_number": 29, "state": "红色金属固体"},
-        {"symbol": "Ag", "name": "银", "atomic_number": 47, "state": "银白色固体"},
-        {"symbol": "Zn", "name": "锌", "atomic_number": 30, "state": "银白色固体"},
-        {"symbol": "Cd", "name": "镉", "atomic_number": 48, "state": "银白色固体"},
-        {"symbol": "Hg", "name": "汞", "atomic_number": 80, "state": "液态金属"}
+        {
+          "symbol": "Cu",
+          "name": "铜",
+          "atomic_number": 29,
+          "state": "红色金属固体",
+          "group_label": "11/12 / 铜锌副族元素",
+          "electron_configuration": "[Ar]3d10 4s1",
+          "common_valence": "0, +1, +2",
+          "redox_tendency": "Cu: Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化",
+          "note": "铜: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。"
+        },
+        {
+          "symbol": "Ag",
+          "name": "银",
+          "atomic_number": 47,
+          "state": "银白色固体",
+          "group_label": "11/12 / 铜锌副族元素",
+          "electron_configuration": "[Kr]4d10 5s1",
+          "common_valence": "0, +1",
+          "redox_tendency": "Ag: Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化",
+          "note": "银: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。"
+        },
+        {
+          "symbol": "Zn",
+          "name": "锌",
+          "atomic_number": 30,
+          "state": "银白色固体",
+          "group_label": "11/12 / 铜锌副族元素",
+          "electron_configuration": "[Ar]3d10 4s2",
+          "common_valence": "0, +2",
+          "redox_tendency": "Zn: Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化",
+          "note": "锌: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。"
+        },
+        {
+          "symbol": "Cd",
+          "name": "镉",
+          "atomic_number": 48,
+          "state": "银白色固体",
+          "group_label": "11/12 / 铜锌副族元素",
+          "electron_configuration": "[Kr]4d10 5s2",
+          "common_valence": "0, +2",
+          "redox_tendency": "Cd: Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化",
+          "note": "镉: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。"
+        },
+        {
+          "symbol": "Hg",
+          "name": "汞",
+          "atomic_number": 80,
+          "state": "液态金属",
+          "group_label": "11/12 / 铜锌副族元素",
+          "electron_configuration": "[Xe]4f14 5d10 6s2",
+          "common_valence": "0, +1, +2",
+          "redox_tendency": "Hg: Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化",
+          "note": "汞: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。"
+        }
       ],
       "property_cards": [
-        {"key": "atomic_number", "label": "原子序数", "value": "Cu 29 / Ag 47；Zn 30 / Cd 48 / Hg 80", "description": "11族、12族代表元素。"},
-        {"key": "electron_configuration", "label": "电子排布", "value": "(n-1)d¹⁰ns¹/²", "description": "d 轨道多为充满状态。"},
-        {"key": "group", "label": "所属族", "value": "11族与12族", "description": "ds 区元素。"},
-        {"key": "common_valence", "label": "常见化合价", "value": "Cu +1/+2；Ag +1；Zn/Cd +2；Hg +1/+2", "description": "汞(I)常以 Hg₂²⁺存在。"},
-        {"key": "elemental_state", "label": "单质状态", "value": "多数为金属固体，汞为液体", "description": "金属光泽明显。"},
-        {"key": "redox", "label": "氧化性/还原性", "value": "Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化", "description": "配位和沉淀会影响稳定性。"}
+        {
+          "key": "atomic_number",
+          "label": "原子序数",
+          "value": "Cu 29 / Ag 47；Zn 30 / Cd 48 / Hg 80",
+          "description": "11族、12族代表元素。"
+        },
+        {
+          "key": "electron_configuration",
+          "label": "电子排布",
+          "value": "(n-1)d¹⁰ns¹/²",
+          "description": "d 轨道多为充满状态。"
+        },
+        {
+          "key": "group",
+          "label": "所属族",
+          "value": "11族与12族",
+          "description": "ds 区元素。"
+        },
+        {
+          "key": "common_valence",
+          "label": "常见化合价",
+          "value": "Cu +1/+2；Ag +1；Zn/Cd +2；Hg +1/+2",
+          "description": "汞(I)常以 Hg₂²⁺存在。"
+        },
+        {
+          "key": "elemental_state",
+          "label": "单质状态",
+          "value": "多数为金属固体，汞为液体",
+          "description": "金属光泽明显。"
+        },
+        {
+          "key": "redox",
+          "label": "氧化性/还原性",
+          "value": "Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化",
+          "description": "配位和沉淀会影响稳定性。"
+        }
       ],
       "property_sections": [
-        {"key": "hydroxide", "title": "氢氧化物", "subtitle": "沉淀生成与性质", "summary": "ds 区金属离子与碱反应常形成特征沉淀。", "formula": "M²⁺ + OH⁻ → M(OH)₂↓", "tone": "green", "experiment_keywords": ["氢氧化物", "生成与性质"]},
-        {"key": "complex", "title": "配合物", "subtitle": "氨水/配体引起颜色变化", "summary": "铜、银、锌等离子可形成配合物并改变沉淀溶解行为。", "formula": "Mⁿ⁺ + 配体 ⇌ 配合物", "tone": "blue", "experiment_keywords": ["配合物", "氨", "配合"]},
-        {"key": "redox", "title": "价态转化", "subtitle": "Cu(I)、Hg(I/II)", "summary": "铜和汞化合物体现 ds 区元素典型氧化态转化。", "formula": "Cu⁺/Cu²⁺，Hg₂²⁺/Hg²⁺", "tone": "gold", "experiment_keywords": ["铜(I)", "汞", "相互转化"]}
-      ]
+        {
+          "key": "hydroxide",
+          "title": "氢氧化物",
+          "subtitle": "沉淀生成与性质",
+          "summary": "ds 区金属离子与碱反应常形成特征沉淀。",
+          "formula": "M²⁺ + OH⁻ → M(OH)₂↓",
+          "tone": "green",
+          "experiment_keywords": [
+            "氢氧化物",
+            "生成与性质"
+          ]
+        },
+        {
+          "key": "complex",
+          "title": "配合物",
+          "subtitle": "氨水/配体引起颜色变化",
+          "summary": "铜、银、锌等离子可形成配合物并改变沉淀溶解行为。",
+          "formula": "Mⁿ⁺ + 配体 ⇌ 配合物",
+          "tone": "blue",
+          "experiment_keywords": [
+            "配合物",
+            "氨",
+            "配合"
+          ]
+        },
+        {
+          "key": "redox",
+          "title": "价态转化",
+          "subtitle": "Cu(I)、Hg(I/II)",
+          "summary": "铜和汞化合物体现 ds 区元素典型氧化态转化。",
+          "formula": "Cu⁺/Cu²⁺，Hg₂²⁺/Hg²⁺",
+          "tone": "gold",
+          "experiment_keywords": [
+            "铜(I)",
+            "汞",
+            "相互转化"
+          ]
+        }
+      ],
+      "default_element_symbol": "Cu",
+      "family_common_properties": [
+        {
+          "key": "family_redox_trend",
+          "label": "氧化性/还原性",
+          "value": "Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化",
+          "description": "配位和沉淀会影响稳定性。",
+          "tone": "green"
+        },
+        {
+          "key": "valence_pattern",
+          "label": "常见化合价",
+          "value": "Cu +1/+2；Ag +1；Zn/Cd +2；Hg +1/+2",
+          "description": "汞(I)常以 Hg₂²⁺存在。",
+          "tone": "gold"
+        },
+        {
+          "key": "elemental_state_trend",
+          "label": "单质状态",
+          "value": "多数为金属固体，汞为液体",
+          "description": "金属光泽明显。",
+          "tone": "blue"
+        },
+        {
+          "key": "experiment_focus",
+          "label": "实验主线",
+          "value": "氢氧化物 / 配合物 / 价态转化",
+          "description": "铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。",
+          "tone": "green"
+        }
+      ],
+      "reference_media": []
     },
     {
       "profile_id": "d-block-transition",
@@ -261,30 +1278,209 @@
       "subtitle": "Ti、V、Cr、Mn、Fe、Co、Ni 等",
       "family_number": "3-10",
       "family_name": "过渡金属元素",
-      "hero": {"eyebrow": "d区元素性质", "title": "d区：多氧化态、颜色与配位", "summary": "未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"},
-      "element_symbols": ["Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni"],
+      "hero": {
+        "eyebrow": "d区元素性质",
+        "title": "d区：多氧化态、颜色与配位",
+        "summary": "未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+      },
+      "element_symbols": [
+        "Ti",
+        "V",
+        "Cr",
+        "Mn",
+        "Fe",
+        "Co",
+        "Ni"
+      ],
       "elements": [
-        {"symbol": "Ti", "name": "钛", "atomic_number": 22, "state": "金属固体"},
-        {"symbol": "V", "name": "钒", "atomic_number": 23, "state": "金属固体"},
-        {"symbol": "Cr", "name": "铬", "atomic_number": 24, "state": "金属固体"},
-        {"symbol": "Mn", "name": "锰", "atomic_number": 25, "state": "金属固体"},
-        {"symbol": "Fe", "name": "铁", "atomic_number": 26, "state": "金属固体"},
-        {"symbol": "Co", "name": "钴", "atomic_number": 27, "state": "金属固体"},
-        {"symbol": "Ni", "name": "镍", "atomic_number": 28, "state": "金属固体"}
+        {
+          "symbol": "Ti",
+          "name": "钛",
+          "atomic_number": 22,
+          "state": "金属固体",
+          "group_label": "3-10 / 过渡金属元素",
+          "electron_configuration": "[Ar]3d2 4s2",
+          "common_valence": "0, +3, +4",
+          "redox_tendency": "Ti: 低价态常还原，高价态常氧化",
+          "note": "钛: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+        },
+        {
+          "symbol": "V",
+          "name": "钒",
+          "atomic_number": 23,
+          "state": "金属固体",
+          "group_label": "3-10 / 过渡金属元素",
+          "electron_configuration": "[Ar]3d3 4s2",
+          "common_valence": "0, +2, +3, +4, +5",
+          "redox_tendency": "V: 低价态常还原，高价态常氧化",
+          "note": "钒: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+        },
+        {
+          "symbol": "Cr",
+          "name": "铬",
+          "atomic_number": 24,
+          "state": "金属固体",
+          "group_label": "3-10 / 过渡金属元素",
+          "electron_configuration": "[Ar]3d5 4s1",
+          "common_valence": "0, +3, +6",
+          "redox_tendency": "Cr: 低价态常还原，高价态常氧化",
+          "note": "铬: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+        },
+        {
+          "symbol": "Mn",
+          "name": "锰",
+          "atomic_number": 25,
+          "state": "金属固体",
+          "group_label": "3-10 / 过渡金属元素",
+          "electron_configuration": "[Ar]3d5 4s2",
+          "common_valence": "0, +2, +4, +6, +7",
+          "redox_tendency": "Mn: 低价态常还原，高价态常氧化",
+          "note": "锰: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+        },
+        {
+          "symbol": "Fe",
+          "name": "铁",
+          "atomic_number": 26,
+          "state": "金属固体",
+          "group_label": "3-10 / 过渡金属元素",
+          "electron_configuration": "[Ar]3d6 4s2",
+          "common_valence": "0, +2, +3",
+          "redox_tendency": "Fe: 低价态常还原，高价态常氧化",
+          "note": "铁: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+        },
+        {
+          "symbol": "Co",
+          "name": "钴",
+          "atomic_number": 27,
+          "state": "金属固体",
+          "group_label": "3-10 / 过渡金属元素",
+          "electron_configuration": "[Ar]3d7 4s2",
+          "common_valence": "0, +2, +3",
+          "redox_tendency": "Co: 低价态常还原，高价态常氧化",
+          "note": "钴: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+        },
+        {
+          "symbol": "Ni",
+          "name": "镍",
+          "atomic_number": 28,
+          "state": "金属固体",
+          "group_label": "3-10 / 过渡金属元素",
+          "electron_configuration": "[Ar]3d8 4s2",
+          "common_valence": "0, +2",
+          "redox_tendency": "Ni: 低价态常还原，高价态常氧化",
+          "note": "镍: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+        }
       ],
       "property_cards": [
-        {"key": "atomic_number", "label": "原子序数", "value": "Ti 22 至 Ni 28 为第一过渡系列核心", "description": "第一过渡系列实验最常见。"},
-        {"key": "electron_configuration", "label": "电子排布", "value": "(n-1)d¹-¹⁰ns⁰-²", "description": "d、s 能级接近，常有异常构型。"},
-        {"key": "group", "label": "所属族", "value": "3-10族为主", "description": "典型 d 区过渡金属。"},
-        {"key": "common_valence", "label": "常见化合价", "value": "+2、+3 常见；Cr、Mn 可达高价", "description": "高氧化态常显强氧化性。"},
-        {"key": "elemental_state", "label": "单质状态", "value": "常温为金属固体", "description": "密度、硬度、熔点通常较高。"},
-        {"key": "redox", "label": "氧化性/还原性", "value": "低价态常还原，高价态常氧化", "description": "颜色变化常与氧化态变化相连。"}
+        {
+          "key": "atomic_number",
+          "label": "原子序数",
+          "value": "Ti 22 至 Ni 28 为第一过渡系列核心",
+          "description": "第一过渡系列实验最常见。"
+        },
+        {
+          "key": "electron_configuration",
+          "label": "电子排布",
+          "value": "(n-1)d¹-¹⁰ns⁰-²",
+          "description": "d、s 能级接近，常有异常构型。"
+        },
+        {
+          "key": "group",
+          "label": "所属族",
+          "value": "3-10族为主",
+          "description": "典型 d 区过渡金属。"
+        },
+        {
+          "key": "common_valence",
+          "label": "常见化合价",
+          "value": "+2、+3 常见；Cr、Mn 可达高价",
+          "description": "高氧化态常显强氧化性。"
+        },
+        {
+          "key": "elemental_state",
+          "label": "单质状态",
+          "value": "常温为金属固体",
+          "description": "密度、硬度、熔点通常较高。"
+        },
+        {
+          "key": "redox",
+          "label": "氧化性/还原性",
+          "value": "低价态常还原，高价态常氧化",
+          "description": "颜色变化常与氧化态变化相连。"
+        }
       ],
       "property_sections": [
-        {"key": "hydroxide", "title": "氢氧化物酸碱性", "subtitle": "沉淀、水解与两性", "summary": "过渡金属氢氧化物可体现酸碱性、两性和沉淀颜色。", "formula": "Mⁿ⁺ + OH⁻", "tone": "green", "experiment_keywords": ["氢氧化物", "酸碱性"]},
-        {"key": "redox", "title": "氧化还原性", "subtitle": "颜色随价态变化", "summary": "V、Cr、Mn、Fe 等元素的多氧化态是 d 区实验主线。", "formula": "低价态 ⇌ 高价态", "tone": "blue", "experiment_keywords": ["氧化还原", "过渡金属", "颜色变化"]},
-        {"key": "complex", "title": "配合物与颜色", "subtitle": "配位环境改变颜色", "summary": "金属离子与配体结合会改变 d-d 跃迁和颜色表现。", "formula": "Mⁿ⁺ + L ⇌ [MLₓ]ⁿ⁺", "tone": "gold", "experiment_keywords": ["配合物", "颜色", "金属离子"]}
-      ]
+        {
+          "key": "hydroxide",
+          "title": "氢氧化物酸碱性",
+          "subtitle": "沉淀、水解与两性",
+          "summary": "过渡金属氢氧化物可体现酸碱性、两性和沉淀颜色。",
+          "formula": "Mⁿ⁺ + OH⁻",
+          "tone": "green",
+          "experiment_keywords": [
+            "氢氧化物",
+            "酸碱性"
+          ]
+        },
+        {
+          "key": "redox",
+          "title": "氧化还原性",
+          "subtitle": "颜色随价态变化",
+          "summary": "V、Cr、Mn、Fe 等元素的多氧化态是 d 区实验主线。",
+          "formula": "低价态 ⇌ 高价态",
+          "tone": "blue",
+          "experiment_keywords": [
+            "氧化还原",
+            "过渡金属",
+            "颜色变化"
+          ]
+        },
+        {
+          "key": "complex",
+          "title": "配合物与颜色",
+          "subtitle": "配位环境改变颜色",
+          "summary": "金属离子与配体结合会改变 d-d 跃迁和颜色表现。",
+          "formula": "Mⁿ⁺ + L ⇌ [MLₓ]ⁿ⁺",
+          "tone": "gold",
+          "experiment_keywords": [
+            "配合物",
+            "颜色",
+            "金属离子"
+          ]
+        }
+      ],
+      "default_element_symbol": "Fe",
+      "family_common_properties": [
+        {
+          "key": "family_redox_trend",
+          "label": "氧化性/还原性",
+          "value": "低价态常还原，高价态常氧化",
+          "description": "颜色变化常与氧化态变化相连。",
+          "tone": "green"
+        },
+        {
+          "key": "valence_pattern",
+          "label": "常见化合价",
+          "value": "+2、+3 常见；Cr、Mn 可达高价",
+          "description": "高氧化态常显强氧化性。",
+          "tone": "gold"
+        },
+        {
+          "key": "elemental_state_trend",
+          "label": "单质状态",
+          "value": "常温为金属固体",
+          "description": "密度、硬度、熔点通常较高。",
+          "tone": "blue"
+        },
+        {
+          "key": "experiment_focus",
+          "label": "实验主线",
+          "value": "氢氧化物酸碱性 / 氧化还原性 / 配合物与颜色",
+          "description": "未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。",
+          "tone": "green"
+        }
+      ],
+      "reference_media": []
     },
     {
       "profile_id": "hydrogen-noble-gases",
@@ -295,28 +1491,184 @@
       "subtitle": "特殊位置与稳定构型",
       "family_number": "特殊",
       "family_name": "氢与稀有气体",
-      "hero": {"eyebrow": "综合元素性质", "title": "氢：特殊的一价元素", "summary": "氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"},
-      "element_symbols": ["H", "He", "Ne", "Ar", "Kr", "Xe"],
+      "hero": {
+        "eyebrow": "综合元素性质",
+        "title": "氢：特殊的一价元素",
+        "summary": "氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+      },
+      "element_symbols": [
+        "H",
+        "He",
+        "Ne",
+        "Ar",
+        "Kr",
+        "Xe"
+      ],
       "elements": [
-        {"symbol": "H", "name": "氢", "atomic_number": 1, "state": "无色气体"},
-        {"symbol": "He", "name": "氦", "atomic_number": 2, "state": "无色气体"},
-        {"symbol": "Ne", "name": "氖", "atomic_number": 10, "state": "无色气体"},
-        {"symbol": "Ar", "name": "氩", "atomic_number": 18, "state": "无色气体"},
-        {"symbol": "Kr", "name": "氪", "atomic_number": 36, "state": "无色气体"},
-        {"symbol": "Xe", "name": "氙", "atomic_number": 54, "state": "无色气体"}
+        {
+          "symbol": "H",
+          "name": "氢",
+          "atomic_number": 1,
+          "state": "无色气体",
+          "group_label": "特殊 / 氢与稀有气体",
+          "electron_configuration": "1s1",
+          "common_valence": "-1, 0, +1",
+          "redox_tendency": "H: H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
+          "note": "氢: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+        },
+        {
+          "symbol": "He",
+          "name": "氦",
+          "atomic_number": 2,
+          "state": "无色气体",
+          "group_label": "特殊 / 氢与稀有气体",
+          "electron_configuration": "1s2",
+          "common_valence": "0",
+          "redox_tendency": "He: H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
+          "note": "氦: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+        },
+        {
+          "symbol": "Ne",
+          "name": "氖",
+          "atomic_number": 10,
+          "state": "无色气体",
+          "group_label": "特殊 / 氢与稀有气体",
+          "electron_configuration": "[He]2s2 2p6",
+          "common_valence": "0",
+          "redox_tendency": "Ne: H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
+          "note": "氖: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+        },
+        {
+          "symbol": "Ar",
+          "name": "氩",
+          "atomic_number": 18,
+          "state": "无色气体",
+          "group_label": "特殊 / 氢与稀有气体",
+          "electron_configuration": "[Ne]3s2 3p6",
+          "common_valence": "0",
+          "redox_tendency": "Ar: H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
+          "note": "氩: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+        },
+        {
+          "symbol": "Kr",
+          "name": "氪",
+          "atomic_number": 36,
+          "state": "无色气体",
+          "group_label": "特殊 / 氢与稀有气体",
+          "electron_configuration": "[Ar]3d10 4s2 4p6",
+          "common_valence": "0, +2",
+          "redox_tendency": "Kr: H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
+          "note": "氪: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+        },
+        {
+          "symbol": "Xe",
+          "name": "氙",
+          "atomic_number": 54,
+          "state": "无色气体",
+          "group_label": "特殊 / 氢与稀有气体",
+          "electron_configuration": "[Kr]4d10 5s2 5p6",
+          "common_valence": "0, +2, +4, +6, +8",
+          "redox_tendency": "Xe: H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
+          "note": "氙: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+        }
       ],
       "property_cards": [
-        {"key": "atomic_number", "label": "原子序数", "value": "H 1；He 2 / Ne 10 / Ar 18 / Kr 36 / Xe 54", "description": "氢是最轻元素，稀有气体位于 18 族。"},
-        {"key": "electron_configuration", "label": "电子排布", "value": "H: 1s¹；稀有气体: 稳定闭壳层", "description": "稳定构型解释惰性。"},
-        {"key": "group", "label": "所属族", "value": "氢位置特殊；稀有气体为18族", "description": "氢不能简单归为碱金属或卤素。"},
-        {"key": "common_valence", "label": "常见化合价", "value": "H: +1/-1；稀有气体通常 0", "description": "重稀有气体可形成少量化合物。"},
-        {"key": "elemental_state", "label": "单质状态", "value": "常温常压多为气体", "description": "稀有气体单原子分子为主。"},
-        {"key": "redox", "label": "氧化性/还原性", "value": "H₂ 可作还原剂；氢化物中 H⁻ 有还原性", "description": "氢的反应性随结合对象变化。"}
+        {
+          "key": "atomic_number",
+          "label": "原子序数",
+          "value": "H 1；He 2 / Ne 10 / Ar 18 / Kr 36 / Xe 54",
+          "description": "氢是最轻元素，稀有气体位于 18 族。"
+        },
+        {
+          "key": "electron_configuration",
+          "label": "电子排布",
+          "value": "H: 1s¹；稀有气体: 稳定闭壳层",
+          "description": "稳定构型解释惰性。"
+        },
+        {
+          "key": "group",
+          "label": "所属族",
+          "value": "氢位置特殊；稀有气体为18族",
+          "description": "氢不能简单归为碱金属或卤素。"
+        },
+        {
+          "key": "common_valence",
+          "label": "常见化合价",
+          "value": "H: +1/-1；稀有气体通常 0",
+          "description": "重稀有气体可形成少量化合物。"
+        },
+        {
+          "key": "elemental_state",
+          "label": "单质状态",
+          "value": "常温常压多为气体",
+          "description": "稀有气体单原子分子为主。"
+        },
+        {
+          "key": "redox",
+          "label": "氧化性/还原性",
+          "value": "H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
+          "description": "氢的反应性随结合对象变化。"
+        }
       ],
       "property_sections": [
-        {"key": "hydrogen", "title": "氢的特殊性", "subtitle": "H⁺ 与 H⁻", "summary": "氢可与活泼金属形成离子型氢化物，也可形成大量共价化合物。", "formula": "H₂ / H⁺ / H⁻", "tone": "green", "experiment_keywords": ["氢", "过氧化氢", "臭氧"]},
-        {"key": "noble", "title": "稀有气体", "subtitle": "稳定构型与低反应性", "summary": "稀有气体闭壳层电子构型带来低反应性，重稀有气体可在强氧化条件下形成化合物。", "formula": "ns²np⁶", "tone": "blue", "experiment_keywords": ["稀有气体"]}
-      ]
+        {
+          "key": "hydrogen",
+          "title": "氢的特殊性",
+          "subtitle": "H⁺ 与 H⁻",
+          "summary": "氢可与活泼金属形成离子型氢化物，也可形成大量共价化合物。",
+          "formula": "H₂ / H⁺ / H⁻",
+          "tone": "green",
+          "experiment_keywords": [
+            "氢",
+            "过氧化氢",
+            "臭氧"
+          ]
+        },
+        {
+          "key": "noble",
+          "title": "稀有气体",
+          "subtitle": "稳定构型与低反应性",
+          "summary": "稀有气体闭壳层电子构型带来低反应性，重稀有气体可在强氧化条件下形成化合物。",
+          "formula": "ns²np⁶",
+          "tone": "blue",
+          "experiment_keywords": [
+            "稀有气体"
+          ]
+        }
+      ],
+      "default_element_symbol": "H",
+      "family_common_properties": [
+        {
+          "key": "family_redox_trend",
+          "label": "氧化性/还原性",
+          "value": "H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
+          "description": "氢的反应性随结合对象变化。",
+          "tone": "green"
+        },
+        {
+          "key": "valence_pattern",
+          "label": "常见化合价",
+          "value": "H: +1/-1；稀有气体通常 0",
+          "description": "重稀有气体可形成少量化合物。",
+          "tone": "gold"
+        },
+        {
+          "key": "elemental_state_trend",
+          "label": "单质状态",
+          "value": "常温常压多为气体",
+          "description": "稀有气体单原子分子为主。",
+          "tone": "blue"
+        },
+        {
+          "key": "experiment_focus",
+          "label": "实验主线",
+          "value": "氢的特殊性 / 稀有气体",
+          "description": "氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。",
+          "tone": "green"
+        }
+      ],
+      "reference_media": []
     }
-  ]
+  ],
+  "reference_media": []
 }

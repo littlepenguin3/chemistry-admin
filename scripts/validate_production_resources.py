@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import sys
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -83,6 +84,74 @@ def _question_bank_count(path: Path) -> dict[str, int]:
     }
 
 
+def _seed_experiment_chapter_ids(experiment: dict[str, Any]) -> list[str]:
+    chapter_ids: list[str] = []
+    seen: set[str] = set()
+    for binding in experiment.get("chapter_bindings") or []:
+        if not isinstance(binding, dict):
+            continue
+        chapter_id = str(binding.get("chapter_id") or "").strip()
+        if chapter_id and chapter_id not in seen:
+            chapter_ids.append(chapter_id)
+            seen.add(chapter_id)
+    return chapter_ids
+
+
+def _student_learning_experiment_coverage_counts(profiles: list[dict[str, Any]]) -> dict[str, int]:
+    formal_experiments = _json(ROOT / "data" / "seed" / "formal_experiments.json").get("experiments") or []
+    experiments = [
+        experiment
+        for experiment in formal_experiments
+        if isinstance(experiment, dict) and str(experiment.get("status") or "published") == "published"
+    ]
+    enabled = [profile for profile in profiles if isinstance(profile, dict) and profile.get("enabled", True)]
+    chapter_to_profile: dict[str, str] = {}
+    profile_counts: dict[str, int] = defaultdict(int)
+    covered_experiment_ids: set[str] = set()
+    multi_profile_experiment_count = 0
+    errors: list[str] = []
+
+    for profile in enabled:
+        profile_id = str(profile.get("profile_id") or "<missing>")
+        chapter_id = str(profile.get("chapter_id") or "").strip()
+        if not chapter_id:
+            errors.append(f"{profile_id}: missing chapter_id")
+            continue
+        if chapter_id in chapter_to_profile:
+            errors.append(f"{profile_id}: duplicate chapter_id {chapter_id}")
+        chapter_to_profile[chapter_id] = profile_id
+        profile_counts.setdefault(profile_id, 0)
+
+    for experiment in experiments:
+        experiment_id = str(experiment.get("id") or experiment.get("code") or "<missing>")
+        profile_ids = [
+            chapter_to_profile[chapter_id]
+            for chapter_id in _seed_experiment_chapter_ids(experiment)
+            if chapter_id in chapter_to_profile
+        ]
+        if not profile_ids:
+            errors.append(f"{experiment_id}: no student learning profile covers its chapter bindings")
+            continue
+        covered_experiment_ids.add(experiment_id)
+        if len(set(profile_ids)) > 1:
+            multi_profile_experiment_count += 1
+        for profile_id in set(profile_ids):
+            profile_counts[profile_id] += 1
+
+    profiles_without_experiments = sorted(profile_id for profile_id, count in profile_counts.items() if count == 0)
+    for profile_id in profiles_without_experiments:
+        errors.append(f"{profile_id}: no formal experiments are bound to this profile chapter")
+    if errors:
+        raise ValueError("student learning experiment coverage mismatch: " + "; ".join(errors))
+    return {
+        "published_experiments": len(experiments),
+        "covered_experiments": len(covered_experiment_ids),
+        "uncovered_experiments": len(experiments) - len(covered_experiment_ids),
+        "profiles_without_experiments": len(profiles_without_experiments),
+        "multi_profile_experiments": multi_profile_experiment_count,
+    }
+
+
 def _student_learning_profile_count(path: Path) -> dict[str, int]:
     required_cards = {
         "atomic_number",
@@ -92,6 +161,23 @@ def _student_learning_profile_count(path: Path) -> dict[str, int]:
         "elemental_state",
         "redox",
     }
+    required_element_facts = {
+        "atomic_number",
+        "electron_configuration",
+        "group_label",
+        "common_valence",
+        "state",
+        "redox_tendency",
+    }
+    required_reference_media = {
+        "id",
+        "usage",
+        "asset_type",
+        "source_url",
+        "license",
+        "attribution",
+        "alt_text",
+    }
     data = _json(path)
     profiles = data.get("profiles") or []
     if not isinstance(profiles, list):
@@ -99,7 +185,15 @@ def _student_learning_profile_count(path: Path) -> dict[str, int]:
     enabled = [profile for profile in profiles if isinstance(profile, dict) and profile.get("enabled", True)]
     for profile in enabled:
         profile_id = profile.get("profile_id") or "<missing>"
-        for key in ["chapter_id", "title", "hero", "elements", "property_cards", "property_sections"]:
+        for key in [
+            "chapter_id",
+            "title",
+            "hero",
+            "elements",
+            "property_cards",
+            "family_common_properties",
+            "property_sections",
+        ]:
             if not profile.get(key):
                 raise ValueError(f"{path} profile {profile_id} missing {key}")
         card_keys = {
@@ -110,7 +204,24 @@ def _student_learning_profile_count(path: Path) -> dict[str, int]:
         missing = sorted(required_cards - card_keys)
         if missing:
             raise ValueError(f"{path} profile {profile_id} missing property cards: {', '.join(missing)}")
-    return {"profiles": len(profiles), "enabled_profiles": len(enabled)}
+        for element in profile.get("elements") or []:
+            if not isinstance(element, dict):
+                raise ValueError(f"{path} profile {profile_id} has a non-object element")
+            symbol = element.get("symbol") or "<missing>"
+            missing_facts = sorted(key for key in required_element_facts if element.get(key) in (None, ""))
+            if missing_facts:
+                raise ValueError(f"{path} profile {profile_id} element {symbol} missing facts: {', '.join(missing_facts)}")
+        for media in profile.get("reference_media") or []:
+            if not isinstance(media, dict):
+                raise ValueError(f"{path} profile {profile_id} has a non-object reference media entry")
+            missing_media = sorted(key for key in required_reference_media if not media.get(key))
+            if missing_media:
+                raise ValueError(f"{path} profile {profile_id} reference media missing: {', '.join(missing_media)}")
+    return {
+        "profiles": len(profiles),
+        "enabled_profiles": len(enabled),
+        **_student_learning_experiment_coverage_counts(profiles),
+    }
 
 
 def _embedding_dense_count(path: Path) -> dict[str, int]:
@@ -215,7 +326,14 @@ RESOURCE_SPECS: list[dict[str, Any]] = [
         "path": "data/seed/student_learning/element_profiles.json",
         "kind": "json",
         "count": _student_learning_profile_count,
-        "expected_counts": {"profiles": 9, "enabled_profiles": 9},
+        "expected_counts": {
+            "profiles": 9,
+            "enabled_profiles": 9,
+            "published_experiments": 77,
+            "covered_experiments": 77,
+            "uncovered_experiments": 0,
+            "profiles_without_experiments": 0,
+        },
     },
     {
         "id": "canonical_chunks_inorganic_lower",

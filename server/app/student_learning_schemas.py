@@ -42,6 +42,19 @@ class StudentVideoResource(BaseModel):
     thumbnail_path: str | None = None
 
 
+class StudentLearningReferenceMedia(BaseModel):
+    id: str
+    usage: str
+    asset_type: str
+    source_url: str
+    license: str
+    attribution: str
+    alt_text: str
+    local_path: str | None = None
+    element_symbols: list[str] = Field(default_factory=list)
+    property_keys: list[str] = Field(default_factory=list)
+
+
 class StudentExperimentPointSummary(BaseModel):
     id: str
     code: str
@@ -80,6 +93,11 @@ class StudentLearningElementBadge(BaseModel):
     name: str
     atomic_number: int | None = None
     state: str | None = None
+    group_label: str | None = None
+    electron_configuration: str | None = None
+    common_valence: str | None = None
+    redox_tendency: str | None = None
+    note: str | None = None
 
 
 class StudentLearningPropertyCard(BaseModel):
@@ -116,6 +134,12 @@ class StudentLearningPointGroup(BaseModel):
     points: list[StudentLearningPointCard] = Field(default_factory=list)
 
 
+class StudentLearningChapterExperimentGroup(BaseModel):
+    parent_code: str
+    parent_title: str
+    points: list[StudentLearningPointCard] = Field(default_factory=list)
+
+
 class StudentLearningProfileSummary(BaseModel):
     profile_id: str
     chapter_id: str
@@ -134,11 +158,15 @@ class StudentLearningProfile(BaseModel):
     family_number: str = ""
     family_name: str = ""
     hero: StudentLearningHero
+    default_element_symbol: str | None = None
     element_symbols: list[str] = Field(default_factory=list)
     elements: list[StudentLearningElementBadge] = Field(default_factory=list)
     property_cards: list[StudentLearningPropertyCard] = Field(default_factory=list)
+    family_common_properties: list[StudentLearningPropertyCard] = Field(default_factory=list)
     property_sections: list[StudentLearningPropertySection] = Field(default_factory=list)
+    reference_media: list[StudentLearningReferenceMedia] = Field(default_factory=list)
     related_groups: list[StudentLearningPointGroup] = Field(default_factory=list)
+    chapter_experiment_groups: list[StudentLearningChapterExperimentGroup] = Field(default_factory=list)
 
 
 class StudentLearningPageResponse(BaseModel):

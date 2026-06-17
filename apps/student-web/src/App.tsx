@@ -48,12 +48,16 @@ import {
   StudentExperimentDetailResponse,
   StudentExperimentGroupResponse,
   StudentExperimentGroupSummary,
+  StudentLearningElementBadge,
   StudentLearningArea,
   StudentLearningHomeResponse,
+  StudentLearningChapterExperimentGroup,
   StudentLearningPageResponse,
   StudentLearningPointCard,
   StudentLearningPointGroup,
   StudentLearningProfile,
+  StudentLearningProfileSummary,
+  StudentLearningPropertyCard,
   StudentLearningPropertySection,
   StudentPosttestReport,
   StudentPosttestResponse,
@@ -95,14 +99,24 @@ type FeedbackContext = {
   metadata?: Record<string, unknown>;
 };
 type AreaId = "p" | "s" | "d" | "ds" | "f";
+type ChapterLearningView = "facts" | "experiments";
 type PeriodicArea = "s区" | "p区" | "d区" | "ds区" | "f区";
 type LearningRoute =
-  | { screen: "home"; profileId?: string | null; propertyKey?: string | null }
+  | { screen: "entry" }
+  | {
+      screen: "chapter";
+      profileId?: string | null;
+      propertyKey?: string | null;
+      elementSymbol?: string | null;
+      chapterView?: ChapterLearningView;
+    }
   | {
       screen: "point";
       profileId?: string | null;
       propertyKey?: string | null;
       propertyTitle?: string | null;
+      elementSymbol?: string | null;
+      chapterView?: ChapterLearningView;
       experimentId: string;
       pointKey?: string | null;
       pointTitle?: string | null;
@@ -152,6 +166,69 @@ const areaInk: Record<AreaId, string> = {
   d: "#123556",
   ds: "#4d3510",
   f: "#3a2452",
+};
+
+const profileAreaByChapterId: Record<string, AreaId> = {
+  CH13: "p",
+  CH14: "p",
+  CH15: "p",
+  CH16: "p",
+  CH17: "p",
+  CH18: "s",
+  CH19: "ds",
+  CH20: "d",
+  CH21: "f",
+  CH22: "p",
+};
+
+const elementEnglishNames: Record<string, string> = {
+  H: "Hydrogen",
+  He: "Helium",
+  Li: "Lithium",
+  B: "Boron",
+  C: "Carbon",
+  N: "Nitrogen",
+  O: "Oxygen",
+  F: "Fluorine",
+  Ne: "Neon",
+  Na: "Sodium",
+  Mg: "Magnesium",
+  Al: "Aluminium",
+  Si: "Silicon",
+  P: "Phosphorus",
+  S: "Sulfur",
+  Cl: "Chlorine",
+  Ar: "Argon",
+  K: "Potassium",
+  Ca: "Calcium",
+  Ti: "Titanium",
+  V: "Vanadium",
+  Cr: "Chromium",
+  Mn: "Manganese",
+  Fe: "Iron",
+  Co: "Cobalt",
+  Ni: "Nickel",
+  Cu: "Copper",
+  Zn: "Zinc",
+  Ga: "Gallium",
+  As: "Arsenic",
+  Se: "Selenium",
+  Br: "Bromine",
+  Kr: "Krypton",
+  Ag: "Silver",
+  Cd: "Cadmium",
+  In: "Indium",
+  Sn: "Tin",
+  Sb: "Antimony",
+  Te: "Tellurium",
+  I: "Iodine",
+  Xe: "Xenon",
+  At: "Astatine",
+  Ba: "Barium",
+  Hg: "Mercury",
+  Tl: "Thallium",
+  Pb: "Lead",
+  Bi: "Bismuth",
 };
 
 function normalizeStudentId(value: string): string {
@@ -611,7 +688,7 @@ function feedbackEnabled(features: StudentAppFeatureFlags): boolean {
 }
 
 function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
-  const [route, setRoute] = useState<LearningRoute>({ screen: "home" });
+  const [route, setRoute] = useState<LearningRoute>({ screen: "entry" });
   const [appConfig, setAppConfig] = useState<StudentAppConfigResponse>(defaultStudentAppConfig);
   const [configError, setConfigError] = useState("");
   const [posttestLoading, setPosttestLoading] = useState(false);
@@ -685,9 +762,19 @@ function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => v
         profileId={route.profileId}
         propertyKey={route.propertyKey}
         propertyTitle={route.propertyTitle}
+        elementSymbol={route.elementSymbol}
+        chapterView={route.chapterView}
         pointKey={route.pointKey}
         pointTitle={route.pointTitle}
-        onBack={() => setRoute({ screen: "home", profileId: route.profileId, propertyKey: route.propertyKey })}
+        onBack={() =>
+          setRoute({
+            screen: "chapter",
+            profileId: route.profileId,
+            propertyKey: route.propertyKey,
+            elementSymbol: route.elementSymbol,
+            chapterView: route.chapterView || "experiments",
+          })
+        }
         onFinishLearning={finishLearning}
         finishing={posttestLoading}
         finishError={posttestError}
@@ -709,21 +796,37 @@ function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => v
   }
 
   if (route.screen === "summary") {
-    return <PosttestSummaryPanel report={route.report} onContinue={() => setRoute({ screen: "home" })} />;
+    return <PosttestSummaryPanel report={route.report} onContinue={() => setRoute({ screen: "entry" })} />;
+  }
+
+  if (route.screen === "entry") {
+    return (
+      <LearningEntryPanel
+        user={user}
+        onLogout={onLogout}
+        onSelectProfile={(profileId) => setRoute({ screen: "chapter", profileId })}
+        feedbackEnabled={canUseFeedback}
+      />
+    );
   }
 
   return (
     <LearningHomePanel
       user={user}
-      profileId={route.profileId}
-      initialPropertyKey={route.propertyKey}
+      profileId={route.screen === "chapter" ? route.profileId : null}
+      initialPropertyKey={route.screen === "chapter" ? route.propertyKey : null}
+      initialElementSymbol={route.screen === "chapter" ? route.elementSymbol : null}
+      initialChapterView={route.screen === "chapter" ? route.chapterView : null}
       onLogout={onLogout}
+      onSwitchChapter={() => setRoute({ screen: "entry" })}
       onSelectPoint={(point) =>
         setRoute({
           screen: "point",
           profileId: point.profileId,
           propertyKey: point.propertyKey,
           propertyTitle: point.propertyTitle,
+          elementSymbol: point.elementSymbol,
+          chapterView: point.chapterView,
           experimentId: point.experimentId,
           pointKey: point.pointKey,
           pointTitle: point.pointTitle,
@@ -739,11 +842,191 @@ function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => v
   );
 }
 
+function LearningEntryPanel({
+  user,
+  onLogout,
+  onSelectProfile,
+  feedbackEnabled,
+}: {
+  user: AuthUser;
+  onLogout: () => void;
+  onSelectProfile: (profileId: string) => void;
+  feedbackEnabled: boolean;
+}) {
+  const [page, setPage] = useState<StudentLearningPageResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selectedArea, setSelectedArea] = useState<AreaId>("p");
+  const { activeOverlay, toggleOverlay } = useFloatingOverlayState();
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    getStudentLearningPage(null)
+      .then((payload) => {
+        if (!cancelled) setPage(payload);
+      })
+      .catch((requestError) => {
+        if (!cancelled) setError(errorMessage(requestError));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const profiles = page?.profiles || [];
+  const recommendedProfileId = page?.recommended_profile_id || page?.active_profile?.profile_id || profiles[0]?.profile_id || "";
+  const recommendedProfile = profiles.find((profile) => profile.profile_id === recommendedProfileId) || profiles[0] || null;
+  const recommendedArea = recommendedProfile ? profileAreaId(recommendedProfile) : null;
+  const selectedAreaProfiles = profiles.filter((profile) => profileAreaId(profile) === selectedArea);
+  const feedbackContext: FeedbackContext = {
+    pagePath: "/student/learning",
+    contextTitle: "元素周期表章节入口",
+    metadata: { screen: "learning_entry" },
+  };
+
+  useEffect(() => {
+    if (recommendedArea) setSelectedArea(recommendedArea);
+  }, [recommendedArea]);
+
+  return (
+    <section className="learning-panel" aria-label="元素周期表章节入口">
+      <div className="learning-topbar">
+        <div>
+          <p>{user.student_id || user.username}</p>
+          <h2>{user.display_name}</h2>
+        </div>
+        <MobileIconButton className="icon-action" type="button" onClick={onLogout} aria-label="退出登录">
+          <LogOut size={18} />
+        </MobileIconButton>
+      </div>
+
+      {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载学习章节" /> : null}
+      {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
+      {!loading && !error ? (
+        <>
+          <section className="chapter-entry-hero">
+            <p>元素周期表</p>
+            <h2>选择本次学习的元素族</h2>
+            <span>先从周期表定位章节，再进入该族的元素特性、通性规律和实验点位学习。</span>
+          </section>
+
+          <PeriodicTable selectedArea={selectedArea} onSelectArea={setSelectedArea} />
+
+          <section className="chapter-card-panel" aria-label="可学习章节">
+            <div className="point-list-head">
+              <div>
+                <p>当前选区</p>
+                <h2>{periodicAreaByAreaId[selectedArea]}</h2>
+              </div>
+              <span>{selectedAreaProfiles.length} 个</span>
+            </div>
+            {selectedAreaProfiles.length ? (
+              <div className="chapter-card-list">
+                {selectedAreaProfiles.map((profile) => (
+                  <button
+                    className={profile.profile_id === recommendedProfileId ? "chapter-entry-card recommended" : "chapter-entry-card"}
+                    key={profile.profile_id}
+                    type="button"
+                    onClick={() => onSelectProfile(profile.profile_id)}
+                  >
+                    {profile.profile_id === recommendedProfileId ? <em>推荐</em> : null}
+                    <strong>{profile.title}</strong>
+                    <span>{profile.element_symbols.join(" ") || profile.family_name}</span>
+                    <ChevronRight size={17} />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <MobileEmptyState className="empty-learning-card" icon={<Atom size={20} />}>
+                <span>暂无可学习章节</span>
+              </MobileEmptyState>
+            )}
+          </section>
+
+          {feedbackEnabled && activeOverlay !== "assistant" ? (
+            <StudentFeedbackFab
+              context={feedbackContext}
+              open={activeOverlay === "feedback"}
+              onOpenChange={(isOpen) => toggleOverlay("feedback", isOpen)}
+            />
+          ) : null}
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function chapterExperimentGroupsForProfile(profile: StudentLearningProfile): StudentLearningChapterExperimentGroup[] {
+  if (profile.chapter_experiment_groups?.length) return profile.chapter_experiment_groups;
+
+  const groups = new Map<string, StudentLearningChapterExperimentGroup>();
+  for (const relatedGroup of profile.related_groups || []) {
+    const groupKey = relatedGroup.parent_code || relatedGroup.parent_title;
+    if (!groupKey) continue;
+    const group =
+      groups.get(groupKey) ||
+      ({
+        parent_code: relatedGroup.parent_code,
+        parent_title: relatedGroup.parent_title,
+        points: [],
+      } satisfies StudentLearningChapterExperimentGroup);
+    const seenPointKeys = new Set(group.points.map((point) => point.id || point.point_key || point.title));
+    for (const point of relatedGroup.points || []) {
+      const pointKey = point.id || point.point_key || point.title;
+      if (!seenPointKeys.has(pointKey)) {
+        group.points.push(point);
+        seenPointKeys.add(pointKey);
+      }
+    }
+    groups.set(groupKey, group);
+  }
+  return Array.from(groups.values()).sort((first, second) => first.parent_code.localeCompare(second.parent_code));
+}
+
+function periodicMetaForElement(symbol: string) {
+  return periodicElements.find((element) => element.symbol === symbol) || null;
+}
+
+function elementEnglishName(element: StudentLearningElementBadge): string {
+  return elementEnglishNames[element.symbol] || element.symbol;
+}
+
+function elementTileStyle(element: StudentLearningElementBadge): CSSProperties | undefined {
+  const periodicElement = periodicMetaForElement(element.symbol);
+  const areaId = periodicElement ? areaIdByPeriodicArea[periodicElement.area as PeriodicArea] : null;
+  if (!areaId) return undefined;
+  return {
+    "--element-area-color": areaSwatches[areaId],
+    "--element-area-ink": areaInk[areaId],
+  } as CSSProperties;
+}
+
+function ElementTileContent({ element }: { element: StudentLearningElementBadge }) {
+  const periodicElement = periodicMetaForElement(element.symbol);
+  const atomicNumber = element.atomic_number ?? periodicElement?.atomicNumber ?? "";
+  const englishName = elementEnglishName(element);
+  return (
+    <>
+      <small>{atomicNumber}</small>
+      <strong>{element.symbol}</strong>
+      <span title={englishName}>{englishName}</span>
+    </>
+  );
+}
+
 function LearningHomePanel({
   user,
   profileId,
   initialPropertyKey,
+  initialElementSymbol,
+  initialChapterView,
   onLogout,
+  onSwitchChapter,
   onSelectPoint,
   onFinishLearning,
   finishing,
@@ -755,11 +1038,16 @@ function LearningHomePanel({
   user: AuthUser;
   profileId?: string | null;
   initialPropertyKey?: string | null;
+  initialElementSymbol?: string | null;
+  initialChapterView?: ChapterLearningView | null;
   onLogout: () => void;
+  onSwitchChapter: () => void;
   onSelectPoint: (point: {
     profileId: string;
     propertyKey: string;
     propertyTitle: string;
+    elementSymbol?: string | null;
+    chapterView?: ChapterLearningView;
     experimentId: string;
     pointKey?: string | null;
     pointTitle?: string | null;
@@ -774,6 +1062,9 @@ function LearningHomePanel({
   const [page, setPage] = useState<StudentLearningPageResponse | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(profileId || null);
   const [selectedPropertyKey, setSelectedPropertyKey] = useState<string>(initialPropertyKey || "");
+  const [selectedElementSymbol, setSelectedElementSymbol] = useState<string>(initialElementSymbol || "");
+  const [activeChapterView, setActiveChapterView] = useState<ChapterLearningView>(initialChapterView || "facts");
+  const chapterScrollPositions = useRef<Record<ChapterLearningView, number>>({ facts: 0, experiments: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { activeOverlay, resetOverlay, toggleOverlay } = useFloatingOverlayState();
@@ -787,8 +1078,16 @@ function LearningHomePanel({
   }, [initialPropertyKey]);
 
   useEffect(() => {
+    if (initialElementSymbol) setSelectedElementSymbol(initialElementSymbol);
+  }, [initialElementSymbol]);
+
+  useEffect(() => {
+    if (initialChapterView) setActiveChapterView(initialChapterView);
+  }, [initialChapterView]);
+
+  useEffect(() => {
     resetOverlay();
-  }, [selectedProfileId, selectedPropertyKey, resetOverlay]);
+  }, [selectedProfileId, selectedPropertyKey, selectedElementSymbol, activeChapterView, resetOverlay]);
 
   useEffect(() => {
     let cancelled = false;
@@ -822,26 +1121,54 @@ function LearningHomePanel({
       setSelectedPropertyKey(keys[0] || "");
     }
   }, [profile, initialPropertyKey, selectedPropertyKey]);
+  useEffect(() => {
+    if (!profile) return;
+    const symbols = profile.elements.map((element) => element.symbol);
+    const preferred =
+      initialElementSymbol && symbols.includes(initialElementSymbol)
+        ? initialElementSymbol
+        : selectedElementSymbol || profile.default_element_symbol || symbols[0] || "";
+    if (!preferred || !symbols.includes(preferred)) {
+      setSelectedElementSymbol(profile.default_element_symbol && symbols.includes(profile.default_element_symbol) ? profile.default_element_symbol : symbols[0] || "");
+    }
+  }, [profile, initialElementSymbol, selectedElementSymbol]);
+
+  const changeChapterView = (nextView: ChapterLearningView) => {
+    if (nextView === activeChapterView) return;
+    chapterScrollPositions.current[activeChapterView] = window.scrollY;
+    setActiveChapterView(nextView);
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: chapterScrollPositions.current[nextView] || 0, behavior: "auto" });
+    });
+  };
 
   const selectedSection =
     profile?.property_sections.find((section) => section.key === selectedPropertyKey) || profile?.property_sections[0] || null;
-  const relatedGroups = profile && selectedSection ? profile.related_groups.filter((group) => group.property_key === selectedSection.key) : [];
-  const relatedPointCount = relatedGroups.reduce((total, group) => total + group.points.length, 0);
+  const selectedElement =
+    profile?.elements.find((element) => element.symbol === selectedElementSymbol) ||
+    profile?.elements.find((element) => element.symbol === profile.default_element_symbol) ||
+    profile?.elements[0] ||
+    null;
+  const chapterExperimentGroups = profile ? chapterExperimentGroupsForProfile(profile) : [];
+  const relatedPointCount = chapterExperimentGroups.reduce((total, group) => total + group.points.length, 0);
   const homeAssistantContext: AssistantContext | null = profile
     ? {
         context_type: "learning_profile",
         context_title: profile.title,
         context_summary: compactText([
           profile.hero.summary,
-          `性质卡片：${profile.property_cards.map((card) => `${card.label} ${card.value}`).join("；")}`,
-          selectedSection ? `当前性质：${selectedSection.title} ${selectedSection.summary}` : null,
-          relatedGroups.length
-            ? `相关实验点：${relatedGroups.flatMap((group) => group.points.map((point) => point.point_title || point.title)).join("、")}`
+          selectedElement && activeChapterView === "facts"
+            ? `当前元素：${selectedElement.symbol} ${selectedElement.name}，${selectedElement.electron_configuration || ""}，${selectedElement.common_valence || ""}，${selectedElement.redox_tendency || ""}`
+            : null,
+          `全族通性：${(profile.family_common_properties || profile.property_cards).map((card) => `${card.label} ${card.value}`).join("；")}`,
+          selectedSection && activeChapterView === "facts" ? `当前性质：${selectedSection.title} ${selectedSection.summary}` : null,
+          chapterExperimentGroups.length
+            ? `相关实验点：${chapterExperimentGroups.flatMap((group) => group.points.map((point) => point.point_title || point.title)).join("、")}`
             : null,
         ]),
         chapter_id: profile.chapter_id,
         prompts: [
-          selectedSection ? `${selectedSection.title}怎么理解？` : "这一章先学什么？",
+          activeChapterView === "facts" && selectedSection ? `${selectedSection.title}怎么理解？` : "这一章先学什么？",
           "相关实验先看哪一个？",
           `帮我整理${profile.family_name || profile.title}的记忆表`,
         ],
@@ -854,9 +1181,11 @@ function LearningHomePanel({
         chapterId: profile.chapter_id,
         metadata: {
           screen: "learning_profile",
+          chapter_view: activeChapterView,
           profile_id: profile.profile_id,
-          property_key: selectedSection?.key,
-          property_title: selectedSection?.title,
+          element_symbol: activeChapterView === "facts" ? selectedElement?.symbol : undefined,
+          property_key: activeChapterView === "facts" ? selectedSection?.key : undefined,
+          property_title: activeChapterView === "facts" ? selectedSection?.title : undefined,
         },
       }
     : null;
@@ -878,59 +1207,31 @@ function LearningHomePanel({
       {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
       {!loading && !error && profile ? (
         <>
-          <LearningProfileTabs page={page} activeProfileId={profile.profile_id} onSelectProfile={setSelectedProfileId} />
-          <LearningProfileHero profile={profile} />
-          <LearningPropertyCards profile={profile} />
+          <LearningChapterHeader profile={profile} onSwitchChapter={onSwitchChapter} />
+          <ChapterViewSwitcher activeView={activeChapterView} experimentCount={relatedPointCount} onChange={changeChapterView} />
 
-          <section className="property-section-panel">
-            <div className="selection-head">
-              <span style={{ "--area-color": "#087246" } as CSSProperties}>
-                <Layers3 size={18} />
-              </span>
-              <div>
-                <p>族元素的典型性质与实验</p>
-                <h2>{selectedSection?.title || "相关实验点"}</h2>
-              </div>
-            </div>
-            <div className="property-section-list">
-              {profile.property_sections.map((section) => (
-                <PropertySectionButton
-                  key={section.key}
-                  section={section}
-                  active={selectedSection?.key === section.key}
-                  onClick={() => setSelectedPropertyKey(section.key)}
-                />
-              ))}
-            </div>
-          </section>
-
-          <section className="point-list-panel">
-            <div className="point-list-head">
-              <div>
-                <p>{selectedSection?.formula || selectedSection?.summary || "视频与点位"}</p>
-                <h2>相关实验-点位</h2>
-              </div>
-              <span>{relatedPointCount} 个</span>
-            </div>
-            {relatedGroups.length ? (
-              <div className="point-group-stack">
-                {relatedGroups.map((group) => (
-                  <LearningPointGroupView
-                    key={`${group.property_key}-${group.parent_code}`}
-                    group={group}
-                    profile={profile}
-                    onSelectPoint={onSelectPoint}
-                  />
-                ))}
-              </div>
-            ) : (
-              <MobileEmptyState className="empty-learning-card" icon={<FlaskConical size={20} />}>
-                <span>该性质暂未匹配到开放实验点</span>
-              </MobileEmptyState>
-            )}
-          </section>
-
-          <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />
+          {activeChapterView === "facts" ? (
+            <LearningFactsView
+              profile={profile}
+              elements={profile.elements}
+              selectedElement={selectedElement}
+              selectedSection={selectedSection}
+              experimentCount={relatedPointCount}
+              onSelectElement={setSelectedElementSymbol}
+              onShowExperiments={() => changeChapterView("experiments")}
+            />
+          ) : (
+            <LearningExperimentsView
+              profile={profile}
+              groups={chapterExperimentGroups}
+              pointCount={relatedPointCount}
+              elementSymbol={null}
+              onSelectPoint={onSelectPoint}
+              finishing={finishing}
+              finishError={finishError}
+              onFinishLearning={onFinishLearning}
+            />
+          )}
           {assistantEnabled && homeAssistantContext && activeOverlay !== "feedback" ? (
             <StudentAiChat
               context={homeAssistantContext}
@@ -948,6 +1249,171 @@ function LearningHomePanel({
         </>
       ) : null}
     </section>
+  );
+}
+
+function ChapterViewSwitcher({
+  activeView,
+  experimentCount,
+  onChange,
+}: {
+  activeView: ChapterLearningView;
+  experimentCount: number;
+  onChange: (view: ChapterLearningView) => void;
+}) {
+  const options: { key: ChapterLearningView; label: string; count?: number }[] = [
+    { key: "facts", label: "性质通识" },
+    { key: "experiments", label: "实验视频", count: experimentCount },
+  ];
+
+  return (
+    <div className="chapter-view-switcher" role="tablist" aria-label="章节学习视图">
+      {options.map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          role="tab"
+          aria-selected={activeView === option.key}
+          className={activeView === option.key ? "active" : ""}
+          onClick={() => onChange(option.key)}
+        >
+          <span>{option.label}</span>
+          {typeof option.count === "number" ? <em>{option.count}</em> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function LearningFactsView({
+  profile,
+  elements,
+  selectedElement,
+  selectedSection,
+  experimentCount,
+  onSelectElement,
+  onShowExperiments,
+}: {
+  profile: StudentLearningProfile;
+  elements: StudentLearningElementBadge[];
+  selectedElement: StudentLearningElementBadge | null;
+  selectedSection: StudentLearningPropertySection | null;
+  experimentCount: number;
+  onSelectElement: (symbol: string) => void;
+  onShowExperiments: () => void;
+}) {
+  return (
+    <div className="chapter-view-panel facts-view" data-view="facts">
+      <LearningElementChips elements={elements} activeSymbol={selectedElement?.symbol || ""} onSelectElement={onSelectElement} />
+      {selectedElement ? <LearningSelectedElementFacts element={selectedElement} profile={profile} /> : null}
+      <LearningReferenceMedia profile={profile} selectedElement={selectedElement} />
+      <LearningFamilyCommonProperties profile={profile} />
+      <LearningPropertySectionSummaries profile={profile} selectedSection={selectedSection} />
+      <section className="facts-to-experiments-card">
+        <div>
+          <p>下一步</p>
+          <h2>进入实验-点位视频学习</h2>
+          <span>本章节已整理 {experimentCount} 个开放实验点位，按实验和点位顺序学习。</span>
+        </div>
+        <MobileButton className="facts-to-experiments-action" type="button" variant="secondary" fullWidth={false} onClick={onShowExperiments}>
+          <Video size={18} />
+          <span>看实验视频</span>
+        </MobileButton>
+      </section>
+    </div>
+  );
+}
+
+function LearningPropertySectionSummaries({
+  profile,
+  selectedSection,
+}: {
+  profile: StudentLearningProfile;
+  selectedSection: StudentLearningPropertySection | null;
+}) {
+  if (!profile.property_sections.length) return null;
+  return (
+    <section className="property-section-panel facts-property-panel">
+      <div className="selection-head">
+        <span style={{ "--area-color": "#087246" } as CSSProperties}>
+          <Layers3 size={18} />
+        </span>
+        <div>
+          <p>族元素的典型性质</p>
+          <h2>{selectedSection?.title || "通性与趋势"}</h2>
+        </div>
+      </div>
+      <div className="property-section-list">
+        {profile.property_sections.map((section) => (
+          <article className={selectedSection?.key === section.key ? "property-section-summary active" : "property-section-summary"} key={section.key}>
+            <strong>{section.title}</strong>
+            <span>{section.subtitle || section.summary}</span>
+            {section.formula ? <small>{section.formula}</small> : null}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function LearningExperimentsView({
+  profile,
+  groups,
+  pointCount,
+  elementSymbol,
+  onSelectPoint,
+  finishing,
+  finishError,
+  onFinishLearning,
+}: {
+  profile: StudentLearningProfile;
+  groups: StudentLearningChapterExperimentGroup[];
+  pointCount: number;
+  elementSymbol?: string | null;
+  onSelectPoint: (point: {
+    profileId: string;
+    propertyKey: string;
+    propertyTitle: string;
+    elementSymbol?: string | null;
+    chapterView?: ChapterLearningView;
+    experimentId: string;
+    pointKey?: string | null;
+    pointTitle?: string | null;
+  }) => void;
+  finishing: boolean;
+  finishError: string;
+  onFinishLearning: () => void;
+}) {
+  return (
+    <div className="chapter-view-panel experiments-view" data-view="experiments">
+      <section className="point-list-panel">
+        <div className="point-list-head">
+          <div>
+            <p>{profile.subtitle || profile.family_name || "视频与点位"}</p>
+            <h2>实验-点位视频</h2>
+          </div>
+          <span>{pointCount} 个</span>
+        </div>
+        {groups.length ? (
+          <div className="point-group-stack">
+            {groups.map((group) => (
+              <LearningPointGroupView
+                key={group.parent_code || group.parent_title}
+                group={group}
+                profile={profile}
+                onSelectPoint={onSelectPoint}
+                elementSymbol={elementSymbol}
+              />
+            ))}
+          </div>
+        ) : (
+          <MobileEmptyState className="empty-learning-card" icon={<FlaskConical size={20} />}>
+            <span>该章节暂未匹配到开放实验点</span>
+          </MobileEmptyState>
+        )}
+      </section>
+      <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />
+    </div>
   );
 }
 
@@ -979,30 +1445,156 @@ function LearningProfileTabs({
   );
 }
 
-function LearningProfileHero({ profile }: { profile: StudentLearningProfile }) {
+function LearningChapterHeader({ profile, onSwitchChapter }: { profile: StudentLearningProfile; onSwitchChapter: () => void }) {
   return (
-    <section className="profile-hero-card">
-      <div className="element-badge-row" aria-label="族内元素">
-        {profile.elements.map((element) => (
-          <div className="element-badge" key={element.symbol}>
-            <strong>{element.symbol}</strong>
-            <span>{element.name}</span>
-          </div>
-        ))}
+    <section className="chapter-context-card" aria-label="当前章节">
+      <div className="chapter-context-copy">
+        <div className="chapter-context-kicker">
+          <p>当前章节</p>
+          <span>{profile.hero.eyebrow || profile.subtitle || "元素性质"}</span>
+        </div>
+        <h2>{profile.title}</h2>
+        <span>{profile.subtitle || profile.element_symbols.join(" ")}</span>
+        <div className="chapter-context-summary">
+          <strong>{profile.hero.title}</strong>
+          {profile.hero.summary ? <small>{profile.hero.summary}</small> : null}
+        </div>
       </div>
-      <div className="profile-hero-copy">
-        <p>{profile.hero.eyebrow || profile.subtitle}</p>
-        <h2>{profile.hero.title}</h2>
-        <span>{profile.hero.summary}</span>
+      <MobileButton className="chapter-switch-action" type="button" variant="ghost" fullWidth={false} onClick={onSwitchChapter}>
+        <Atom size={17} />
+        <span>换章节</span>
+      </MobileButton>
+    </section>
+  );
+}
+
+function LearningElementChips({
+  elements,
+  activeSymbol,
+  onSelectElement,
+}: {
+  elements: StudentLearningElementBadge[];
+  activeSymbol: string;
+  onSelectElement: (symbol: string) => void;
+}) {
+  return (
+    <section className="element-chip-panel" aria-label="选择族内元素">
+      <div className="element-chip-row" style={{ "--element-count": Math.max(elements.length, 1) } as CSSProperties}>
+        {elements.map((element) => (
+          <button
+            className={element.symbol === activeSymbol ? "element-chip active" : "element-chip"}
+            key={element.symbol}
+            type="button"
+            style={elementTileStyle(element)}
+            aria-label={`${element.symbol} ${elementEnglishName(element)} ${element.name}`}
+            aria-pressed={element.symbol === activeSymbol}
+            onClick={() => onSelectElement(element.symbol)}
+          >
+            <ElementTileContent element={element} />
+          </button>
+        ))}
       </div>
     </section>
   );
 }
 
-function LearningPropertyCards({ profile }: { profile: StudentLearningProfile }) {
+function LearningSelectedElementFacts({ element, profile }: { element: StudentLearningElementBadge; profile: StudentLearningProfile }) {
+  const facts = [
+    { key: "atomic_number", label: "原子序数", value: element.atomic_number != null ? String(element.atomic_number) : "未整理" },
+    { key: "electron_configuration", label: "电子排布", value: element.electron_configuration || "未整理" },
+    { key: "group", label: "所属族", value: element.group_label || profile.title },
+    { key: "common_valence", label: "常见化合价", value: element.common_valence || "未整理" },
+    { key: "state", label: "单质状态", value: element.state || "未整理" },
+    { key: "redox", label: "氧化/还原性", value: element.redox_tendency || "未整理" },
+  ];
+
   return (
-    <section className="property-card-grid" aria-label="基础常识">
-      {profile.property_cards.map((card) => (
+    <section className="selected-element-panel" aria-label={`${element.name}元素特性`}>
+      <div className="selected-element-head">
+        <div className="selected-element-symbol" style={elementTileStyle(element)}>
+          <ElementTileContent element={element} />
+        </div>
+        <div>
+          <p>当前元素特性</p>
+          <h2>{element.name}在{profile.family_name || profile.title}中的位置</h2>
+          {element.note ? <span>{element.note}</span> : null}
+        </div>
+      </div>
+      <div className="element-fact-grid">
+        {facts.map((fact) => (
+          <article className="element-fact-card" key={fact.key}>
+            <p>{fact.label}</p>
+            <strong>{fact.value}</strong>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function LearningReferenceMedia({
+  profile,
+  selectedElement,
+}: {
+  profile: StudentLearningProfile;
+  selectedElement: StudentLearningElementBadge | null;
+}) {
+  const referenceMedia = Array.isArray(profile.reference_media) ? profile.reference_media : [];
+  const media = referenceMedia.filter((item) => {
+    const itemElementSymbols = item.element_symbols || [];
+    if (!selectedElement || !itemElementSymbols.length) return true;
+    return itemElementSymbols.includes(selectedElement.symbol);
+  });
+  if (!media.length) return null;
+
+  return (
+    <section className="reference-media-panel" aria-label="公开参考素材">
+      <div className="selection-head">
+        <span style={{ "--area-color": "#0f7b4d" } as CSSProperties}>
+          <Sparkles size={18} />
+        </span>
+        <div>
+          <p>公开参考素材</p>
+          <h2>补充观察</h2>
+        </div>
+      </div>
+      <div className="reference-media-list">
+        {media.slice(0, 2).map((item) => (
+          <a className="reference-media-item" href={item.source_url} key={item.id} target="_blank" rel="noreferrer">
+            {item.local_path && item.asset_type === "image" ? <img src={item.local_path} alt={item.alt_text} /> : <BookOpenCheck size={22} />}
+            <span>
+              <strong>{item.alt_text}</strong>
+              <small>{item.license} · {item.attribution}</small>
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function LearningFamilyCommonProperties({ profile }: { profile: StudentLearningProfile }) {
+  const cards = profile.family_common_properties?.length ? profile.family_common_properties : profile.property_cards;
+  return (
+    <section className="family-common-panel" aria-label="全族通性">
+      <div className="selection-head">
+        <span style={{ "--area-color": "#0f7b4d" } as CSSProperties}>
+          <BookOpenCheck size={18} />
+        </span>
+        <div>
+          <p>{profile.family_name || profile.title}</p>
+          <h2>全族通性</h2>
+        </div>
+      </div>
+      <LearningPropertyCards cards={cards} label="全族通性卡片" />
+    </section>
+  );
+}
+
+function LearningPropertyCards({ cards, label }: { cards: StudentLearningPropertyCard[]; label: string }) {
+  return (
+    <section className="property-card-grid" aria-label={label}>
+      {cards.map((card) => (
         <article className="property-card" key={card.key}>
           <p>{card.label}</p>
           <strong>{card.value}</strong>
@@ -1036,14 +1628,18 @@ function PropertySectionButton({
 function LearningPointGroupView({
   group,
   profile,
+  elementSymbol,
   onSelectPoint,
 }: {
-  group: StudentLearningPointGroup;
+  group: StudentLearningChapterExperimentGroup | StudentLearningPointGroup;
   profile: StudentLearningProfile;
+  elementSymbol?: string | null;
   onSelectPoint: (point: {
     profileId: string;
     propertyKey: string;
     propertyTitle: string;
+    elementSymbol?: string | null;
+    chapterView?: ChapterLearningView;
     experimentId: string;
     pointKey?: string | null;
     pointTitle?: string | null;
@@ -1061,6 +1657,7 @@ function LearningPointGroupView({
             key={`${point.id}-${point.property_key}-${point.point_key || point.title}`}
             point={point}
             profile={profile}
+            elementSymbol={elementSymbol}
             onSelectPoint={onSelectPoint}
           />
         ))}
@@ -1072,14 +1669,18 @@ function LearningPointGroupView({
 function LearningPointCardView({
   point,
   profile,
+  elementSymbol,
   onSelectPoint,
 }: {
   point: StudentLearningPointCard;
   profile: StudentLearningProfile;
+  elementSymbol?: string | null;
   onSelectPoint: (point: {
     profileId: string;
     propertyKey: string;
     propertyTitle: string;
+    elementSymbol?: string | null;
+    chapterView?: ChapterLearningView;
     experimentId: string;
     pointKey?: string | null;
     pointTitle?: string | null;
@@ -1095,6 +1696,8 @@ function LearningPointCardView({
           profileId: profile.profile_id,
           propertyKey: point.property_key,
           propertyTitle: point.property_title,
+          elementSymbol,
+          chapterView: "experiments",
           experimentId: point.id,
           pointKey: point.point_key,
           pointTitle: point.point_title || point.title,
@@ -1108,6 +1711,7 @@ function LearningPointCardView({
       <div className="point-card-copy">
         <p>{point.point_title || point.property_title}</p>
         <h3>{stripExperimentPrefix(point.title)}</h3>
+        {point.formula || point.summary ? <small>{point.formula || point.summary}</small> : null}
         <span>
           视频 {point.published_video_count || point.video_candidate_count} / 练习 {point.question_count}
         </span>
@@ -1128,6 +1732,19 @@ function firstEnabledArea(areas: StudentLearningArea[]): AreaId | null {
 
 function firstGroupForArea(groups: StudentExperimentGroupSummary[], areaId: AreaId): StudentExperimentGroupSummary | null {
   return groups.find((group) => group.area_id === areaId) || null;
+}
+
+function profileAreaId(profile: StudentLearningProfileSummary): AreaId | null {
+  const mappedArea = profileAreaByChapterId[profile.chapter_id];
+  if (mappedArea) return mappedArea;
+
+  const text = `${profile.title} ${profile.subtitle} ${profile.family_name}`;
+  if (text.includes("ds")) return "ds";
+  if (text.includes("s区")) return "s";
+  if (text.includes("p区")) return "p";
+  if (text.includes("d区")) return "d";
+  if (text.includes("f区")) return "f";
+  return null;
 }
 
 function LearningState({ icon, text }: { icon: ReactNode; text: string }) {
@@ -1160,37 +1777,34 @@ function stripExperimentPrefix(value: string): string {
 
 function PeriodicTable({
   selectedArea,
-  areas,
   onSelectArea,
 }: {
   selectedArea: AreaId;
-  areas: StudentLearningArea[];
-  onSelectArea: (area: AreaId) => void;
+  onSelectArea: (areaId: AreaId) => void;
 }) {
   const groupNumbers = Array.from({ length: 18 }, (_, index) => index + 1);
-  const areaEnabled = new Map(areas.map((area) => [area.area_id, area.enabled]));
 
   return (
     <section className="periodic-card" aria-label="元素周期表选择区">
       <div className="periodic-card-head">
         <div>
-          <p>元素周期表</p>
-          <h3>{periodicAreaByAreaId[selectedArea]}</h3>
+          <p>周期表入口</p>
+          <h3>按族进入章节</h3>
         </div>
         <Atom size={22} />
       </div>
       <div className="area-legend" aria-label="元素区图例">
-        {(Object.keys(periodicAreaByAreaId) as AreaId[]).map((area) => (
+        {(Object.keys(periodicAreaByAreaId) as AreaId[]).map((areaId) => (
           <button
-            key={area}
+            key={areaId}
             type="button"
-            className={[selectedArea === area ? "selected" : "", areaEnabled.get(area) ? "" : "muted"].filter(Boolean).join(" ")}
-            style={{ "--area-color": areaSwatches[area], "--area-ink": areaInk[area] } as CSSProperties}
-            onClick={() => onSelectArea(area)}
-            aria-label={`选择${periodicAreaByAreaId[area]}`}
+            className={selectedArea === areaId ? "selected" : ""}
+            style={{ "--area-color": areaSwatches[areaId], "--area-ink": areaInk[areaId] } as CSSProperties}
+            onClick={() => onSelectArea(areaId)}
+            aria-pressed={selectedArea === areaId}
           >
             <i />
-            <span>{periodicAreaByAreaId[area]}</span>
+            <span>{periodicAreaByAreaId[areaId]}</span>
           </button>
         ))}
       </div>
@@ -1203,18 +1817,19 @@ function PeriodicTable({
         ))}
         {periodicElements.map((element) => {
           const areaId = areaIdByPeriodicArea[element.area as PeriodicArea];
+          const selected = areaId === selectedArea;
           return (
             <button
               key={element.atomicNumber}
               type="button"
-              className={selectedArea === areaId ? "element-cell selected-area" : "element-cell"}
+              className={["element-cell", selected ? "selected-area" : ""].filter(Boolean).join(" ")}
               style={{
                 gridColumn: element.group,
                 gridRow: element.period + 1,
-                background: selectedArea === areaId ? areaSwatches[areaId] : `${areaSwatches[areaId]}88`,
+                background: selected ? areaSwatches[areaId] : `${areaSwatches[areaId]}9d`,
                 "--cell-ink": areaInk[areaId],
               } as CSSProperties}
-              aria-label={`${element.symbol} ${element.name}`}
+              aria-label={`${element.symbol} ${element.name}，选择${periodicAreaByAreaId[areaId]}`}
               title={`${element.symbol} ${element.name}`}
               onClick={() => onSelectArea(areaId)}
             />
@@ -1313,6 +1928,8 @@ function ExperimentDetailPanel({
   profileId,
   propertyKey,
   propertyTitle,
+  elementSymbol,
+  chapterView,
   pointKey,
   pointTitle,
   onBack,
@@ -1326,6 +1943,8 @@ function ExperimentDetailPanel({
   profileId?: string | null;
   propertyKey?: string | null;
   propertyTitle?: string | null;
+  elementSymbol?: string | null;
+  chapterView?: ChapterLearningView | null;
   pointKey?: string | null;
   pointTitle?: string | null;
   onBack: () => void;
@@ -1370,7 +1989,9 @@ function ExperimentDetailPanel({
         context_type: "learning_point",
         context_title: effectivePointTitle,
         context_summary: compactText([
+          chapterView ? `当前视图：${chapterView === "experiments" ? "实验视频" : "性质通识"}` : null,
           propertyTitle ? `相关性质：${propertyTitle}` : null,
+          elementSymbol ? `当前元素：${elementSymbol}` : null,
           `实验：${detail.title}`,
           detail.summary || null,
           pointKey ? `点位标识：${pointKey}` : null,
@@ -1392,7 +2013,9 @@ function ExperimentDetailPanel({
         pointKey: pointKey || video?.point_key || null,
         metadata: {
           screen: "learning_point",
+          chapter_view: chapterView || "experiments",
           profile_id: profileId,
+          element_symbol: elementSymbol,
           property_key: propertyKey,
           property_title: propertyTitle,
           experiment_title: detail.title,

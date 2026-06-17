@@ -28,12 +28,14 @@ from server.app.student_learning_schemas import (
     StudentLearningHero,
     StudentLearningHomeResponse,
     StudentLearningPageResponse,
+    StudentLearningChapterExperimentGroup,
     StudentLearningPointCard,
     StudentLearningPointGroup,
     StudentLearningProfile,
     StudentLearningProfileSummary,
     StudentLearningPropertyCard,
     StudentLearningPropertySection,
+    StudentLearningReferenceMedia,
     StudentVideoResource,
 )
 
@@ -61,6 +63,23 @@ REQUIRED_PROFILE_CARD_KEYS = {
     "common_valence",
     "elemental_state",
     "redox",
+}
+REQUIRED_ELEMENT_FACT_KEYS = {
+    "atomic_number",
+    "electron_configuration",
+    "group_label",
+    "common_valence",
+    "state",
+    "redox_tendency",
+}
+REFERENCE_MEDIA_REQUIRED_KEYS = {
+    "id",
+    "usage",
+    "asset_type",
+    "source_url",
+    "license",
+    "attribution",
+    "alt_text",
 }
 
 
@@ -160,7 +179,16 @@ def validate_student_learning_profiles() -> dict[str, Any]:
             continue
         enabled_count += 1
         prefix = str(profile.get("profile_id") or f"profile[{index}]")
-        for key in ["profile_id", "chapter_id", "title", "hero", "property_cards", "property_sections", "elements"]:
+        for key in [
+            "profile_id",
+            "chapter_id",
+            "title",
+            "hero",
+            "property_cards",
+            "family_common_properties",
+            "property_sections",
+            "elements",
+        ]:
             if not profile.get(key):
                 errors.append(f"{prefix}: missing {key}")
         card_keys = {
@@ -177,6 +205,21 @@ def validate_student_learning_profiles() -> dict[str, Any]:
                 continue
             if not section.get("key") or not section.get("title"):
                 errors.append(f"{prefix}: property section missing key/title")
+        for element in profile.get("elements") or []:
+            if not isinstance(element, dict):
+                errors.append(f"{prefix}: element is not an object")
+                continue
+            symbol = str(element.get("symbol") or "<missing>")
+            missing_facts = sorted(key for key in REQUIRED_ELEMENT_FACT_KEYS if element.get(key) in (None, ""))
+            if missing_facts:
+                errors.append(f"{prefix}: element {symbol} missing facts {', '.join(missing_facts)}")
+        for media in profile.get("reference_media") or []:
+            if not isinstance(media, dict):
+                errors.append(f"{prefix}: reference media is not an object")
+                continue
+            missing_media = sorted(key for key in REFERENCE_MEDIA_REQUIRED_KEYS if not media.get(key))
+            if missing_media:
+                errors.append(f"{prefix}: reference media missing {', '.join(missing_media)}")
     return {
         "ok": not errors,
         "errors": errors,
@@ -222,6 +265,41 @@ def _property_cards(profile: dict[str, Any]) -> list[StudentLearningPropertyCard
     ]
 
 
+def _family_common_properties(profile: dict[str, Any]) -> list[StudentLearningPropertyCard]:
+    cards = profile.get("family_common_properties")
+    if not isinstance(cards, list) or not cards:
+        cards = profile.get("property_cards") or []
+    return [
+        StudentLearningPropertyCard(
+            key=str(card.get("key") or ""),
+            label=str(card.get("label") or ""),
+            value=str(card.get("value") or ""),
+            description=str(card.get("description") or ""),
+        )
+        for card in cards
+        if isinstance(card, dict)
+    ]
+
+
+def _reference_media(profile: dict[str, Any]) -> list[StudentLearningReferenceMedia]:
+    return [
+        StudentLearningReferenceMedia(
+            id=str(media.get("id") or ""),
+            usage=str(media.get("usage") or ""),
+            asset_type=str(media.get("asset_type") or ""),
+            source_url=str(media.get("source_url") or ""),
+            license=str(media.get("license") or ""),
+            attribution=str(media.get("attribution") or ""),
+            alt_text=str(media.get("alt_text") or ""),
+            local_path=str(media.get("local_path")) if media.get("local_path") else None,
+            element_symbols=[str(item) for item in media.get("element_symbols") or [] if str(item).strip()],
+            property_keys=[str(item) for item in media.get("property_keys") or [] if str(item).strip()],
+        )
+        for media in profile.get("reference_media") or []
+        if isinstance(media, dict)
+    ]
+
+
 def _element_badges(profile: dict[str, Any]) -> list[StudentLearningElementBadge]:
     return [
         StudentLearningElementBadge(
@@ -229,6 +307,11 @@ def _element_badges(profile: dict[str, Any]) -> list[StudentLearningElementBadge
             name=str(element.get("name") or ""),
             atomic_number=int(element["atomic_number"]) if element.get("atomic_number") is not None else None,
             state=str(element.get("state")) if element.get("state") else None,
+            group_label=str(element.get("group_label")) if element.get("group_label") else None,
+            electron_configuration=str(element.get("electron_configuration")) if element.get("electron_configuration") else None,
+            common_valence=str(element.get("common_valence")) if element.get("common_valence") else None,
+            redox_tendency=str(element.get("redox_tendency")) if element.get("redox_tendency") else None,
+            note=str(element.get("note")) if element.get("note") else None,
         )
         for element in profile.get("elements") or []
         if isinstance(element, dict)
@@ -708,6 +791,85 @@ def _profile_experiments(profile: dict[str, Any], experiments: list[dict[str, An
     ]
 
 
+def validate_student_learning_experiment_coverage(experiments: list[dict[str, Any]]) -> dict[str, Any]:
+    profiles = [profile for profile in _learning_profiles() if profile.get("enabled", True)]
+    experiment_by_id = {str(experiment["id"]): experiment for experiment in experiments}
+    strict_coverage: dict[str, list[str]] = defaultdict(list)
+    actual_coverage: dict[str, list[str]] = defaultdict(list)
+    profile_counts: dict[str, int] = {}
+    errors: list[str] = []
+
+    profile_chapter_ids: dict[str, str] = {}
+    for profile in profiles:
+        profile_id = str(profile.get("profile_id") or "")
+        chapter_id = str(profile.get("chapter_id") or "").strip()
+        if not profile_id or not chapter_id:
+            errors.append(f"{profile_id or '<missing>'}: missing profile_id/chapter_id")
+            continue
+        if chapter_id in profile_chapter_ids:
+            errors.append(f"{profile_id}: duplicate learning profile chapter_id {chapter_id}")
+        profile_chapter_ids[chapter_id] = profile_id
+
+        strict_matches = [
+            experiment
+            for experiment in experiments
+            if chapter_id in _experiment_chapter_ids(experiment)
+        ]
+        actual_matches = _profile_experiments(profile, experiments)
+        strict_ids = {str(experiment["id"]) for experiment in strict_matches}
+        actual_ids = {str(experiment["id"]) for experiment in actual_matches}
+        profile_counts[profile_id] = len(strict_ids)
+        if not strict_ids:
+            errors.append(f"{profile_id}: chapter {chapter_id} has no published experiments")
+        extra_ids = sorted(actual_ids - strict_ids)
+        if extra_ids:
+            errors.append(f"{profile_id}: service coverage has non-chapter experiments {', '.join(extra_ids)}")
+        missing_ids = sorted(strict_ids - actual_ids)
+        if missing_ids:
+            errors.append(f"{profile_id}: service coverage missed chapter experiments {', '.join(missing_ids)}")
+        for experiment_id in strict_ids:
+            strict_coverage[experiment_id].append(profile_id)
+        for experiment_id in actual_ids:
+            actual_coverage[experiment_id].append(profile_id)
+
+    strict_covered_ids = set(strict_coverage)
+    actual_covered_ids = set(actual_coverage)
+    experiment_ids = set(experiment_by_id)
+    uncovered_ids = sorted(experiment_ids - strict_covered_ids)
+    if uncovered_ids:
+        errors.append(f"uncovered published experiments: {', '.join(uncovered_ids)}")
+    stale_ids = sorted(strict_covered_ids - experiment_ids)
+    if stale_ids:
+        errors.append(f"coverage references unknown experiments: {', '.join(stale_ids)}")
+    if actual_covered_ids != strict_covered_ids:
+        extra_actual = sorted(actual_covered_ids - strict_covered_ids)
+        missing_actual = sorted(strict_covered_ids - actual_covered_ids)
+        if extra_actual:
+            errors.append(f"service coverage has extra experiments: {', '.join(extra_actual)}")
+        if missing_actual:
+            errors.append(f"service coverage missed experiments: {', '.join(missing_actual)}")
+
+    multi_profile_experiment_ids = sorted(
+        experiment_id
+        for experiment_id, profile_ids in strict_coverage.items()
+        if len(profile_ids) > 1
+    )
+    return {
+        "ok": not errors,
+        "errors": errors,
+        "published_experiment_count": len(experiments),
+        "enabled_profile_count": len(profiles),
+        "covered_experiment_count": len(strict_covered_ids),
+        "uncovered_experiment_count": len(uncovered_ids),
+        "profiles_without_experiments": sorted(
+            profile_id for profile_id, count in profile_counts.items() if count == 0
+        ),
+        "multi_profile_experiment_count": len(multi_profile_experiment_ids),
+        "multi_profile_experiment_ids": multi_profile_experiment_ids,
+        "profile_experiment_counts": profile_counts,
+    }
+
+
 def _candidate_point(experiment: dict[str, Any]) -> tuple[str | None, str | None]:
     for media in _media_resources(experiment, visible_only=True):
         point_key = str(media.get("point_key") or "").strip()
@@ -764,6 +926,32 @@ def _learning_groups_for_section(
             )
         )
     return sorted(groups, key=lambda group: (group.parent_code, group.property_key))
+
+
+def _learning_groups_for_chapter(
+    *,
+    profile: dict[str, Any],
+    experiments: list[dict[str, Any]],
+) -> list[StudentLearningChapterExperimentGroup]:
+    section = {
+        "key": "chapter",
+        "title": str(profile.get("title") or profile.get("family_name") or "Chapter experiments"),
+    }
+    buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for experiment in experiments:
+        buckets[_parent_code(experiment)].append(experiment)
+
+    groups: list[StudentLearningChapterExperimentGroup] = []
+    for parent_code, items in buckets.items():
+        ordered_items = sorted(items, key=lambda item: (int(item.get("display_order") or 999), str(item.get("code") or "")))
+        groups.append(
+            StudentLearningChapterExperimentGroup(
+                parent_code=parent_code,
+                parent_title=_parent_title(ordered_items[0]),
+                points=[_learning_point_card(item, section=section) for item in ordered_items],
+            )
+        )
+    return sorted(groups, key=lambda group: group.parent_code)
 
 
 def _select_learning_profile(
@@ -827,6 +1015,7 @@ def get_student_learning_page(user: AuthUser, profile_id: str | None = None) -> 
         for section in sections
         for group in _learning_groups_for_section(section=section, experiments=profile_experiments)
     ]
+    chapter_experiment_groups = _learning_groups_for_chapter(profile=active, experiments=profile_experiments)
     hero = active.get("hero") if isinstance(active.get("hero"), dict) else {}
     active_profile = StudentLearningProfile(
         profile_id=str(active.get("profile_id") or ""),
@@ -840,11 +1029,15 @@ def get_student_learning_page(user: AuthUser, profile_id: str | None = None) -> 
             title=str(hero.get("title") or active.get("title") or ""),
             summary=str(hero.get("summary") or ""),
         ),
+        default_element_symbol=str(active.get("default_element_symbol")) if active.get("default_element_symbol") else None,
         element_symbols=[str(item) for item in active.get("element_symbols") or [] if str(item).strip()],
         elements=_element_badges(active),
         property_cards=_property_cards(active),
+        family_common_properties=_family_common_properties(active),
         property_sections=[_property_section(section) for section in sections],
+        reference_media=_reference_media(active),
         related_groups=related_groups,
+        chapter_experiment_groups=chapter_experiment_groups,
     )
     return StudentLearningPageResponse(
         recommended_profile_id=str(active.get("profile_id") or ""),

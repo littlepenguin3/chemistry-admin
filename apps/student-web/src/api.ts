@@ -109,6 +109,11 @@ export type StudentLearningElementBadge = {
   name: string;
   atomic_number?: number | null;
   state?: string | null;
+  group_label?: string | null;
+  electron_configuration?: string | null;
+  common_valence?: string | null;
+  redox_tendency?: string | null;
+  note?: string | null;
 };
 
 export type StudentLearningPropertyCard = {
@@ -125,6 +130,19 @@ export type StudentLearningPropertySection = {
   summary: string;
   formula: string;
   tone: string;
+};
+
+export type StudentLearningReferenceMedia = {
+  id: string;
+  usage: string;
+  asset_type: string;
+  source_url: string;
+  license: string;
+  attribution: string;
+  alt_text: string;
+  local_path?: string | null;
+  element_symbols: string[];
+  property_keys: string[];
 };
 
 export type StudentExperimentPointSummary = {
@@ -182,6 +200,12 @@ export type StudentLearningPointGroup = {
   points: StudentLearningPointCard[];
 };
 
+export type StudentLearningChapterExperimentGroup = {
+  parent_code: string;
+  parent_title: string;
+  points: StudentLearningPointCard[];
+};
+
 export type StudentLearningProfileSummary = {
   profile_id: string;
   chapter_id: string;
@@ -200,11 +224,15 @@ export type StudentLearningProfile = {
   family_number: string;
   family_name: string;
   hero: StudentLearningHero;
+  default_element_symbol?: string | null;
   element_symbols: string[];
   elements: StudentLearningElementBadge[];
   property_cards: StudentLearningPropertyCard[];
+  family_common_properties?: StudentLearningPropertyCard[];
   property_sections: StudentLearningPropertySection[];
+  reference_media?: StudentLearningReferenceMedia[];
   related_groups: StudentLearningPointGroup[];
+  chapter_experiment_groups?: StudentLearningChapterExperimentGroup[];
 };
 
 export type StudentLearningPageResponse = {
