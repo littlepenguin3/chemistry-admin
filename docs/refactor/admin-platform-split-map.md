@@ -95,6 +95,7 @@ Current frontend extraction status:
 - Done: shared error formatter -> `src/lib/errors.ts`, used by classes and remaining legacy pages.
 - Done: videos/media page -> `src/features/media/VideoResourcesPage.tsx`, lazy-loaded from the `/videos` route with Uppy/tus and `hash-wasm` work isolated to the media feature.
 - Done: shared authenticated image loader -> `src/components/AuthenticatedImage.tsx`, reused by media and remaining experiment pages.
+- Done: media upload/status helpers -> `src/features/media/mediaHelpers.tsx`, covering upload stage types, media status tags, duplicate display helpers, processing progress formatting, SHA-256 hashing, and tus upload id extraction.
 - Done: experiments page -> `src/features/experiments/ExperimentsPage.tsx`, lazy-loaded from the `/experiments` route.
 - Done: shared experiment hooks -> `src/features/experiments/experimentHooks.ts`, reused by experiments and remaining learning-assistant code.
 - Done: question bank page and AI workbench UI -> `src/features/question-bank/QuestionBanksPage.tsx`, lazy-loaded from the `/question-banks` route.
