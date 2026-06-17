@@ -36,6 +36,17 @@ export type PublicPretestQuestion = {
   related_knowledge_point_ids: string[];
 };
 
+export type PublicPosttestQuestion = {
+  id: string;
+  experiment_id: string;
+  experiment_title: string;
+  question_type: "single_choice" | "true_false" | "fill_blank";
+  stem: string;
+  options: PretestQuestionOption[];
+  related_chapter_ids: string[];
+  related_knowledge_point_ids: string[];
+};
+
 export type StudentPretestResponse = {
   status: "in_progress" | "completed";
   stage: 1 | 2 | null;
@@ -113,6 +124,66 @@ export type StudentExperimentDetailResponse = StudentExperimentPointSummary & {
   videos: StudentVideoResource[];
 };
 
+export type PosttestExperimentSummary = {
+  id: string;
+  code: string;
+  title: string;
+  parent_code?: string | null;
+  parent_title?: string | null;
+};
+
+export type StudentPosttestResponse = {
+  status: "in_progress" | "completed";
+  session_id: string;
+  experiments: PosttestExperimentSummary[];
+  questions: PublicPosttestQuestion[];
+};
+
+export type StudentPosttestAnswer = {
+  question_id: string;
+  answer: unknown;
+};
+
+export type StudentPosttestWrongAnswer = {
+  question_id: string;
+  experiment_id: string;
+  experiment_title: string;
+  question_type: string;
+  stem: string;
+  options: PretestQuestionOption[];
+  submitted_answer: unknown;
+  correct_answer: unknown;
+  explanation?: string | null;
+};
+
+export type StudentPosttestMasteryChange = {
+  knowledge_point_id: string;
+  content?: string | null;
+  before_score: number;
+  after_score: number;
+  delta: number;
+};
+
+export type StudentPosttestReport = {
+  session_id: string;
+  experiments: PosttestExperimentSummary[];
+  correct_count: number;
+  total_count: number;
+  score: number;
+  correct_rate: number;
+  mastery_before_average?: number | null;
+  mastery_after_average?: number | null;
+  mastery_delta?: number | null;
+  mastery_changes: StudentPosttestMasteryChange[];
+  wrong_answers: StudentPosttestWrongAnswer[];
+  next_recommendation: string;
+};
+
+export type StudentPosttestSubmitResponse = {
+  status: "completed";
+  report: StudentPosttestReport;
+};
+
 export const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const tokenKey = "chem_student_token";
 
@@ -147,6 +218,12 @@ export function errorMessage(error: unknown): string {
     if (error.status === 409) {
       if (typeof error.detail === "string" && error.detail.includes("Pretest question bank")) {
         return "课前摸底题库暂未配置，请联系教师";
+      }
+      if (typeof error.detail === "string" && error.detail.includes("Posttest question bank")) {
+        return "课后摸底题库暂未配置，请联系教师";
+      }
+      if (typeof error.detail === "string" && error.detail.includes("No learning experiments")) {
+        return "请先进入至少一个实验详情页学习";
       }
       return "账号或题库配置异常，请联系教师";
     }
@@ -220,6 +297,17 @@ export function getStudentExperimentGroup(parentCode: string): Promise<StudentEx
 
 export function getStudentExperimentDetail(experimentId: string): Promise<StudentExperimentDetailResponse> {
   return api<StudentExperimentDetailResponse>(`/api/student/experiments/${encodeURIComponent(experimentId)}`);
+}
+
+export function startStudentPosttest(): Promise<StudentPosttestResponse> {
+  return postJson<StudentPosttestResponse>("/api/student/posttest/start", {});
+}
+
+export function submitStudentPosttest(sessionId: string, answers: StudentPosttestAnswer[]): Promise<StudentPosttestSubmitResponse> {
+  return postJson<StudentPosttestSubmitResponse>("/api/student/posttest/submit", {
+    session_id: sessionId,
+    answers,
+  });
 }
 
 export function studentMediaUrl(path: string): string {

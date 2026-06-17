@@ -2,11 +2,13 @@ import { CSSProperties, FormEvent, ReactNode, useEffect, useMemo, useState } fro
 import {
   ArrowLeft,
   Atom,
+  BarChart3,
   BookOpenCheck,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
   FlaskConical,
+  GraduationCap,
   Layers3,
   LoaderCircle,
   LockKeyhole,
@@ -21,12 +23,15 @@ import logoUrl from "./assets/sysu-logo.svg";
 import {
   AuthUser,
   LoginResponse,
+  PublicPosttestQuestion,
   PublicPretestQuestion,
   StudentExperimentDetailResponse,
   StudentExperimentGroupResponse,
   StudentExperimentGroupSummary,
   StudentLearningArea,
   StudentLearningHomeResponse,
+  StudentPosttestReport,
+  StudentPosttestResponse,
   changeStudentPassword,
   errorMessage,
   getStudentExperimentDetail,
@@ -37,20 +42,25 @@ import {
   logout,
   setAuthToken,
   startStudentPretest,
+  startStudentPosttest,
   studentMediaUrl,
   studentLogin,
+  submitStudentPosttest,
   submitStudentPretest,
 } from "./api";
 import { periodicElements } from "./periodic";
 
 type ViewState = "checking" | "login" | "password" | "pretest-loading" | "pretest-error" | "pretest" | "home";
 type AnswerMap = Record<string, string>;
+type AssessmentQuestion = PublicPretestQuestion | PublicPosttestQuestion;
 type AreaId = "p" | "s" | "d" | "ds" | "f";
 type PeriodicArea = "s区" | "p区" | "d区" | "ds区" | "f区";
 type LearningRoute =
   | { screen: "home" }
   | { screen: "group"; parentCode: string }
-  | { screen: "experiment"; parentCode: string; experimentId: string };
+  | { screen: "experiment"; parentCode: string; experimentId: string }
+  | { screen: "posttest"; posttest: StudentPosttestResponse }
+  | { screen: "summary"; report: StudentPosttestReport };
 
 const areaIdByPeriodicArea: Record<PeriodicArea, AreaId> = {
   "s区": "s",
@@ -213,7 +223,13 @@ function App() {
       {view === "pretest-loading" ? <LoadingPanel text="正在准备课前摸底" /> : null}
       {view === "pretest-error" ? <PretestErrorPanel message={pretestError} onLogout={handleLogout} /> : null}
       {view === "pretest" && pretest ? (
-        <AssessmentPanel questions={pretest.questions} submitting={pretestLoading} onSubmit={handlePretestSubmit} />
+        <AssessmentPanel
+          eyebrow="课前摸底"
+          title="请完成以下题目"
+          questions={pretest.questions}
+          submitting={pretestLoading}
+          onSubmit={handlePretestSubmit}
+        />
       ) : null}
       {view === "home" && user ? <LearningSurface user={user} onLogout={handleLogout} /> : null}
     </main>
@@ -239,12 +255,29 @@ function optionText(option: Record<string, unknown>, index: number): string {
   return String(option.text ?? fallback);
 }
 
+function assessmentOptions(question: AssessmentQuestion): Array<{ value: string; marker: string; text: string }> {
+  if (question.question_type === "true_false") {
+    return [
+      { value: "true", marker: "对", text: "正确" },
+      { value: "false", marker: "错", text: "错误" },
+    ];
+  }
+  return question.options.map((option, index) => {
+    const value = optionValue(option, index);
+    return { value, marker: value, text: optionText(option, index) };
+  });
+}
+
 function AssessmentPanel({
+  eyebrow,
+  title,
   questions,
   submitting,
   onSubmit,
 }: {
-  questions: PublicPretestQuestion[];
+  eyebrow: string;
+  title: string;
+  questions: AssessmentQuestion[];
   submitting: boolean;
   onSubmit: (answers: AnswerMap) => void;
 }) {
@@ -254,17 +287,17 @@ function AssessmentPanel({
     setAnswers({});
   }, [questions]);
 
-  const allAnswered = questions.length > 0 && questions.every((question) => answers[question.id]);
+  const allAnswered = questions.length > 0 && questions.every((question) => String(answers[question.id] || "").trim());
 
   return (
-    <section className="assessment-panel" aria-label="课前摸底">
+    <section className="assessment-panel" aria-label={eyebrow}>
       <div className="assessment-title">
         <span className="panel-icon">
           <ClipboardList size={19} />
         </span>
         <div>
-          <p>课前摸底</p>
-          <h2>请完成以下题目</h2>
+          <p>{eyebrow}</p>
+          <h2>{title}</h2>
         </div>
       </div>
 
@@ -275,24 +308,32 @@ function AssessmentPanel({
               <span>Q{questionIndex + 1}</span>
             </div>
             <h3>{question.stem}</h3>
-            <div className="option-list">
-              {question.options.map((option, optionIndex) => {
-                const value = optionValue(option, optionIndex);
-                const selected = answers[question.id] === value;
-                return (
-                  <button
-                    key={`${question.id}-${value}`}
-                    className={selected ? "option selected" : "option"}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => setAnswers((current) => ({ ...current, [question.id]: value }))}
-                  >
-                    <b>{value}</b>
-                    <span>{optionText(option, optionIndex)}</span>
-                  </button>
-                );
-              })}
-            </div>
+            {question.question_type === "fill_blank" ? (
+              <input
+                className="fill-answer"
+                value={answers[question.id] || ""}
+                onChange={(event) => setAnswers((current) => ({ ...current, [question.id]: event.target.value }))}
+                placeholder="请输入答案"
+              />
+            ) : (
+              <div className="option-list">
+                {assessmentOptions(question).map((option) => {
+                  const selected = answers[question.id] === option.value;
+                  return (
+                    <button
+                      key={`${question.id}-${option.value}`}
+                      className={selected ? "option selected" : "option"}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setAnswers((current) => ({ ...current, [question.id]: option.value }))}
+                    >
+                      <b>{option.marker}</b>
+                      <span>{option.text}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </article>
         ))}
       </div>
@@ -476,6 +517,38 @@ function PasswordPanel({ user, onChanged }: { user: AuthUser; onChanged: (respon
 
 function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [route, setRoute] = useState<LearningRoute>({ screen: "home" });
+  const [posttestLoading, setPosttestLoading] = useState(false);
+  const [posttestSubmitting, setPosttestSubmitting] = useState(false);
+  const [posttestError, setPosttestError] = useState("");
+
+  const finishLearning = async () => {
+    setPosttestLoading(true);
+    setPosttestError("");
+    try {
+      const response = await startStudentPosttest();
+      setRoute({ screen: "posttest", posttest: response });
+    } catch (requestError) {
+      setPosttestError(errorMessage(requestError));
+    } finally {
+      setPosttestLoading(false);
+    }
+  };
+
+  const submitPosttest = async (posttest: StudentPosttestResponse, answers: AnswerMap) => {
+    setPosttestSubmitting(true);
+    setPosttestError("");
+    try {
+      const response = await submitStudentPosttest(
+        posttest.session_id,
+        Object.entries(answers).map(([questionId, answer]) => ({ question_id: questionId, answer })),
+      );
+      setRoute({ screen: "summary", report: response.report });
+    } catch (requestError) {
+      setPosttestError(errorMessage(requestError));
+    } finally {
+      setPosttestSubmitting(false);
+    }
+  };
 
   if (route.screen === "group") {
     return (
@@ -483,6 +556,9 @@ function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => v
         parentCode={route.parentCode}
         onBack={() => setRoute({ screen: "home" })}
         onSelectExperiment={(experimentId) => setRoute({ screen: "experiment", parentCode: route.parentCode, experimentId })}
+        onFinishLearning={finishLearning}
+        finishing={posttestLoading}
+        finishError={posttestError}
       />
     );
   }
@@ -492,21 +568,54 @@ function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => v
       <ExperimentDetailPanel
         experimentId={route.experimentId}
         onBack={() => setRoute({ screen: "group", parentCode: route.parentCode })}
+        onFinishLearning={finishLearning}
+        finishing={posttestLoading}
+        finishError={posttestError}
       />
     );
   }
 
-  return <LearningHomePanel user={user} onLogout={onLogout} onEnterGroup={(parentCode) => setRoute({ screen: "group", parentCode })} />;
+  if (route.screen === "posttest") {
+    return (
+      <PosttestPanel
+        posttest={route.posttest}
+        submitting={posttestSubmitting}
+        error={posttestError}
+        onSubmit={(answers) => submitPosttest(route.posttest, answers)}
+      />
+    );
+  }
+
+  if (route.screen === "summary") {
+    return <PosttestSummaryPanel report={route.report} onContinue={() => setRoute({ screen: "home" })} />;
+  }
+
+  return (
+    <LearningHomePanel
+      user={user}
+      onLogout={onLogout}
+      onEnterGroup={(parentCode) => setRoute({ screen: "group", parentCode })}
+      onFinishLearning={finishLearning}
+      finishing={posttestLoading}
+      finishError={posttestError}
+    />
+  );
 }
 
 function LearningHomePanel({
   user,
   onLogout,
   onEnterGroup,
+  onFinishLearning,
+  finishing,
+  finishError,
 }: {
   user: AuthUser;
   onLogout: () => void;
   onEnterGroup: (parentCode: string) => void;
+  onFinishLearning: () => void;
+  finishing: boolean;
+  finishError: string;
 }) {
   const [home, setHome] = useState<StudentLearningHomeResponse | null>(null);
   const [selectedArea, setSelectedArea] = useState<AreaId>("p");
@@ -604,6 +713,7 @@ function LearningHomePanel({
             <BookOpenCheck size={18} />
             <span>进入实验</span>
           </button>
+          <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />
         </>
       ) : null}
     </section>
@@ -728,10 +838,16 @@ function ExperimentGroupPanel({
   parentCode,
   onBack,
   onSelectExperiment,
+  onFinishLearning,
+  finishing,
+  finishError,
 }: {
   parentCode: string;
   onBack: () => void;
   onSelectExperiment: (experimentId: string) => void;
+  onFinishLearning: () => void;
+  finishing: boolean;
+  finishError: string;
 }) {
   const [group, setGroup] = useState<StudentExperimentGroupResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -781,11 +897,24 @@ function ExperimentGroupPanel({
           ))}
         </div>
       ) : null}
+      {group ? <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} /> : null}
     </section>
   );
 }
 
-function ExperimentDetailPanel({ experimentId, onBack }: { experimentId: string; onBack: () => void }) {
+function ExperimentDetailPanel({
+  experimentId,
+  onBack,
+  onFinishLearning,
+  finishing,
+  finishError,
+}: {
+  experimentId: string;
+  onBack: () => void;
+  onFinishLearning: () => void;
+  finishing: boolean;
+  finishError: string;
+}) {
   const [detail, setDetail] = useState<StudentExperimentDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -866,8 +995,161 @@ function ExperimentDetailPanel({ experimentId, onBack }: { experimentId: string;
               <span>暂未开放</span>
             </button>
           </section>
+          <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />
         </>
       ) : null}
+    </section>
+  );
+}
+
+function FinishLearningAction({ loading, error, onClick }: { loading: boolean; error: string; onClick: () => void }) {
+  return (
+    <section className="finish-learning">
+      {error ? <div className="form-error">{error}</div> : null}
+      <button className="secondary-action finish-action" type="button" disabled={loading} onClick={onClick}>
+        {loading ? <LoaderCircle className="spin" size={18} /> : <GraduationCap size={18} />}
+        <span>{loading ? "正在生成后测" : "完成学习"}</span>
+      </button>
+    </section>
+  );
+}
+
+function PosttestPanel({
+  posttest,
+  submitting,
+  error,
+  onSubmit,
+}: {
+  posttest: StudentPosttestResponse;
+  submitting: boolean;
+  error: string;
+  onSubmit: (answers: AnswerMap) => void;
+}) {
+  const names = posttest.experiments.map((experiment) => stripExperimentPrefix(experiment.title)).join("、");
+  return (
+    <section className="learning-panel" aria-label="课后摸底">
+      <section className="posttest-context">
+        <div>
+          <p>本轮学习</p>
+          <h2>{names || "实验学习"}</h2>
+        </div>
+        <span>{posttest.questions.length} 题</span>
+      </section>
+      {error ? <div className="form-error">{error}</div> : null}
+      <AssessmentPanel
+        eyebrow="课后摸底"
+        title="请完成学习后测"
+        questions={posttest.questions}
+        submitting={submitting}
+        onSubmit={onSubmit}
+      />
+    </section>
+  );
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "未生成";
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatScore(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "未生成";
+  return value.toFixed(1);
+}
+
+function answerLabel(answer: unknown): string {
+  if (Array.isArray(answer)) return answer.map(answerLabel).join(" / ");
+  if (typeof answer === "boolean") return answer ? "正确" : "错误";
+  if (answer === null || answer === undefined || answer === "") return "未作答";
+  return String(answer);
+}
+
+function PosttestSummaryPanel({ report, onContinue }: { report: StudentPosttestReport; onContinue: () => void }) {
+  const masteryChanges = report.mastery_changes.slice(0, 5);
+  return (
+    <section className="learning-panel" aria-label="学习总结">
+      <section className="summary-hero">
+        <span className="panel-icon">
+          <BarChart3 size={20} />
+        </span>
+        <div>
+          <p>学习总结</p>
+          <h2>本轮实验报告</h2>
+          <small>{report.next_recommendation}</small>
+        </div>
+      </section>
+
+      <section className="summary-grid">
+        <div>
+          <span>后测正确率</span>
+          <strong>{formatPercent(report.correct_rate)}</strong>
+          <small>
+            {report.correct_count}/{report.total_count} 题
+          </small>
+        </div>
+        <div>
+          <span>掌握度变化</span>
+          <strong>{report.mastery_delta === null || report.mastery_delta === undefined ? "未生成" : `${report.mastery_delta >= 0 ? "+" : ""}${report.mastery_delta}`}</strong>
+          <small>
+            {formatScore(report.mastery_before_average)} → {formatScore(report.mastery_after_average)}
+          </small>
+        </div>
+      </section>
+
+      <section className="detail-section">
+        <h3>本轮实验</h3>
+        <div className="learned-list">
+          {report.experiments.map((experiment) => (
+            <div key={experiment.id}>
+              <FlaskConical size={16} />
+              <span>{stripExperimentPrefix(experiment.title)}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {masteryChanges.length ? (
+        <section className="detail-section">
+          <h3>掌握度变化</h3>
+          <div className="mastery-list">
+            {masteryChanges.map((item) => (
+              <div key={item.knowledge_point_id}>
+                <span>{item.content || item.knowledge_point_id}</span>
+                <strong>
+                  {formatScore(item.before_score)} → {formatScore(item.after_score)}
+                </strong>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="detail-section">
+        <h3>错题回顾</h3>
+        {report.wrong_answers.length ? (
+          <div className="wrong-list">
+            {report.wrong_answers.map((item, index) => (
+              <article key={item.question_id}>
+                <p>Q{index + 1}</p>
+                <h4>{item.stem}</h4>
+                <span>你的答案：{answerLabel(item.submitted_answer)}</span>
+                <span>参考答案：{answerLabel(item.correct_answer)}</span>
+                {item.explanation ? <small>{item.explanation}</small> : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-learning-card">
+            <CheckCircle2 size={20} />
+            <span>本轮没有错题</span>
+          </div>
+        )}
+      </section>
+
+      <button className="primary-action full" type="button" onClick={onContinue}>
+        <BookOpenCheck size={18} />
+        <span>继续学习</span>
+      </button>
     </section>
   );
 }
