@@ -30,10 +30,10 @@
 
 ## 5. Media Lifecycle Follow-Through
 
-- [ ] 5.1 Reassess whether archive/tombstone behavior requires durable schema support beyond the current dry-run and missing-file summaries.
-- [ ] 5.2 If no schema change is required, document the decision and avoid adding a migration.
-- [ ] 5.3 If schema support is required, add the next migration as `014_...` or later without touching existing migrations.
-- [ ] 5.4 Run media lifecycle tests and dry-run cleanup after any media-related changes.
+- [x] 5.1 Reassess whether archive/tombstone behavior requires durable schema support beyond the current dry-run and missing-file summaries.
+- [x] 5.2 If no schema change is required, document the decision and avoid adding a migration.
+- [x] 5.3 If schema support is required, add the next migration as `014_...` or later without touching existing migrations.
+- [x] 5.4 Run media lifecycle tests and dry-run cleanup after any media-related changes.
 
 ## 6. Final Validation And Handoff
 
