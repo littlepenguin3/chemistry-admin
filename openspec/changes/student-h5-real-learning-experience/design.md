@@ -29,6 +29,20 @@ Another contributor is working on learning reports. This change must avoid repor
 
 ## Decisions
 
+### Decision: Student H5 is a phone-first mini-program/WebView surface
+
+Treat `apps/student-web` as the student-facing H5 / mini-program WebView client. It is not a desktop admin console and must not inherit admin-console density, table-first layouts, or hover-only interaction patterns.
+
+The design target is common phone viewports, especially 360px to 430px CSS pixel widths. Desktop browser usage is a development convenience only: the app may center or constrain a phone-width layout on desktop, but the product experience must be judged by phone ergonomics.
+
+Practical guardrails:
+- primary flows must be fully touch reachable: login, initial password change, temporary pretest skip, learning profile, property selection, point detail, chat, feedback, and logout;
+- bottom navigation, floating feedback, chat controls, and sticky actions must avoid overlap and respect mobile safe-area expectations;
+- repeated point cards and property cards must use responsive constraints that prevent horizontal scroll at phone widths;
+- future visual QA should include at least 360x780, 390x844, and 430x932 viewports before considering student H5 changes complete.
+
+Rationale: the user population will experience this as a phone H5 / mini-program page. A layout that only looks acceptable in a desktop browser is not acceptable for this product surface.
+
 ### Decision: Pull-based student app configuration instead of WebSocket
 
 Add `GET /api/student/app-config` for authenticated students. It returns learning feature flags from `platform_settings` and AI enabled flags from `ai_configuration`.

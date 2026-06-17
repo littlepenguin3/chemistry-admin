@@ -50,6 +50,25 @@ The backend SHALL expose a student learning payload centered on a family or chap
 - **THEN** the H5 app MUST still show the point and its learning context
 - **AND** it MUST render a graceful empty video state instead of failing navigation
 
+### Requirement: Student H5 mobile-first WebView contract
+The student learning surface SHALL be treated as a phone-first H5 / mini-program WebView experience, not as a desktop admin page or a shrunken desktop layout.
+
+#### Scenario: Student opens H5 on a phone viewport
+- **WHEN** the student H5 app is viewed at common phone widths from 360px to 430px CSS pixels
+- **THEN** primary learning screens MUST fit the viewport without horizontal scrolling
+- **AND** headings, cards, bottom navigation, floating feedback entry, chat entry, and action buttons MUST remain tappable and non-overlapping
+- **AND** the layout MUST prioritize the phone flow: profile overview, property selection, related experiment points, point detail, chat, and feedback
+
+#### Scenario: Student uses touch-only interaction
+- **WHEN** a student uses the app without hover, precise mouse input, or desktop keyboard shortcuts
+- **THEN** all required learning, chat, feedback, login, password-change, pretest-skip, and logout actions MUST be reachable through touch controls
+- **AND** interactive controls SHOULD use phone-appropriate hit areas and spacing
+
+#### Scenario: Desktop browser is used only for development preview
+- **WHEN** a developer opens the student H5 app on a wide desktop browser
+- **THEN** the app MAY center or constrain the phone layout for preview
+- **BUT** it MUST NOT introduce desktop-only navigation, table-first layouts, hover-only affordances, or admin-console density into the student H5 experience
+
 ### Requirement: Student experiment point detail
 The student H5 app SHALL provide a point detail experience that keeps video learning primary while showing compact explanation context.
 

@@ -38,3 +38,4 @@
 - [x] 5.6 Perform local smoke checks for login/app-config, learning page, chat visibility, feedback visibility/submission, and admin settings effects.
 
   Automated local smoke covered service startup, student/admin login pages, frontend API target wiring to the local new-code backend, and unauthenticated API boundaries. Authenticated H5 learning/chat/feedback behavior is ready for manual check with a real local student account.
+- [x] 5.7 Document the student H5 phone-first WebView contract and require mobile viewport QA for future student-web changes.

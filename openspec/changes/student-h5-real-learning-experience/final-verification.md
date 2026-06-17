@@ -34,3 +34,18 @@ Smoke checks completed:
 - Unauthenticated `GET /api/student/learning-page`: 401
 
 Authenticated H5 learning/chat/feedback behavior is ready for manual verification with a real local student account.
+
+## Student H5 Mobile Contract
+
+The student frontend is explicitly a phone-first H5 / mini-program WebView surface. Future student-web changes should be checked against phone viewports before being treated as complete:
+
+- 360x780 CSS pixels
+- 390x844 CSS pixels
+- 430x932 CSS pixels
+
+Required mobile checks:
+
+- no horizontal scrolling on primary learning screens;
+- login, initial password change, temporary pretest skip, learning, point detail, chat, feedback, and logout are touch reachable;
+- bottom navigation, floating feedback, chat controls, and sticky actions do not overlap;
+- desktop preview may center/constrain the phone layout but must not introduce desktop-only UI behavior.
