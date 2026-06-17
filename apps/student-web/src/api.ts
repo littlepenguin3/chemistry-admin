@@ -47,6 +47,72 @@ export type StudentPretestAnswer = {
   answer: unknown;
 };
 
+export type StudentLearningArea = {
+  area_id: string;
+  area_name: string;
+  enabled: boolean;
+  parent_codes: string[];
+  experiment_count: number;
+  published_video_count: number;
+  question_count: number;
+};
+
+export type StudentExperimentGroupSummary = {
+  parent_code: string;
+  parent_title: string;
+  area_id: string;
+  area_name: string;
+  chapter_ids: string[];
+  experiment_count: number;
+  published_video_count: number;
+  question_count: number;
+  recommended: boolean;
+};
+
+export type StudentLearningHomeResponse = {
+  recommended_area_id: string | null;
+  recommended_parent_code: string | null;
+  areas: StudentLearningArea[];
+  groups: StudentExperimentGroupSummary[];
+};
+
+export type StudentExperimentPointSummary = {
+  id: string;
+  code: string;
+  title: string;
+  summary?: string | null;
+  parent_code: string;
+  parent_title: string;
+  module_title?: string | null;
+  chapter_ids: string[];
+  video_candidate_count: number;
+  published_video_count: number;
+  question_count: number;
+};
+
+export type StudentExperimentGroupResponse = {
+  parent_code: string;
+  parent_title: string;
+  area_id: string;
+  area_name: string;
+  experiments: StudentExperimentPointSummary[];
+};
+
+export type StudentVideoResource = {
+  media_id: string;
+  title: string;
+  point_key?: string | null;
+  point_title?: string | null;
+  mime_type?: string | null;
+  stream_path?: string | null;
+  thumbnail_path?: string | null;
+};
+
+export type StudentExperimentDetailResponse = StudentExperimentPointSummary & {
+  video_candidates: string[];
+  videos: StudentVideoResource[];
+};
+
 export const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const tokenKey = "chem_student_token";
 
@@ -142,6 +208,23 @@ export function submitStudentPretest(stage: 1 | 2, answers: StudentPretestAnswer
     stage,
     answers,
   });
+}
+
+export function getStudentLearningHome(): Promise<StudentLearningHomeResponse> {
+  return api<StudentLearningHomeResponse>("/api/student/learning-home");
+}
+
+export function getStudentExperimentGroup(parentCode: string): Promise<StudentExperimentGroupResponse> {
+  return api<StudentExperimentGroupResponse>(`/api/student/experiment-groups/${encodeURIComponent(parentCode)}`);
+}
+
+export function getStudentExperimentDetail(experimentId: string): Promise<StudentExperimentDetailResponse> {
+  return api<StudentExperimentDetailResponse>(`/api/student/experiments/${encodeURIComponent(experimentId)}`);
+}
+
+export function studentMediaUrl(path: string): string {
+  const separator = path.includes("?") ? "&" : "?";
+  return `${apiBase}${path}${separator}access_token=${encodeURIComponent(authToken)}`;
 }
 
 export async function logout(): Promise<void> {

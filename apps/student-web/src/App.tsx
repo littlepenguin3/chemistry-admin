@@ -1,33 +1,88 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { CSSProperties, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
+  Atom,
+  BookOpenCheck,
   CheckCircle2,
+  ChevronRight,
   ClipboardList,
   FlaskConical,
+  Layers3,
   LoaderCircle,
   LockKeyhole,
   LogIn,
   LogOut,
+  PlayCircle,
   ShieldCheck,
   UserRound,
+  Video,
 } from "lucide-react";
 import logoUrl from "./assets/sysu-logo.svg";
 import {
   AuthUser,
   LoginResponse,
   PublicPretestQuestion,
+  StudentExperimentDetailResponse,
+  StudentExperimentGroupResponse,
+  StudentExperimentGroupSummary,
+  StudentLearningArea,
+  StudentLearningHomeResponse,
   changeStudentPassword,
   errorMessage,
+  getStudentExperimentDetail,
+  getStudentExperimentGroup,
+  getStudentLearningHome,
   getAuthToken,
   loadCurrentUser,
   logout,
   setAuthToken,
   startStudentPretest,
+  studentMediaUrl,
   studentLogin,
   submitStudentPretest,
 } from "./api";
+import { periodicElements } from "./periodic";
 
 type ViewState = "checking" | "login" | "password" | "pretest-loading" | "pretest-error" | "pretest" | "home";
 type AnswerMap = Record<string, string>;
+type AreaId = "p" | "s" | "d" | "ds" | "f";
+type PeriodicArea = "s区" | "p区" | "d区" | "ds区" | "f区";
+type LearningRoute =
+  | { screen: "home" }
+  | { screen: "group"; parentCode: string }
+  | { screen: "experiment"; parentCode: string; experimentId: string };
+
+const areaIdByPeriodicArea: Record<PeriodicArea, AreaId> = {
+  "s区": "s",
+  "p区": "p",
+  "d区": "d",
+  "ds区": "ds",
+  "f区": "f",
+};
+
+const periodicAreaByAreaId: Record<AreaId, PeriodicArea> = {
+  s: "s区",
+  p: "p区",
+  d: "d区",
+  ds: "ds区",
+  f: "f区",
+};
+
+const areaSwatches: Record<AreaId, string> = {
+  p: "#2f9d70",
+  s: "#8cc95f",
+  d: "#6fa3d8",
+  ds: "#d7ab3c",
+  f: "#a77bd2",
+};
+
+const areaInk: Record<AreaId, string> = {
+  p: "#0f3d2b",
+  s: "#28430e",
+  d: "#123556",
+  ds: "#4d3510",
+  f: "#3a2452",
+};
 
 function normalizeStudentId(value: string): string {
   return value.trim().toUpperCase();
@@ -141,7 +196,7 @@ function App() {
   };
 
   return (
-    <main className={view === "pretest" ? "app-shell assessment-shell" : "app-shell"}>
+    <main className={view === "pretest" ? "app-shell assessment-shell" : view === "home" ? "app-shell learning-shell" : "app-shell"}>
       <section className="brand-rail" aria-label="中山大学化学学院">
         <div className="brand-seal">
           <img src={logoUrl} alt="中山大学校徽" />
@@ -160,7 +215,7 @@ function App() {
       {view === "pretest" && pretest ? (
         <AssessmentPanel questions={pretest.questions} submitting={pretestLoading} onSubmit={handlePretestSubmit} />
       ) : null}
-      {view === "home" && user ? <HomePanel user={user} onLogout={handleLogout} /> : null}
+      {view === "home" && user ? <LearningSurface user={user} onLogout={handleLogout} /> : null}
     </main>
   );
 }
@@ -419,35 +474,413 @@ function PasswordPanel({ user, onChanged }: { user: AuthUser; onChanged: (respon
   );
 }
 
-function HomePanel({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+function LearningSurface({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+  const [route, setRoute] = useState<LearningRoute>({ screen: "home" });
+
+  if (route.screen === "group") {
+    return (
+      <ExperimentGroupPanel
+        parentCode={route.parentCode}
+        onBack={() => setRoute({ screen: "home" })}
+        onSelectExperiment={(experimentId) => setRoute({ screen: "experiment", parentCode: route.parentCode, experimentId })}
+      />
+    );
+  }
+
+  if (route.screen === "experiment") {
+    return (
+      <ExperimentDetailPanel
+        experimentId={route.experimentId}
+        onBack={() => setRoute({ screen: "group", parentCode: route.parentCode })}
+      />
+    );
+  }
+
+  return <LearningHomePanel user={user} onLogout={onLogout} onEnterGroup={(parentCode) => setRoute({ screen: "group", parentCode })} />;
+}
+
+function LearningHomePanel({
+  user,
+  onLogout,
+  onEnterGroup,
+}: {
+  user: AuthUser;
+  onLogout: () => void;
+  onEnterGroup: (parentCode: string) => void;
+}) {
+  const [home, setHome] = useState<StudentLearningHomeResponse | null>(null);
+  const [selectedArea, setSelectedArea] = useState<AreaId>("p");
+  const [selectedParentCode, setSelectedParentCode] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    getStudentLearningHome()
+      .then((payload) => {
+        if (cancelled) return;
+        setHome(payload);
+        const recommendedArea = normalizeAreaId(payload.recommended_area_id) || firstEnabledArea(payload.areas) || "p";
+        setSelectedArea(recommendedArea);
+        setSelectedParentCode(payload.recommended_parent_code || firstGroupForArea(payload.groups, recommendedArea)?.parent_code || null);
+      })
+      .catch((requestError) => {
+        if (!cancelled) setError(errorMessage(requestError));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!home) return;
+    const nextGroup = home.groups.find((group) => group.area_id === selectedArea && group.recommended) || firstGroupForArea(home.groups, selectedArea);
+    setSelectedParentCode(nextGroup?.parent_code || null);
+  }, [home, selectedArea]);
+
+  const groups = home?.groups.filter((group) => group.area_id === selectedArea) || [];
+  const selectedGroup =
+    groups.find((group) => group.parent_code === selectedParentCode) || groups.find((group) => group.recommended) || groups[0] || null;
+
   return (
-    <section className="auth-panel success-panel">
-      <div className="success-mark">
-        <CheckCircle2 size={30} />
-      </div>
-      <div className="success-copy">
-        <p>登录已完成</p>
-        <h2>{user.display_name}</h2>
-      </div>
-      <div className="student-summary">
+    <section className="learning-panel" aria-label="实验学习">
+      <div className="learning-topbar">
         <div>
-          <span>学号</span>
-          <strong>{user.student_id || user.username}</strong>
+          <p>{user.student_id || user.username}</p>
+          <h2>{user.display_name}</h2>
         </div>
-        <div>
-          <span>班级</span>
-          <strong>{user.class_name || "未绑定"}</strong>
-        </div>
+        <button className="icon-action" type="button" onClick={onLogout} aria-label="退出登录">
+          <LogOut size={18} />
+        </button>
       </div>
-      <div className="next-banner">
-        <FlaskConical size={20} />
-        <span>学习页面即将接入</span>
-      </div>
-      <button className="secondary-action" type="button" onClick={onLogout}>
-        <LogOut size={18} />
-        <span>退出登录</span>
-      </button>
+
+      {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载实验资源" /> : null}
+      {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
+      {!loading && !error && home ? (
+        <>
+          <PeriodicTable selectedArea={selectedArea} areas={home.areas} onSelectArea={setSelectedArea} />
+
+          <section className="selection-panel">
+            <div className="selection-head">
+              <span style={{ "--area-color": areaSwatches[selectedArea] } as CSSProperties}>
+                <Layers3 size={18} />
+              </span>
+              <div>
+                <p>当前选区</p>
+                <h2>{home.areas.find((area) => area.area_id === selectedArea)?.area_name || periodicAreaByAreaId[selectedArea]}</h2>
+              </div>
+            </div>
+
+            {groups.length ? (
+              <div className="family-grid">
+                {groups.map((group) => (
+                  <ExperimentGroupCard
+                    key={group.parent_code}
+                    group={group}
+                    selected={selectedGroup?.parent_code === group.parent_code}
+                    onSelect={() => setSelectedParentCode(group.parent_code)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="empty-learning-card">
+                <FlaskConical size={20} />
+                <span>该区实验暂未开放</span>
+              </div>
+            )}
+          </section>
+
+          <button
+            className="primary-action full"
+            type="button"
+            disabled={!selectedGroup}
+            onClick={() => selectedGroup && onEnterGroup(selectedGroup.parent_code)}
+          >
+            <BookOpenCheck size={18} />
+            <span>进入实验</span>
+          </button>
+        </>
+      ) : null}
     </section>
+  );
+}
+
+function normalizeAreaId(value: string | null | undefined): AreaId | null {
+  if (value === "p" || value === "s" || value === "d" || value === "ds" || value === "f") return value;
+  return null;
+}
+
+function firstEnabledArea(areas: StudentLearningArea[]): AreaId | null {
+  const match = areas.find((area) => area.enabled && normalizeAreaId(area.area_id));
+  return normalizeAreaId(match?.area_id);
+}
+
+function firstGroupForArea(groups: StudentExperimentGroupSummary[], areaId: AreaId): StudentExperimentGroupSummary | null {
+  return groups.find((group) => group.area_id === areaId) || null;
+}
+
+function LearningState({ icon, text }: { icon: ReactNode; text: string }) {
+  return (
+    <div className="learning-state">
+      {icon}
+      <span>{text}</span>
+    </div>
+  );
+}
+
+function ExperimentGroupCard({
+  group,
+  selected,
+  onSelect,
+}: {
+  group: StudentExperimentGroupSummary;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button className={selected ? "family-card active" : "family-card"} type="button" aria-pressed={selected} onClick={onSelect}>
+      {group.recommended ? <em>推荐学习</em> : null}
+      <strong>{stripExperimentPrefix(group.parent_title)}</strong>
+      <small>
+        {group.experiment_count} 个实验点 / {group.question_count} 题
+      </small>
+    </button>
+  );
+}
+
+function stripExperimentPrefix(value: string): string {
+  return value.replace(/^实验\s+\d+(?:-\d+)?\s*/, "").trim() || value;
+}
+
+function PeriodicTable({
+  selectedArea,
+  areas,
+  onSelectArea,
+}: {
+  selectedArea: AreaId;
+  areas: StudentLearningArea[];
+  onSelectArea: (area: AreaId) => void;
+}) {
+  const groupNumbers = Array.from({ length: 18 }, (_, index) => index + 1);
+  const areaEnabled = new Map(areas.map((area) => [area.area_id, area.enabled]));
+
+  return (
+    <section className="periodic-card" aria-label="元素周期表选择区">
+      <div className="periodic-card-head">
+        <div>
+          <p>元素周期表</p>
+          <h3>{periodicAreaByAreaId[selectedArea]}</h3>
+        </div>
+        <Atom size={22} />
+      </div>
+      <div className="area-legend" aria-label="元素区图例">
+        {(Object.keys(periodicAreaByAreaId) as AreaId[]).map((area) => (
+          <button
+            key={area}
+            type="button"
+            className={[selectedArea === area ? "selected" : "", areaEnabled.get(area) ? "" : "muted"].filter(Boolean).join(" ")}
+            style={{ "--area-color": areaSwatches[area], "--area-ink": areaInk[area] } as CSSProperties}
+            onClick={() => onSelectArea(area)}
+            aria-label={`选择${periodicAreaByAreaId[area]}`}
+          >
+            <i />
+            <span>{periodicAreaByAreaId[area]}</span>
+          </button>
+        ))}
+      </div>
+      <div className="periodic-caption">族（IUPAC 编号）</div>
+      <div className="periodic-grid">
+        {groupNumbers.map((group) => (
+          <div className="group-number" key={group} style={{ gridColumn: group, gridRow: 1 }}>
+            {group}
+          </div>
+        ))}
+        {periodicElements.map((element) => {
+          const areaId = areaIdByPeriodicArea[element.area as PeriodicArea];
+          return (
+            <button
+              key={element.atomicNumber}
+              type="button"
+              className={selectedArea === areaId ? "element-cell selected-area" : "element-cell"}
+              style={{
+                gridColumn: element.group,
+                gridRow: element.period + 1,
+                background: selectedArea === areaId ? areaSwatches[areaId] : `${areaSwatches[areaId]}88`,
+                "--cell-ink": areaInk[areaId],
+              } as CSSProperties}
+              aria-label={`${element.symbol} ${element.name}`}
+              title={`${element.symbol} ${element.name}`}
+              onClick={() => onSelectArea(areaId)}
+            />
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ExperimentGroupPanel({
+  parentCode,
+  onBack,
+  onSelectExperiment,
+}: {
+  parentCode: string;
+  onBack: () => void;
+  onSelectExperiment: (experimentId: string) => void;
+}) {
+  const [group, setGroup] = useState<StudentExperimentGroupResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    getStudentExperimentGroup(parentCode)
+      .then((payload) => {
+        if (!cancelled) setGroup(payload);
+      })
+      .catch((requestError) => {
+        if (!cancelled) setError(errorMessage(requestError));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [parentCode]);
+
+  return (
+    <section className="learning-panel" aria-label="实验列表">
+      <PageBar title={group ? stripExperimentPrefix(group.parent_title) : "实验列表"} onBack={onBack} />
+      {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载实验列表" /> : null}
+      {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
+      {group ? (
+        <div className="experiment-list">
+          {group.experiments.map((experiment) => (
+            <button className="experiment-card" key={experiment.id} type="button" onClick={() => onSelectExperiment(experiment.id)}>
+              <div className="experiment-thumb">
+                <PlayCircle size={32} />
+                <strong>{experiment.code}</strong>
+              </div>
+              <div>
+                <p>{experiment.module_title || group.area_name}</p>
+                <h3>{experiment.title}</h3>
+                <span>
+                  视频 {experiment.published_video_count || experiment.video_candidate_count} / 练习 {experiment.question_count}
+                </span>
+              </div>
+              <ChevronRight size={18} />
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ExperimentDetailPanel({ experimentId, onBack }: { experimentId: string; onBack: () => void }) {
+  const [detail, setDetail] = useState<StudentExperimentDetailResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    getStudentExperimentDetail(experimentId)
+      .then((payload) => {
+        if (!cancelled) setDetail(payload);
+      })
+      .catch((requestError) => {
+        if (!cancelled) setError(errorMessage(requestError));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [experimentId]);
+
+  const video = detail?.videos[0] || null;
+
+  return (
+    <section className="learning-panel" aria-label="实验详情">
+      <PageBar title={detail?.title || "实验详情"} onBack={onBack} />
+      {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载实验详情" /> : null}
+      {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
+      {detail ? (
+        <>
+          <section className="video-stage">
+            {video?.stream_path ? (
+              <video
+                controls
+                playsInline
+                poster={video.thumbnail_path ? studentMediaUrl(video.thumbnail_path) : undefined}
+                src={studentMediaUrl(video.stream_path)}
+              />
+            ) : (
+              <div className="video-placeholder">
+                <Video size={34} />
+                <strong>实验视频待发布</strong>
+              </div>
+            )}
+          </section>
+
+          <section className="experiment-detail-card">
+            <p>{detail.module_title || detail.parent_title}</p>
+            <h2>{detail.title}</h2>
+            {detail.summary ? <span>{detail.summary}</span> : null}
+          </section>
+
+          <section className="detail-section">
+            <h3>实验观察点</h3>
+            {detail.video_candidates.length ? (
+              <div className="candidate-list">
+                {detail.video_candidates.map((candidate) => (
+                  <div key={candidate}>
+                    <FlaskConical size={16} />
+                    <span>{candidate}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-learning-card">暂无观察点</div>
+            )}
+          </section>
+
+          <section className="detail-section practice-strip">
+            <div>
+              <p>练习</p>
+              <h3>{detail.question_count} 题</h3>
+            </div>
+            <button type="button" disabled>
+              <ClipboardList size={17} />
+              <span>暂未开放</span>
+            </button>
+          </section>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function PageBar({ title, onBack }: { title: string; onBack: () => void }) {
+  return (
+    <div className="pagebar">
+      <button className="icon-action" type="button" onClick={onBack} aria-label="返回">
+        <ArrowLeft size={18} />
+      </button>
+      <h2>{title}</h2>
+      <span />
+    </div>
   );
 }
 
