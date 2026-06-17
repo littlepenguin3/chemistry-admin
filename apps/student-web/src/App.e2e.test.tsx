@@ -406,10 +406,22 @@ describe("student app e2e flow", () => {
     expect(recommendedFluorine).toHaveTextContent("F");
     expect(recommendedFluorine).toHaveClass("recommended-element");
     expect(within(periodic).getByRole("button", { name: "He 氦，选择氢和稀有气体" })).toHaveTextContent("");
-    expect(within(periodic).getByRole("button", { name: "Rn 氡，选择氢和稀有气体" }).style.gridColumn).toBe("19");
-    expect(within(periodic).getByRole("button", { name: "Og 鿫，选择氢和稀有气体" }).style.gridColumn).toBe("19");
-    expect(within(periodic).getByRole("button", { name: "Lu 镥，选择f区" }).style.gridColumn).toBe("18");
-    expect(within(periodic).getByRole("button", { name: "Lr 铹，选择f区" }).style.gridColumn).toBe("18");
+    const radon = within(periodic).getByRole("button", { name: "Rn 氡，选择氢和稀有气体" });
+    const oganesson = within(periodic).getByRole("button", { name: "Og 鿫，选择氢和稀有气体" });
+    const lutetium = within(periodic).getByRole("button", { name: "Lu 镥，选择f区" });
+    const lawrencium = within(periodic).getByRole("button", { name: "Lr 铹，选择f区" });
+    expect(radon.style.gridColumn).toBe("19");
+    expect(oganesson.style.gridColumn).toBe("19");
+    expect(oganesson.style.gridRow).toBe("8");
+    expect(lutetium.style.gridColumn).toBe("18");
+    expect(lutetium.style.gridRow).toBe("10");
+    expect(lawrencium.style.gridColumn).toBe("18");
+    expect(lawrencium.style.gridRow).toBe("11");
+    expect(Array.from(periodic.querySelectorAll<HTMLElement>(".period-number")).map((node) => node.style.gridRow).slice(6)).toEqual([
+      "8",
+      "10",
+      "11",
+    ]);
     fireEvent.click(within(periodic).getByRole("button", { name: "Li 锂，选择s区" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "s区", level: 2 })).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "碱金属和碱土金属" })).toBeInTheDocument();

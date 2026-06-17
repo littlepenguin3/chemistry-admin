@@ -578,7 +578,7 @@ button {
 .periodic-grid {
   display: grid;
   grid-template-columns: 14px repeat(18, minmax(0, 1fr));
-  grid-template-rows: 18px repeat(9, 18px);
+  grid-template-rows: 18px repeat(7, 18px) 14px repeat(2, 18px);
   gap: 3px;
 }
 
@@ -2760,7 +2760,7 @@ button {
   }
 
   .periodic-grid {
-    grid-template-rows: 20px repeat(9, 22px);
+    grid-template-rows: 20px repeat(7, 22px) 16px repeat(2, 22px);
     gap: 4px;
   }
 

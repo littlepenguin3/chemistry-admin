@@ -179,6 +179,10 @@ function periodicGridColumnForElement(element: PeriodicElementMeta): number {
   return displayGroup + 1;
 }
 
+function periodicGridRowForPeriod(period: number): number {
+  return period >= 8 ? period + 2 : period + 1;
+}
+
 const LazyAiMarkdown = lazy(async () => {
   const module = await import("./components/AiMarkdown");
   return { default: module.AiMarkdown };
@@ -2001,7 +2005,7 @@ function PeriodicTable({
           </div>
         ))}
         {periodicPeriodLabels.map((period, index) => (
-          <div className="period-number" key={period} style={{ gridColumn: 1, gridRow: index + 2 }}>
+          <div className="period-number" key={period} style={{ gridColumn: 1, gridRow: periodicGridRowForPeriod(index + 1) }}>
             {period}
           </div>
         ))}
@@ -2024,7 +2028,7 @@ function PeriodicTable({
                 .join(" ")}
               style={{
                 gridColumn: periodicGridColumnForElement(element),
-                gridRow: element.period + 1,
+                gridRow: periodicGridRowForPeriod(element.period),
                 background: areaSwatches[areaId],
                 "--cell-ink": areaInk[areaId],
               } as CSSProperties}
