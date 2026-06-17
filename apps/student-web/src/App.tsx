@@ -84,6 +84,7 @@ type FeedbackContext = {
   pointKey?: string | null;
   metadata?: Record<string, unknown>;
 };
+type FloatingOverlay = "assistant" | "feedback" | null;
 type AreaId = "p" | "s" | "d" | "ds" | "f";
 type PeriodicArea = "s区" | "p区" | "d区" | "ds区" | "f区";
 type LearningRoute =
@@ -766,6 +767,7 @@ function LearningHomePanel({
   const [selectedPropertyKey, setSelectedPropertyKey] = useState<string>(initialPropertyKey || "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeOverlay, setActiveOverlay] = useState<FloatingOverlay>(null);
 
   useEffect(() => {
     setSelectedProfileId(profileId || null);
@@ -774,6 +776,10 @@ function LearningHomePanel({
   useEffect(() => {
     if (initialPropertyKey) setSelectedPropertyKey(initialPropertyKey);
   }, [initialPropertyKey]);
+
+  useEffect(() => {
+    setActiveOverlay(null);
+  }, [selectedProfileId, selectedPropertyKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -917,8 +923,20 @@ function LearningHomePanel({
           </section>
 
           <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />
-          {assistantEnabled && homeAssistantContext ? <StudentAiChat context={homeAssistantContext} /> : null}
-          {feedbackEnabled && feedbackContext ? <StudentFeedbackFab context={feedbackContext} /> : null}
+          {assistantEnabled && homeAssistantContext && activeOverlay !== "feedback" ? (
+            <StudentAiChat
+              context={homeAssistantContext}
+              open={activeOverlay === "assistant"}
+              onOpenChange={(isOpen) => setActiveOverlay(isOpen ? "assistant" : null)}
+            />
+          ) : null}
+          {feedbackEnabled && feedbackContext && activeOverlay !== "assistant" ? (
+            <StudentFeedbackFab
+              context={feedbackContext}
+              open={activeOverlay === "feedback"}
+              onOpenChange={(isOpen) => setActiveOverlay(isOpen ? "feedback" : null)}
+            />
+          ) : null}
         </>
       ) : null}
     </section>
@@ -1317,6 +1335,7 @@ function ExperimentDetailPanel({
   const [detail, setDetail] = useState<StudentExperimentDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeOverlay, setActiveOverlay] = useState<FloatingOverlay>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1336,6 +1355,10 @@ function ExperimentDetailPanel({
       cancelled = true;
     };
   }, [experimentId]);
+
+  useEffect(() => {
+    setActiveOverlay(null);
+  }, [experimentId, propertyKey, pointKey]);
 
   const video = detail?.videos.find((item) => pointKey && item.point_key === pointKey) || detail?.videos[0] || null;
   const effectivePointTitle = pointTitle || video?.point_title || detail?.video_candidates[0] || detail?.title || "实验点位";
@@ -1431,8 +1454,20 @@ function ExperimentDetailPanel({
             </button>
           </section>
           <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />
-          {assistantEnabled && detailAssistantContext ? <StudentAiChat context={detailAssistantContext} /> : null}
-          {feedbackEnabled && feedbackContext ? <StudentFeedbackFab context={feedbackContext} /> : null}
+          {assistantEnabled && detailAssistantContext && activeOverlay !== "feedback" ? (
+            <StudentAiChat
+              context={detailAssistantContext}
+              open={activeOverlay === "assistant"}
+              onOpenChange={(isOpen) => setActiveOverlay(isOpen ? "assistant" : null)}
+            />
+          ) : null}
+          {feedbackEnabled && feedbackContext && activeOverlay !== "assistant" ? (
+            <StudentFeedbackFab
+              context={feedbackContext}
+              open={activeOverlay === "feedback"}
+              onOpenChange={(isOpen) => setActiveOverlay(isOpen ? "feedback" : null)}
+            />
+          ) : null}
         </>
       ) : null}
     </section>
@@ -1511,13 +1546,31 @@ function AssistantSourceSummary({ metadata }: { metadata?: StudentAssistantFinal
   );
 }
 
-function StudentAiChat({ context }: { context: AssistantContext }) {
-  const [open, setOpen] = useState(false);
+function StudentAiChat({
+  context,
+  open: controlledOpen,
+  onOpenChange,
+}: {
+  context: AssistantContext;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [localOpen, setLocalOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("idle");
   const streamRef = useRef<HTMLDivElement>(null);
+  const open = controlledOpen ?? localOpen;
+
+  const setOpen = (nextOpen: boolean | ((current: boolean) => boolean)) => {
+    const resolved = typeof nextOpen === "function" ? nextOpen(open) : nextOpen;
+    if (onOpenChange) {
+      onOpenChange(resolved);
+    } else {
+      setLocalOpen(resolved);
+    }
+  };
 
   useEffect(() => {
     setMessages([]);
@@ -1692,13 +1745,31 @@ const feedbackTypes = [
   { value: "suggestion", label: "功能建议" },
 ];
 
-function StudentFeedbackFab({ context }: { context: FeedbackContext }) {
-  const [open, setOpen] = useState(false);
+function StudentFeedbackFab({
+  context,
+  open: controlledOpen,
+  onOpenChange,
+}: {
+  context: FeedbackContext;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [localOpen, setLocalOpen] = useState(false);
   const [feedbackType, setFeedbackType] = useState("content");
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const open = controlledOpen ?? localOpen;
+
+  const setOpen = (nextOpen: boolean | ((current: boolean) => boolean)) => {
+    const resolved = typeof nextOpen === "function" ? nextOpen(open) : nextOpen;
+    if (onOpenChange) {
+      onOpenChange(resolved);
+    } else {
+      setLocalOpen(resolved);
+    }
+  };
 
   useEffect(() => {
     setMessage("");

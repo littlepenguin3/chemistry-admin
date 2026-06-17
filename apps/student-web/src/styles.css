@@ -309,7 +309,7 @@ button {
   gap: 16px;
   width: min(100%, 720px);
   margin: 0 auto;
-  padding-bottom: 14px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
 .learning-topbar,
