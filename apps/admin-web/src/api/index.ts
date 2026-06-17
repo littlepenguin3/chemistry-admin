@@ -1017,10 +1017,20 @@ export type StudentAttempt = {
   question_id?: string;
   question_type?: Question["question_type"];
   stem?: string;
+  options?: Array<Record<string, unknown>>;
+  explanation?: string | null;
+  difficulty?: string | null;
+  attempt_kind?: string;
+  attempt_kind_label?: string;
   correct?: boolean | null;
   score?: number | null;
   submitted_answer?: unknown;
+  submitted_answer_value?: unknown;
   answer?: unknown;
+  correct_answer?: unknown;
+  related_chapter_ids?: string[];
+  related_knowledge_point_ids?: string[];
+  primary_points?: QuestionPoint[];
   metadata?: {
     primary_points?: QuestionPoint[];
     primary_point_keys?: string[];
@@ -1032,10 +1042,32 @@ export type StudentAttempt = {
   created_at?: string;
 };
 
+export type TeacherReportAiContent = {
+  text: string;
+  source: "ai" | "fallback";
+  mode: string;
+  generated_at?: string | null;
+};
+
+export type TeacherLatestPosttestReport = {
+  session_id: string;
+  completed_at?: string | null;
+  score?: number | null;
+  correct_count: number;
+  total_count: number;
+  experiments: Array<{ id: string; code?: string | null; title?: string | null }>;
+  attempts: StudentAttempt[];
+  wrong_answers: StudentAttempt[];
+  ai_summary?: TeacherReportAiContent | null;
+  ai_mistake_explanation?: TeacherReportAiContent | null;
+};
+
 export type StudentReport = {
   student?: Record<string, unknown>;
   progress?: Array<Record<string, unknown>>;
+  experiment_mastery?: Array<Record<string, unknown>>;
   attempts?: StudentAttempt[];
+  latest_posttest_report?: TeacherLatestPosttestReport | null;
   weak_points?: Array<Record<string, unknown>>;
   weak_video_points?: WeakVideoPointItem[];
   timeline?: Array<Record<string, unknown>>;

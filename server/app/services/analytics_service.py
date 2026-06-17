@@ -11,6 +11,55 @@ from server.app.auth import AuthUser
 from server.app.database import db_session
 from server.app.mastery import DEFAULT_EXPERIMENT_MASTERY_SCORE
 
+
+def _as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
+
+
+def _metadata(row: dict[str, Any]) -> dict[str, Any]:
+    value = row.get("metadata")
+    return value if isinstance(value, dict) else {}
+
+
+def _answer_value(value: Any) -> Any:
+    if isinstance(value, dict) and "value" in value:
+        return value.get("value")
+    return value
+
+
+def _submitted_answer_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return _answer_value(value.get("value", value))
+    return value
+
+
+def _correct_answer(row: dict[str, Any]) -> Any:
+    answer = row.get("answer") if isinstance(row.get("answer"), dict) else {}
+    question_type = str(row.get("question_type") or "")
+    if question_type in {"single_choice", "true_false"}:
+        return answer.get("value")
+    if question_type == "fill_blank":
+        return answer.get("accepted_answers") or []
+    return answer
+
+
+def _cached_ai_response(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or not value.get("text"):
+        return None
+    return {
+        "text": str(value.get("text") or ""),
+        "source": "ai" if value.get("source") == "ai" else "fallback",
+        "mode": str(value.get("mode") or "cached"),
+        "generated_at": value.get("generated_at"),
+    }
+
+
 def _teacher_can_access_class(user: AuthUser, class_id: str) -> bool:
     if user.role == "admin":
         return True
@@ -343,6 +392,85 @@ def get_class_dashboard(
     }
 
 
+def _attempt_kind_label(value: Any) -> str:
+    kind = str(value or "")
+    if kind == "posttest":
+        return "课后测试"
+    if kind == "pretest_stage1":
+        return "课前摸底 · 粗筛"
+    if kind == "pretest_stage2":
+        return "课前摸底 · 精诊"
+    if kind:
+        return kind
+    return "未标记"
+
+
+def _shape_attempt_for_teacher(attempt: dict[str, Any]) -> dict[str, Any]:
+    shaped = dict(attempt)
+    if shaped.get("id") is not None:
+        shaped["id"] = str(shaped["id"])
+    if shaped.get("question_id") is not None:
+        shaped["question_id"] = str(shaped["question_id"])
+    if shaped.get("score") is not None:
+        shaped["score"] = float(shaped["score"])
+    shaped["submitted_answer_value"] = _submitted_answer_value(shaped.get("submitted_answer"))
+    shaped["correct_answer"] = _correct_answer(shaped)
+    shaped["attempt_kind_label"] = _attempt_kind_label(shaped.get("attempt_kind"))
+    shaped["primary_points"] = _attempt_primary_points(shaped)
+    return shaped
+
+
+def _attempt_session_id(attempt: dict[str, Any]) -> str | None:
+    metadata = _metadata(attempt)
+    value = metadata.get("posttest_session_id")
+    return str(value) if value else None
+
+
+def _build_latest_posttest_report(row: dict[str, Any] | None, attempts: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not row:
+        return None
+    session_id = str(row["id"])
+    session_attempts = [attempt for attempt in attempts if _attempt_session_id(attempt) == session_id]
+    session_attempts.sort(key=lambda item: (str(item.get("created_at") or ""), str(item.get("id") or "")))
+    experiments: dict[str, dict[str, Any]] = {}
+    experiment_ids = [str(item) for item in _as_list(row.get("experiment_ids")) if str(item).strip()]
+    for attempt in session_attempts:
+        experiment_id = str(attempt.get("experiment_id") or "")
+        if not experiment_id:
+            continue
+        experiments.setdefault(
+            experiment_id,
+            {
+                "id": experiment_id,
+                "code": attempt.get("experiment_code"),
+                "title": attempt.get("experiment_title"),
+            },
+        )
+    ordered_experiments = [
+        experiments[experiment_id]
+        for experiment_id in experiment_ids
+        if experiment_id in experiments
+    ]
+    ordered_experiments.extend(
+        experiment
+        for experiment_id, experiment in experiments.items()
+        if experiment_id not in experiment_ids
+    )
+    metadata = _metadata(row)
+    return {
+        "session_id": session_id,
+        "completed_at": row.get("completed_at"),
+        "score": float(row["score"]) if row.get("score") is not None else None,
+        "correct_count": int(row.get("correct_count") or 0),
+        "total_count": int(row.get("total_count") or 0),
+        "experiments": ordered_experiments,
+        "attempts": session_attempts,
+        "wrong_answers": [attempt for attempt in session_attempts if attempt.get("correct") is False],
+        "ai_summary": _cached_ai_response(metadata.get("ai_summary")),
+        "ai_mistake_explanation": _cached_ai_response(metadata.get("ai_mistake_explanation")),
+    }
+
+
 def get_student_report(
     *,
     class_id: str,
@@ -359,15 +487,17 @@ def get_student_report(
                     FROM student_profiles sp
                     LEFT JOIN classes c ON c.id = sp.class_id
                     WHERE sp.student_id = :student_id
+                      AND sp.class_id = :class_id
                     UNION
                     SELECT re.student_id, re.student_name, re.class_id, c.class_name
                     FROM roster_entries re
                     LEFT JOIN classes c ON c.id = re.class_id
                     WHERE re.student_id = :student_id
+                      AND re.class_id = :class_id
                     LIMIT 1
                     """
                 ),
-                {"student_id": student_id},
+                {"student_id": student_id, "class_id": class_id},
             )
             .mappings()
             .first()
@@ -388,14 +518,59 @@ def get_student_report(
             for row in session.execute(
                 text(
                     """
-                    SELECT a.*, q.stem, q.related_knowledge_point_ids, q.metadata AS question_metadata,
-                           fe.code AS experiment_code, fe.title AS experiment_title
+                    SELECT a.*,
+                           q.stem,
+                           q.options,
+                           q.answer,
+                           q.explanation,
+                           q.difficulty,
+                           q.related_chapter_ids,
+                           q.related_knowledge_point_ids,
+                           q.metadata AS question_metadata,
+                           fe.code AS experiment_code,
+                           fe.title AS experiment_title,
+                           fe.metadata AS experiment_metadata
                     FROM experiment_question_attempts a
                     LEFT JOIN experiment_questions q ON q.id = a.question_id
                     LEFT JOIN formal_experiments fe ON fe.id = a.experiment_id
                     WHERE a.student_id = :student_id
+                      AND (a.class_id = :class_id OR a.class_id IS NULL)
                     ORDER BY a.created_at DESC
                     LIMIT 200
+                    """
+                ),
+                {"student_id": student_id, "class_id": class_id},
+            )
+            .mappings()
+            .all()
+        ]
+        latest_posttest = (
+            session.execute(
+                text(
+                    """
+                    SELECT *
+                    FROM student_posttest_sessions
+                    WHERE student_id = :student_id
+                      AND (class_id = :class_id OR class_id IS NULL)
+                      AND status = 'completed'
+                    ORDER BY completed_at DESC NULLS LAST, updated_at DESC, created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {"student_id": student_id, "class_id": class_id},
+            )
+            .mappings()
+            .first()
+        )
+        experiment_mastery = [
+            dict(row)
+            for row in session.execute(
+                text(
+                    """
+                    SELECT experiment_id, mastery_score, evidence_count, last_evidence_kind, updated_at
+                    FROM student_experiment_mastery
+                    WHERE student_id = :student_id
+                    ORDER BY updated_at DESC
                     """
                 ),
                 {"student_id": student_id},
@@ -420,6 +595,8 @@ def get_student_report(
             .mappings()
             .all()
         ]
+    attempts = [_shape_attempt_for_teacher(attempt) for attempt in attempts]
+    latest_posttest_report = _build_latest_posttest_report(dict(latest_posttest) if latest_posttest else None, attempts)
     weak_points: dict[str, dict[str, Any]] = {}
     weak_video_points: dict[str, dict[str, Any]] = {}
     for attempt in attempts:
@@ -452,7 +629,9 @@ def get_student_report(
     return {
         "student": dict(student),
         "progress": progress,
+        "experiment_mastery": experiment_mastery,
         "attempts": attempts,
+        "latest_posttest_report": latest_posttest_report,
         "weak_points": sorted(weak_points.values(), key=lambda row: row["incorrect_count"], reverse=True),
         "weak_video_points": sorted(weak_video_points.values(), key=lambda row: row["incorrect_count"], reverse=True),
         "timeline": timeline,
