@@ -547,6 +547,9 @@ export type Experiment = {
   title_en?: string;
   summary?: string;
   metadata?: Record<string, unknown>;
+  family_id?: string;
+  family_code?: string;
+  family_title?: string;
   status: "draft" | "published" | "archived";
   display_order: number;
   chapter_bindings: ChapterBinding[];
@@ -943,35 +946,59 @@ export type QuestionWorkbenchSession = {
   updated_at?: string;
 };
 
+export type AnalyticsExperimentState = {
+  status: string;
+  completion_percent: number;
+  best_score: number | null;
+  mastery_score: number;
+  score: number;
+  has_mastery: boolean;
+  evidence_count: number;
+  attempt_count: number;
+};
+
+export type AnalyticsExperimentGroup = {
+  id: string;
+  code?: string;
+  title: string;
+  raw_title?: string;
+  experiment_ids: string[];
+  experiment_count: number;
+};
+
+export type AnalyticsExperimentGroupState = {
+  status: string;
+  mastery_score: number;
+  score: number;
+  has_mastery: boolean;
+  evidence_experiment_count: number;
+  experiment_count: number;
+  evidence_count: number;
+  attempt_count: number;
+  lowest_experiment_id?: string | null;
+  lowest_experiment_score?: number | null;
+};
+
 export type AnalyticsDashboard = {
   class_id: string;
   metrics: {
     class_size: number;
     active_students: number;
     published_experiments: number;
+    published_experiment_groups?: number;
     completion_rate: number;
     average_score: number;
     missing_students: number;
   };
   experiments: Experiment[];
+  experiment_groups?: AnalyticsExperimentGroup[];
   matrix: Array<{
     student_id: string;
     student_name: string;
     status?: string;
     average_score?: number;
-    experiments: Record<
-      string,
-      {
-        status: string;
-        completion_percent: number;
-        best_score: number | null;
-        mastery_score: number;
-        score: number;
-        has_mastery: boolean;
-        evidence_count: number;
-        attempt_count: number;
-      }
-    >;
+    experiments: Record<string, AnalyticsExperimentState>;
+    experiment_groups?: Record<string, AnalyticsExperimentGroupState>;
   }>;
   recent_activity: Array<Record<string, unknown>>;
   missing_students: Array<Record<string, unknown>>;
@@ -1068,6 +1095,7 @@ export type StudentReport = {
   experiment_mastery?: Array<Record<string, unknown>>;
   attempts?: StudentAttempt[];
   latest_posttest_report?: TeacherLatestPosttestReport | null;
+  posttest_reports?: TeacherLatestPosttestReport[];
   weak_points?: Array<Record<string, unknown>>;
   weak_video_points?: WeakVideoPointItem[];
   timeline?: Array<Record<string, unknown>>;

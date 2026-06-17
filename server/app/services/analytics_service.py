@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from typing import Any
 
 from fastapi import HTTPException, Response, status
@@ -58,6 +59,60 @@ def _cached_ai_response(value: Any) -> dict[str, Any] | None:
         "mode": str(value.get("mode") or "cached"),
         "generated_at": value.get("generated_at"),
     }
+
+
+def _clean_experiment_group_title(value: Any) -> str:
+    title = str(value or "").strip()
+    title = re.sub(r"^实验\s*\d+\s*-\s*\d+\s*", "", title).strip()
+    title = re.sub(r"^（[^）]+）\s*", "", title).strip()
+    return title
+
+
+def _experiment_group_info(experiment: dict[str, Any]) -> dict[str, str]:
+    metadata = _metadata(experiment)
+    parent_code = str(metadata.get("parent_code") or "").strip()
+    raw_title = (
+        metadata.get("parent_title")
+        or metadata.get("outline_group")
+        or metadata.get("module_display_title")
+        or metadata.get("module_title")
+        or ""
+    )
+    title = _clean_experiment_group_title(raw_title)
+    if not title:
+        title = parent_code or str(experiment.get("code") or experiment.get("id") or "未分组")
+    group_id = parent_code or title
+    return {"id": group_id, "code": parent_code, "title": title, "raw_title": str(raw_title or "")}
+
+
+def _attach_experiment_group(experiment: dict[str, Any]) -> dict[str, Any]:
+    group = _experiment_group_info(experiment)
+    return {
+        **experiment,
+        "family_id": group["id"],
+        "family_code": group["code"],
+        "family_title": group["title"],
+    }
+
+
+def _build_experiment_groups(experiments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[str, dict[str, Any]] = {}
+    for experiment in experiments:
+        group = _experiment_group_info(experiment)
+        item = groups.setdefault(
+            group["id"],
+            {
+                "id": group["id"],
+                "code": group["code"],
+                "title": group["title"],
+                "raw_title": group["raw_title"],
+                "experiment_ids": [],
+                "experiment_count": 0,
+            },
+        )
+        item["experiment_ids"].append(experiment["id"])
+        item["experiment_count"] += 1
+    return list(groups.values())
 
 
 def _teacher_can_access_class(user: AuthUser, class_id: str) -> bool:
@@ -254,9 +309,10 @@ def get_class_dashboard(
     with db_session() as session:
         students = _class_students(session, class_id)
         student_ids = [str(student["student_id"]) for student in students]
-        experiments = _list_experiments(status_filter="published")
+        experiments = [_attach_experiment_group(item) for item in _list_experiments(status_filter="published")]
         if experiment_id:
             experiments = [item for item in experiments if item["id"] == experiment_id]
+        experiment_groups = _build_experiment_groups(experiments)
         progress_rows = [
             dict(row)
             for row in session.execute(
@@ -331,12 +387,14 @@ def get_class_dashboard(
     progress_by_key = {(row["student_id"], row["experiment_id"]): row for row in progress_rows}
     attempts_by_key = {(row["student_id"], row["experiment_id"]): row for row in attempt_rows}
     mastery_by_key = {(row["student_id"], row["experiment_id"]): row for row in mastery_rows}
+    groups_by_id = {group["id"]: group for group in experiment_groups}
     matrix: list[dict[str, Any]] = []
     completed_cells = 0
     scored_cells: list[float] = []
     active_students: set[str] = set()
     for student in students:
         experiment_states: dict[str, Any] = {}
+        group_states: dict[str, Any] = {}
         student_scores: list[float] = []
         for experiment in experiments:
             key = (student["student_id"], experiment["id"])
@@ -366,11 +424,46 @@ def get_class_dashboard(
                 "evidence_count": int(mastery["evidence_count"]) if mastery else 0,
                 "attempt_count": int(attempt["attempt_count"]) if attempt else 0,
             }
+        for group_id, group in groups_by_id.items():
+            experiment_ids = [str(item) for item in group["experiment_ids"]]
+            states = [experiment_states[experiment_id] for experiment_id in experiment_ids if experiment_id in experiment_states]
+            scores = [float(state["mastery_score"]) for state in states]
+            mastery_score = round(sum(scores) / len(scores), 2) if scores else DEFAULT_EXPERIMENT_MASTERY_SCORE
+            evidence_experiment_count = sum(1 for state in states if state["has_mastery"])
+            evidence_count = sum(int(state["evidence_count"]) for state in states)
+            attempt_count = sum(int(state["attempt_count"]) for state in states)
+            lowest_experiment_id = None
+            lowest_experiment_score = None
+            if states:
+                lowest_experiment_id, lowest_state = min(
+                    ((experiment_id, experiment_states[experiment_id]) for experiment_id in experiment_ids if experiment_id in experiment_states),
+                    key=lambda item: float(item[1]["mastery_score"]),
+                )
+                lowest_experiment_score = float(lowest_state["mastery_score"])
+            group_states[group_id] = {
+                "status": "not_started"
+                if evidence_experiment_count == 0
+                else "needs_attention"
+                if mastery_score < 60
+                else "completed"
+                if evidence_experiment_count == len(states)
+                else "in_progress",
+                "mastery_score": mastery_score,
+                "score": mastery_score,
+                "has_mastery": evidence_experiment_count > 0,
+                "evidence_experiment_count": evidence_experiment_count,
+                "experiment_count": len(states),
+                "evidence_count": evidence_count,
+                "attempt_count": attempt_count,
+                "lowest_experiment_id": lowest_experiment_id,
+                "lowest_experiment_score": lowest_experiment_score,
+            }
         matrix.append(
             {
                 **student,
                 "average_score": round(sum(student_scores) / len(student_scores), 2) if student_scores else 0,
                 "experiments": experiment_states,
+                "experiment_groups": group_states,
             }
         )
     total_cells = max(1, len(students) * len(experiments))
@@ -381,11 +474,13 @@ def get_class_dashboard(
             "class_size": len(students),
             "active_students": len(active_students),
             "published_experiments": len(experiments),
+            "published_experiment_groups": len(experiment_groups),
             "completion_rate": round(100 * completed_cells / total_cells, 2),
             "average_score": round(sum(scored_cells) / len(scored_cells), 2) if scored_cells else 0,
             "missing_students": len(missing_students),
         },
         "experiments": experiments,
+        "experiment_groups": experiment_groups,
         "matrix": matrix,
         "recent_activity": recent,
         "missing_students": missing_students,
@@ -536,7 +631,7 @@ def get_student_report(
                     WHERE a.student_id = :student_id
                       AND (a.class_id = :class_id OR a.class_id IS NULL)
                     ORDER BY a.created_at DESC
-                    LIMIT 200
+                    LIMIT 1000
                     """
                 ),
                 {"student_id": student_id, "class_id": class_id},
@@ -544,8 +639,9 @@ def get_student_report(
             .mappings()
             .all()
         ]
-        latest_posttest = (
-            session.execute(
+        posttest_sessions = [
+            dict(row)
+            for row in session.execute(
                 text(
                     """
                     SELECT *
@@ -554,14 +650,14 @@ def get_student_report(
                       AND (class_id = :class_id OR class_id IS NULL)
                       AND status = 'completed'
                     ORDER BY completed_at DESC NULLS LAST, updated_at DESC, created_at DESC
-                    LIMIT 1
+                    LIMIT 50
                     """
                 ),
                 {"student_id": student_id, "class_id": class_id},
             )
             .mappings()
-            .first()
-        )
+            .all()
+        ]
         experiment_mastery = [
             dict(row)
             for row in session.execute(
@@ -596,7 +692,9 @@ def get_student_report(
             .all()
         ]
     attempts = [_shape_attempt_for_teacher(attempt) for attempt in attempts]
-    latest_posttest_report = _build_latest_posttest_report(dict(latest_posttest) if latest_posttest else None, attempts)
+    posttest_reports = [_build_latest_posttest_report(row, attempts) for row in posttest_sessions]
+    posttest_reports = [report for report in posttest_reports if report is not None]
+    latest_posttest_report = posttest_reports[0] if posttest_reports else None
     weak_points: dict[str, dict[str, Any]] = {}
     weak_video_points: dict[str, dict[str, Any]] = {}
     for attempt in attempts:
@@ -632,6 +730,7 @@ def get_student_report(
         "experiment_mastery": experiment_mastery,
         "attempts": attempts,
         "latest_posttest_report": latest_posttest_report,
+        "posttest_reports": posttest_reports,
         "weak_points": sorted(weak_points.values(), key=lambda row: row["incorrect_count"], reverse=True),
         "weak_video_points": sorted(weak_video_points.values(), key=lambda row: row["incorrect_count"], reverse=True),
         "timeline": timeline,
@@ -765,23 +864,75 @@ def export_class_report_response(
     dashboard = get_class_dashboard(class_id=class_id, user=user)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["class_id", "student_id", "student_name", "experiment_id", "experiment_code", "mastery_score"])
+    writer.writerow(
+        [
+            "record_type",
+            "class_id",
+            "student_id",
+            "student_name",
+            "family_id",
+            "family_title",
+            "family_score",
+            "family_evidence_experiments",
+            "family_experiment_count",
+            "experiment_id",
+            "experiment_code",
+            "experiment_title",
+            "experiment_score",
+            "experiment_has_mastery",
+            "experiment_evidence_count",
+            "experiment_attempt_count",
+        ]
+    )
     experiments_by_id = {item["id"]: item for item in dashboard["experiments"]}
+    groups_by_id = {item["id"]: item for item in dashboard["experiment_groups"]}
     for student in dashboard["matrix"]:
+        for group_id, state in student.get("experiment_groups", {}).items():
+            group = groups_by_id.get(group_id, {})
+            writer.writerow(
+                [
+                    "family_summary",
+                    class_id,
+                    student["student_id"],
+                    student["student_name"],
+                    group_id,
+                    group.get("title"),
+                    state.get("mastery_score", DEFAULT_EXPERIMENT_MASTERY_SCORE),
+                    state.get("evidence_experiment_count", 0),
+                    state.get("experiment_count", 0),
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                ]
+            )
         for experiment_id, state in student["experiments"].items():
             experiment = experiments_by_id.get(experiment_id, {})
             writer.writerow(
                 [
+                    "experiment_detail",
                     class_id,
                     student["student_id"],
                     student["student_name"],
+                    experiment.get("family_id"),
+                    experiment.get("family_title"),
+                    "",
+                    "",
+                    "",
                     experiment_id,
                     experiment.get("code"),
+                    experiment.get("title"),
                     state.get("mastery_score", DEFAULT_EXPERIMENT_MASTERY_SCORE),
+                    state.get("has_mastery", False),
+                    state.get("evidence_count", 0),
+                    state.get("attempt_count", 0),
                 ]
             )
     return Response(
-        content=output.getvalue(),
+        content="\ufeff" + output.getvalue(),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="class-{class_id}-experiment-report.csv"'},
+        headers={"Content-Disposition": f'attachment; filename="class-{class_id}-learning-analytics.csv"'},
     )

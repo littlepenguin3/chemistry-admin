@@ -450,6 +450,87 @@ button.analytics-score-pill:focus-visible {
   outline: none;
 }
 
+.analytics-family-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.analytics-family-info-button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--sysu-line);
+  border-radius: 50%;
+  color: var(--sysu-muted);
+  background: #fff;
+  cursor: help;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.analytics-family-info-button:hover,
+.analytics-family-info-button:focus-visible {
+  color: var(--sysu-primary);
+  border-color: rgba(0, 88, 38, 0.28);
+  outline: none;
+}
+
+.analytics-family-preview {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.analytics-family-preview-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.analytics-family-preview-list {
+  max-height: 320px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.analytics-family-preview-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--sysu-line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.analytics-family-preview-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-family-preview-row strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-family-preview-row em {
+  color: var(--sysu-muted);
+  font-style: normal;
+  font-size: 11px;
+}
+
+.analytics-family-preview-row.is-default {
+  border-style: dashed;
+  background: var(--sysu-panel);
+}
+
 .analytics-score-pill.is-default {
   border-style: dashed;
   opacity: 0.78;
@@ -481,6 +562,10 @@ button.analytics-score-pill:focus-visible {
 
 .analytics-drawer-content {
   min-width: 0;
+}
+
+.analytics-report-select {
+  width: 100%;
 }
 
 .analytics-report-summary,
@@ -518,6 +603,39 @@ button.analytics-score-pill:focus-visible {
 .analytics-drawer-content .ant-card-small > .ant-card-body {
   white-space: pre-wrap;
   line-height: 1.7;
+}
+
+.analytics-report-link {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--sysu-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--sysu-ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.analytics-report-link:hover,
+.analytics-report-link:focus-visible {
+  border-color: rgba(0, 88, 38, 0.28);
+  background: var(--sysu-soft);
+  outline: none;
+}
+
+.analytics-report-link span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-report-link strong {
+  white-space: nowrap;
 }
 
 .compact-form-grid {
