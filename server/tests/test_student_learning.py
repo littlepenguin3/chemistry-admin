@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from sqlalchemy.exc import SQLAlchemyError
+
+from server.app.auth import AuthUser
 from server.app.services.student_learning_service import (
     _areas_for_groups,
     _build_parent_groups,
     _choose_recommendation,
+    _latest_pretest_area_id,
+    _lowest_mastery_chapter_id,
+    _record_learning_event,
     validate_student_learning_profiles,
 )
 from server.tests.route_helpers import assert_route
@@ -39,6 +45,17 @@ def _experiment(
     }
 
 
+class _FailingSession:
+    def __init__(self) -> None:
+        self.rolled_back = False
+
+    def execute(self, *_args, **_kwargs):
+        raise SQLAlchemyError("missing optional student learning table")
+
+    def rollback(self) -> None:
+        self.rolled_back = True
+
+
 def test_student_learning_routes_are_registered() -> None:
     assert_route("/api/student/learning-home", "GET")
     assert_route("/api/student/learning-page", "GET")
@@ -52,6 +69,33 @@ def test_student_learning_profile_seed_is_valid() -> None:
     assert result["ok"] is True
     assert result["profile_count"] == 9
     assert result["enabled_profile_count"] == 9
+
+
+def test_student_learning_recommendation_tables_are_optional() -> None:
+    pretest_session = _FailingSession()
+    mastery_session = _FailingSession()
+
+    assert _latest_pretest_area_id(pretest_session, "20240001") is None
+    assert pretest_session.rolled_back is True
+    assert _lowest_mastery_chapter_id(mastery_session, student_id="20240001", area_id="p") is None
+    assert mastery_session.rolled_back is True
+
+
+def test_student_learning_event_recording_is_best_effort() -> None:
+    session = _FailingSession()
+    user = AuthUser(
+        id="00000000-0000-0000-0000-000000000000",
+        username="20240001",
+        role="student",
+        display_name="Student",
+        status="active",
+        must_change_password=False,
+        student_id="20240001",
+    )
+
+    _record_learning_event(session, user=user, event_type="learning_profile_opened", chapter_id="CH13")
+
+    assert session.rolled_back is True
 
 
 def test_parent_groups_follow_experiment_parent_titles_and_hide_empty_f_area() -> None:

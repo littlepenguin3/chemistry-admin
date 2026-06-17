@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from server.app.auth import AuthUser
 from server.app.config import ROOT, get_settings
@@ -411,23 +412,29 @@ def _load_published_experiments(session: Any) -> list[dict[str, Any]]:
 
 
 def _latest_pretest_area_id(session: Any, student_id: str) -> str | None:
-    row = (
-        session.execute(
-            text(
-                """
-                SELECT weakest_area
-                FROM student_pretest_sessions
-                WHERE student_id = :student_id
-                  AND status = 'completed'
-                ORDER BY completed_at DESC NULLS LAST, updated_at DESC, created_at DESC
-                LIMIT 1
-                """
-            ),
-            {"student_id": student_id},
+    try:
+        row = (
+            session.execute(
+                text(
+                    """
+                    SELECT weakest_area
+                    FROM student_pretest_sessions
+                    WHERE student_id = :student_id
+                      AND status = 'completed'
+                    ORDER BY completed_at DESC NULLS LAST, updated_at DESC, created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {"student_id": student_id},
+            )
+            .mappings()
+            .first()
         )
-        .mappings()
-        .first()
-    )
+    except SQLAlchemyError:
+        # Compatibility barrier: the learning page must still open while the
+        # pretest/learning-report branch is absent from a local database.
+        session.rollback()
+        return None
     if not row:
         return None
     return PRETEST_AREA_IDS.get(str(row.get("weakest_area") or ""))
@@ -437,24 +444,30 @@ def _lowest_mastery_chapter_id(session: Any, *, student_id: str, area_id: str) -
     chapter_ids = [chapter_id for chapter_id, chapter in CHAPTER_AREA_MAP.items() if chapter.get("area_id") == area_id]
     if not chapter_ids:
         return None
-    row = (
-        session.execute(
-            text(
-                """
-                SELECT kp.chapter_id, sm.mastery_score
-                FROM student_mastery sm
-                JOIN knowledge_points kp ON kp.id = sm.knowledge_point_id
-                WHERE sm.student_id = :student_id
-                  AND kp.chapter_id = ANY(:chapter_ids)
-                ORDER BY sm.mastery_score ASC, kp.chapter_id ASC, kp.id ASC
-                LIMIT 1
-                """
-            ),
-            {"student_id": student_id, "chapter_ids": chapter_ids},
+    try:
+        row = (
+            session.execute(
+                text(
+                    """
+                    SELECT kp.chapter_id, sm.mastery_score
+                    FROM student_mastery sm
+                    JOIN knowledge_points kp ON kp.id = sm.knowledge_point_id
+                    WHERE sm.student_id = :student_id
+                      AND kp.chapter_id = ANY(:chapter_ids)
+                    ORDER BY sm.mastery_score ASC, kp.chapter_id ASC, kp.id ASC
+                    LIMIT 1
+                    """
+                ),
+                {"student_id": student_id, "chapter_ids": chapter_ids},
+            )
+            .mappings()
+            .first()
         )
-        .mappings()
-        .first()
-    )
+    except SQLAlchemyError:
+        # Compatibility barrier: recommendation is optional; seed-backed
+        # learning content is the source of truth for this page.
+        session.rollback()
+        return None
     return str(row["chapter_id"]) if row else None
 
 
@@ -547,42 +560,45 @@ def _record_learning_event(
     experiment_id: str | None = None,
     chapter_id: str | None = None,
 ) -> None:
-    _ensure_student_row(session, user)
-    session.execute(
-        text(
-            """
-            INSERT INTO student_events (
-              student_id, event_type, chapter_id, experiment_id, metadata, created_at
-            )
-            VALUES (
-              :student_id,
-              :event_type,
-              :chapter_id,
-              CASE
-                WHEN CAST(:experiment_id AS text) IS NOT NULL
-                 AND EXISTS (SELECT 1 FROM experiments e WHERE e.id = CAST(:experiment_id AS text))
-                THEN CAST(:experiment_id AS text)
-                ELSE NULL
-              END,
-              CAST(:metadata AS jsonb),
-              now()
-            )
-            """
-        ),
-        {
-            "student_id": _student_id(user),
-            "event_type": event_type,
-            "chapter_id": chapter_id,
-            "experiment_id": experiment_id,
-            "metadata": _json(
-                {
-                    "area_id": area_id,
-                    "parent_code": parent_code,
-                    "experiment_id": experiment_id,
-                }
+    try:
+        _ensure_student_row(session, user)
+        session.execute(
+            text(
+                """
+                INSERT INTO student_events (
+                  student_id, event_type, chapter_id, experiment_id, metadata, created_at
+                )
+                VALUES (
+                  :student_id,
+                  :event_type,
+                  :chapter_id,
+                  CASE
+                    WHEN CAST(:experiment_id AS text) IS NOT NULL
+                     AND EXISTS (SELECT 1 FROM experiments e WHERE e.id = CAST(:experiment_id AS text))
+                    THEN CAST(:experiment_id AS text)
+                    ELSE NULL
+                  END,
+                  CAST(:metadata AS jsonb),
+                  now()
+                )
+                """
             ),
-        },
-    )
+            {
+                "student_id": _student_id(user),
+                "event_type": event_type,
+                "chapter_id": chapter_id,
+                "experiment_id": experiment_id,
+                "metadata": _json(
+                    {
+                        "area_id": area_id,
+                        "parent_code": parent_code,
+                        "experiment_id": experiment_id,
+                    }
+                ),
+            },
+        )
+    except SQLAlchemyError:
+        session.rollback()
 
 
 def get_student_learning_home(user: AuthUser) -> StudentLearningHomeResponse:
