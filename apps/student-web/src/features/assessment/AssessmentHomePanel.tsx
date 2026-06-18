@@ -1,18 +1,15 @@
 import { ClipboardList } from "lucide-react";
+import { MobileEmptyState } from "../../mobile/primitives";
 
 export function AssessmentHomePanel() {
   return (
     <section className="learning-panel assessment-home-panel" aria-label="测评">
-      <section className="tab-empty-card">
-        <span className="panel-icon">
-          <ClipboardList size={20} />
-        </span>
+      <MobileEmptyState className="empty-learning-card assessment-empty-state" icon={<ClipboardList size={20} />}>
         <div>
-          <p>当前测评</p>
-          <h2>完成章节学习后进入后测</h2>
-          <span>后测会根据本次学习的实验点生成，完成后这里会显示报告和错题讲解。</span>
+          <strong>完成章节学习后进入后测</strong>
+          <small>完成后这里会显示报告和错题讲解。</small>
         </div>
-      </section>
+      </MobileEmptyState>
     </section>
   );
 }

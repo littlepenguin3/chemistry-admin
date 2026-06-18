@@ -29,7 +29,7 @@ button {
 .app-shell {
   position: relative;
   min-height: 100vh;
-  padding: var(--mobile-shell-top) 18px var(--mobile-shell-bottom);
+  padding: var(--mobile-shell-top) var(--mobile-shell-inline) var(--mobile-shell-bottom);
   overflow: hidden;
   background:
     linear-gradient(90deg, rgba(0, 88, 38, 0.08) 1px, transparent 1px),

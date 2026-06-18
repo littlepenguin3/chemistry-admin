@@ -432,9 +432,13 @@
 }
 
 .chapter-view-switcher {
+  position: sticky;
+  top: calc(var(--student-app-header-height) + var(--student-app-header-gap));
+  z-index: 18;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
+  margin: 0 0 var(--student-app-header-gap);
   min-height: 48px;
   border: 1px solid rgba(0, 88, 38, 0.14);
   border-radius: 999px;

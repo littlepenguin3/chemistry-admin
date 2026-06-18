@@ -1,5 +1,6 @@
 .learning-shell {
   overflow: visible;
+  padding: 0;
 }
 
 .learning-panel {
@@ -13,35 +14,46 @@
 }
 
 .student-app-shell {
+  --student-app-header-height: calc(56px + env(safe-area-inset-top, 0px));
+  --student-app-header-gap: var(--mobile-space-3);
+
   position: relative;
   z-index: var(--mobile-z-content);
   display: grid;
-  gap: 14px;
-  width: min(100%, var(--mobile-content-max));
-  margin: 0 auto;
+  align-content: start;
+  gap: var(--student-app-header-gap);
+  width: 100%;
+  min-height: 100dvh;
+  margin: 0;
   padding-bottom: var(--mobile-bottom-action-space);
 }
 
 .student-app-header {
   position: sticky;
-  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  top: 0;
   z-index: 19;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
-  min-height: 58px;
-  border: 1px solid rgba(0, 88, 38, 0.14);
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: rgba(255, 253, 246, 0.94);
-  box-shadow: 0 12px 28px rgba(21, 49, 34, 0.12);
+  min-height: var(--student-app-header-height);
+  border-bottom: 1px solid rgba(0, 88, 38, 0.14);
+  padding: calc(8px + env(safe-area-inset-top, 0px)) var(--mobile-content-inline) 8px;
+  background: rgba(255, 253, 246, 0.98);
+  box-shadow: 0 9px 24px rgba(21, 49, 34, 0.12);
   backdrop-filter: blur(14px);
 }
 
+.student-app-header.has-actions {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.student-app-header > div:first-child {
+  min-width: 0;
+}
+
 .student-app-header p,
-.student-app-header h1,
-.student-app-header span {
+.student-app-header h1 {
   margin: 0;
 }
 
@@ -59,17 +71,39 @@
   line-height: 1.08;
 }
 
-.student-app-header > span {
-  max-width: 112px;
-  overflow: hidden;
+.student-app-header-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 3px;
+  min-width: 0;
+}
+
+.student-app-header-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 36px;
+  border: 0;
   border-radius: 8px;
-  padding: 8px 9px;
-  color: var(--green);
-  background: rgba(0, 88, 38, 0.08);
+  padding: 0 9px;
+  color: #ffffff;
+  background: rgba(0, 88, 38, 0.78);
+  box-shadow: 0 8px 16px rgba(0, 88, 38, 0.16);
   font-size: 12px;
   font-weight: 900;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.student-app-header-action svg {
+  flex: 0 0 auto;
+  color: currentColor;
+  stroke-width: 2.4;
+}
+
+.student-app-header-action:active {
+  transform: translateY(1px);
 }
 
 .app-config-hint {
@@ -79,6 +113,9 @@
 
 .student-tab-content {
   display: grid;
+  width: min(100%, var(--mobile-content-max));
+  margin: 0 auto;
+  padding: 0 18px;
   min-width: 0;
 }
 
@@ -89,21 +126,19 @@
 
 .student-bottom-nav {
   position: fixed;
-  right: 50%;
-  bottom: max(8px, env(safe-area-inset-bottom));
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: var(--mobile-z-floating);
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: 2px;
-  width: min(calc(100vw - 24px), var(--mobile-content-max));
-  min-height: var(--mobile-bottom-nav-height);
-  border: 1px solid rgba(0, 88, 38, 0.16);
-  border-radius: 8px;
-  padding: 7px;
-  background: rgba(255, 253, 246, 0.96);
-  box-shadow: 0 16px 40px rgba(21, 49, 34, 0.2);
-  transform: translateX(50%);
+  min-height: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(0, 88, 38, 0.16);
+  padding: 5px var(--mobile-chrome-inline) calc(5px + env(safe-area-inset-bottom)) var(--mobile-chrome-inline);
+  background: rgba(255, 253, 246, 0.98);
+  box-shadow: 0 -10px 28px rgba(21, 49, 34, 0.16);
   backdrop-filter: blur(18px);
 }
 
@@ -113,7 +148,7 @@
   place-items: center;
   gap: 3px;
   min-width: 0;
-  min-height: 58px;
+  min-height: 54px;
   border: 0;
   border-radius: 8px;
   color: var(--muted);
@@ -304,18 +339,6 @@
 
 .assistant-intro-card {
   grid-template-columns: auto minmax(0, 1fr) 38px;
-}
-
-.assistant-context-clear {
-  display: inline-grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border: 0;
-  border-radius: 8px;
-  color: var(--green);
-  background: rgba(0, 88, 38, 0.08);
-  cursor: pointer;
 }
 
 .learning-topbar,

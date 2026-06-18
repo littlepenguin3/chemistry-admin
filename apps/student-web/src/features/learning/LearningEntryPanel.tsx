@@ -10,7 +10,7 @@ import { formatChapterEntryTitle, formatRecommendedAreaCueLabel } from "./learni
 export function LearningEntryPanel({
   onSelectProfile,
 }: {
-  onSelectProfile: (profileId: string) => void;
+  onSelectProfile: (profile: StudentLearningPageResponse["profiles"][number]) => void;
 }) {
   const [page, setPage] = useState<StudentLearningPageResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,12 +66,6 @@ export function LearningEntryPanel({
       {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
       {!loading && !error ? (
         <>
-          <section className="chapter-entry-hero">
-            <p>元素周期表</p>
-            <h2>选择本次学习的元素族</h2>
-            <span>先从周期表定位章节，再进入该族的元素特性、通性规律和实验点位学习。</span>
-          </section>
-
           <PeriodicTable
             selectedArea={selectedArea}
             recommendedArea={recommendedArea}
@@ -100,7 +94,7 @@ export function LearningEntryPanel({
                       className={isRecommended ? "chapter-entry-card recommended" : "chapter-entry-card"}
                       key={profile.profile_id}
                       type="button"
-                      onClick={() => onSelectProfile(profile.profile_id)}
+                      onClick={() => onSelectProfile(profile)}
                     >
                       <div className="chapter-entry-title">
                         <strong>{chapterEntryTitle}</strong>

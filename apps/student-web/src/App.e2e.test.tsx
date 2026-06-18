@@ -63,6 +63,15 @@ vi.mock("./api", () => ({
   errorMessage: (error: unknown) => (error instanceof Error ? error.message : "请求失败，请稍后重试"),
 }));
 
+vi.mock("./features/atom-viewer/AtomViewerZdog", () => ({
+  AtomViewerZdog: ({ element, mode }: { element: { name: string }; mode: "bohr" | "orbital" }) => (
+    <figure className="atom-viewer">
+      <canvas className="atom-canvas" aria-label={`${element.name}${mode === "bohr" ? "电子层" : "轨道"}模型`} />
+      <figcaption className="atom-hint">拖动旋转模型</figcaption>
+    </figure>
+  ),
+}));
+
 const user: AuthUser = {
   id: "student-user-e2e",
   username: "20249999",
@@ -179,6 +188,14 @@ const learningPage: StudentLearningPageResponse = {
         symbol: "Cl",
         name: "氯",
         atomic_number: 17,
+        relative_atomic_mass: "35.45",
+        group: "17",
+        period: 3,
+        block: "p",
+        state_at_20c: "Gas",
+        density: "0.002898 g/cm3",
+        rsc_url: "https://periodic-table.rsc.org/element/17/chlorine",
+        fact_source: "Royal Society of Chemistry Periodic Table",
         state: "气体",
         group_label: "第 17 族",
         electron_configuration: "[Ne]3s2 3p5",
@@ -189,6 +206,14 @@ const learningPage: StudentLearningPageResponse = {
         symbol: "Br",
         name: "溴",
         atomic_number: 35,
+        relative_atomic_mass: "79.904",
+        group: "17",
+        period: 4,
+        block: "p",
+        state_at_20c: "Liquid",
+        density: "3.11 g/cm3",
+        rsc_url: "https://periodic-table.rsc.org/element/35/bromine",
+        fact_source: "Royal Society of Chemistry Periodic Table",
         state: "液体",
         group_label: "第 17 族",
         electron_configuration: "[Ar]3d10 4s2 4p5",
@@ -419,6 +444,23 @@ describe("student app e2e flow", () => {
     apiMocks.submitStudentPosttest.mockResolvedValue({ status: "completed", report });
     apiMocks.generatePosttestAiSummary.mockResolvedValue(aiSummary);
     apiMocks.explainPosttestMistakes.mockResolvedValue(aiMistakeExplanation);
+    apiMocks.streamStudentAssistantAsk.mockImplementation(async (_payload, onEvent) => {
+      onEvent({ event: "status", message: "正在检索课程资料" });
+      onEvent({
+        event: "delta",
+        delta: String.raw`### 回答思路
+
+- **现象**：CCl4 层变橙红色通常说明生成了 $\ce{Br2}$。`,
+      });
+      onEvent({
+        event: "final",
+        response: {
+          text: "",
+          source_count: 1,
+          sources: [{ title: "卤素置换实验资料", section: "实验现象", chunk_id: "halogen-displacement" }],
+        },
+      });
+    });
     apiMocks.submitStudentFeedback.mockResolvedValue({ id: "feedback-e2e", status: "open", attachment_count: 0 });
   });
 
@@ -446,6 +488,53 @@ describe("student app e2e flow", () => {
     expect(await screen.findByRole("heading", { name: "问答" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "AI 学习助手对话" })).toBeInTheDocument();
     expect(screen.getByText("可以询问课程知识、实验现象、复习顺序和错题思路。")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "课程问答" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("tab", { name: "实验点位" }));
+    expect(await screen.findByText("从实验点位开始")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /实验 19-1 卤素/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /19-1-01/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /氯水 \+ KBr 溶液 \+ CCl4/ }));
+    fireEvent.click(screen.getByRole("button", { name: /背后原理/ }));
+    fireEvent.click(screen.getByRole("button", { name: "发送点位问题" }));
+    await waitFor(() => expect(apiMocks.streamStudentAssistantAsk).toHaveBeenCalledTimes(1));
+    const pointPayload = apiMocks.streamStudentAssistantAsk.mock.calls[0][0];
+    expect(pointPayload).toEqual(
+      expect.objectContaining({
+        context_type: "learning_point",
+        chapter_id: "CH17",
+        experiment_id: "EXP_19_1_01",
+        point_key: expect.stringContaining("candidate:1:氯水 + KBr 溶液 + CCl4"),
+        context_summary: expect.stringContaining("点位：氯水 + KBr 溶液 + CCl4"),
+        question: expect.stringContaining("背后的化学原理"),
+      }),
+    );
+    await waitFor(() => expect(document.querySelector(".ai-message.assistant .ai-md-list")).not.toBeNull());
+    expect(document.querySelector(".ai-message.assistant .katex")).not.toBeNull();
+    expect(document.querySelector(".ai-chat-status")).toBeNull();
+    expect(screen.getByText("完成")).toBeInTheDocument();
+    expect(screen.getByText("引用来源 1")).toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole("button", { name: "我的" }));
+    expect(await screen.findByRole("heading", { name: "我的" })).toBeInTheDocument();
+    fireEvent.click(within(nav).getByRole("button", { name: "问答" }));
+    expect(await screen.findByRole("heading", { name: "问答" })).toBeInTheDocument();
+    expect(screen.getByText("你想先问哪一类？")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /复习顺序/ })).toBeInTheDocument();
+    expect(screen.getByText("准备提问")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "发送预览问题" }));
+    await waitFor(() => expect(apiMocks.streamStudentAssistantAsk).toHaveBeenCalledTimes(2));
+    expect(apiMocks.streamStudentAssistantAsk).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        context_type: "learning_home",
+        question: expect.stringContaining("复习顺序"),
+      }),
+      expect.any(Function),
+    );
+    await waitFor(() => expect(document.querySelector(".ai-message.assistant .ai-md-list")).not.toBeNull());
+    expect(document.querySelector(".ai-message.assistant .katex")).not.toBeNull();
+    expect(document.querySelector(".ai-chat-status")).toBeNull();
+    expect(screen.getByText("完成")).toBeInTheDocument();
+    expect(screen.getByText("引用来源 1")).toBeInTheDocument();
 
     fireEvent.click(within(nav).getByRole("button", { name: "我的" }));
     expect(await screen.findByRole("heading", { name: "我的" })).toBeInTheDocument();
@@ -470,9 +559,12 @@ describe("student app e2e flow", () => {
     expect(screen.getByRole("button", { name: /卤素/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /卤素/ }));
     expect(await screen.findByRole("heading", { name: "卤素" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "带着本组实验去问答" }));
+    fireEvent.click(screen.getByRole("button", { name: "去问答" }));
     expect(await screen.findByRole("heading", { name: "问答" })).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { name: "卤素" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("实验组")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /为什么这样设计/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /和其他点位对比/ })).toBeInTheDocument();
     fireEvent.click(within(nav).getByRole("button", { name: "学习" }));
 
     const periodic = await screen.findByRole("region", { name: "元素周期表选择区" });
@@ -516,7 +608,21 @@ describe("student app e2e flow", () => {
     expect(recommendedChapter.querySelector(".chapter-family-badge")).toBeNull();
     expect(within(recommendedChapter).getByText("17族（卤素）")).toBeInTheDocument();
     fireEvent.click(recommendedChapter);
-    expect(await screen.findByRole("heading", { name: "第 17 族 卤族元素" })).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector(".atom-model-card")).not.toBeNull());
+    expect(document.querySelector(".atom-model-card")).not.toBeNull();
+    expect(document.querySelector(".atom-canvas")).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "电子层" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("tab", { name: "轨道" }));
+    const orbitalSelect = screen.getByRole("combobox", { name: "显示轨道" }) as HTMLSelectElement;
+    expect(orbitalSelect.value).toBe("3p:all");
+    expect(orbitalSelect.selectedOptions[0]?.textContent).toBe("3p5 全部");
+    expect(orbitalSelect.textContent).not.toContain("自动");
+    expect(Array.from(orbitalSelect.querySelectorAll("optgroup")).map((group) => group.getAttribute("label"))).toEqual([
+      "s 轨道",
+      "p 轨道",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: /Br Bromine/ }));
+    await waitFor(() => expect(document.querySelector(".atom-model-card")?.textContent).toContain("Bromine"));
     fireEvent.click(screen.getByRole("button", { name: /看实验视频/ }));
     expect(await screen.findByRole("heading", { name: "实验-点位视频" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /卤素置换观察/ }));

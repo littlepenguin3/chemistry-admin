@@ -288,7 +288,7 @@ export function VideoResourcesPage() {
     }
     hashRunRef.current += 1;
     disposeUploadClient();
-    const videoFiles = files.filter((file) => file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|avi)$/i.test(file.name));
+    const videoFiles = files.filter((file) => file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|avi|mkv)$/i.test(file.name));
     const nextItems = videoFiles.map((file) => makeUploadQueueItem(file, (file as File & { uid?: string }).uid));
     uploadItemsRef.current = nextItems;
     currentUploadIdRef.current = undefined;
@@ -830,7 +830,7 @@ export function VideoResourcesPage() {
                 </div>
               </div>
               <Upload.Dragger
-                accept="video/*,.mp4,.mov,.m4v,.webm,.avi"
+                accept="video/*,.mp4,.mov,.m4v,.webm,.avi,.mkv"
                 multiple
                 showUploadList={false}
                 disabled={batchRunning}
@@ -843,7 +843,7 @@ export function VideoResourcesPage() {
               >
                 <p className="ant-upload-drag-icon"><CloudUploadOutlined /></p>
                 <p className="ant-upload-text">拖拽一个或多个视频到这里，或点击选择文件</p>
-                <p className="ant-upload-hint">支持 mp4、mov、m4v、webm、avi；多个文件会串行上传，上传完成后自动进入后台处理。</p>
+                <p className="ant-upload-hint">支持 mp4、mov、m4v、webm、avi、mkv；多个文件会串行上传，上传完成后自动进入后台处理。</p>
               </Upload.Dragger>
             </>
           ) : (

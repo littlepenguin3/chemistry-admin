@@ -84,6 +84,14 @@ const mockLearningPage = {
         symbol: "Cl",
         name: "氯",
         atomic_number: 17,
+        relative_atomic_mass: "35.45",
+        group: "17",
+        period: 3,
+        block: "p",
+        state_at_20c: "Gas",
+        density: "0.002898 g/cm3",
+        rsc_url: "https://periodic-table.rsc.org/element/17/chlorine",
+        fact_source: "Royal Society of Chemistry Periodic Table",
         state: "气体",
         group_label: "第 17 族",
         electron_configuration: "[Ne]3s2 3p5",
@@ -94,6 +102,14 @@ const mockLearningPage = {
         symbol: "Br",
         name: "溴",
         atomic_number: 35,
+        relative_atomic_mass: "79.904",
+        group: "17",
+        period: 4,
+        block: "p",
+        state_at_20c: "Liquid",
+        density: "3.11 g/cm3",
+        rsc_url: "https://periodic-table.rsc.org/element/35/bromine",
+        fact_source: "Royal Society of Chemistry Periodic Table",
         state: "液体",
         group_label: "第 17 族",
         electron_configuration: "[Ar]3d10 4s2 4p5",
@@ -325,6 +341,61 @@ async function assertElementChipRowBalanced(page, label) {
   }
 }
 
+async function assertAtomModelRenderable(page, label) {
+  await page.locator(".atom-model-card").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".atom-canvas").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.waitForTimeout(300);
+
+  const metrics = await page.evaluate(() => {
+    const canvas = document.querySelector(".atom-canvas");
+    const modeButtons = Array.from(document.querySelectorAll(".atom-mode-segment button"));
+    if (!(canvas instanceof HTMLCanvasElement)) return null;
+    const rect = canvas.getBoundingClientRect();
+    let nonBlankPixelCount = 0;
+    try {
+      const context = canvas.getContext("2d");
+      if (context && canvas.width > 0 && canvas.height > 0) {
+        const sampleWidth = Math.min(canvas.width, 96);
+        const sampleHeight = Math.min(canvas.height, 96);
+        const imageData = context.getImageData(
+          Math.max(0, Math.floor((canvas.width - sampleWidth) / 2)),
+          Math.max(0, Math.floor((canvas.height - sampleHeight) / 2)),
+          sampleWidth,
+          sampleHeight,
+        );
+        for (let index = 3; index < imageData.data.length; index += 4) {
+          if (imageData.data[index] > 0) nonBlankPixelCount += 1;
+        }
+      }
+    } catch {
+      nonBlankPixelCount = -1;
+    }
+    return {
+      rectWidth: rect.width,
+      rectHeight: rect.height,
+      canvasWidth: canvas.width,
+      canvasHeight: canvas.height,
+      nonBlankPixelCount,
+      modeButtonCount: modeButtons.length,
+      modeButtonHeight: Math.min(...modeButtons.map((button) => button.getBoundingClientRect().height)),
+    };
+  });
+
+  if (!metrics) throw new Error(`${label}: atom canvas was not found`);
+  if (metrics.rectWidth < 180 || metrics.rectHeight < 180) {
+    throw new Error(`${label}: atom canvas CSS size too small ${metrics.rectWidth}x${metrics.rectHeight}`);
+  }
+  if (metrics.canvasWidth < 180 || metrics.canvasHeight < 180) {
+    throw new Error(`${label}: atom canvas backing size too small ${metrics.canvasWidth}x${metrics.canvasHeight}`);
+  }
+  if (metrics.nonBlankPixelCount === 0) {
+    throw new Error(`${label}: atom canvas appears blank`);
+  }
+  if (metrics.modeButtonCount < 2 || metrics.modeButtonHeight < 34) {
+    throw new Error(`${label}: atom mode controls are not reachable`);
+  }
+}
+
 async function waitForAny(page, selectors, timeout = 10000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -357,8 +428,17 @@ async function submitVisibleAssessment(page) {
 }
 
 async function clickStudentTab(page, label) {
-  await page.locator(".student-bottom-nav button").filter({ hasText: label }).first().click({ force: true });
-  await page.locator(".student-app-header h1").filter({ hasText: label }).first().waitFor({ state: "visible", timeout: 10000 });
+  const tabButton = page.locator(".student-bottom-nav button").filter({ hasText: label }).first();
+  await tabButton.click({ force: true });
+  await page.waitForFunction(
+    (tabLabel) =>
+      Array.from(document.querySelectorAll(".student-bottom-nav button.active")).some((button) =>
+        button.textContent?.includes(tabLabel),
+      ),
+    label,
+    { timeout: 10000 },
+  );
+  await page.waitForFunction(() => window.scrollY === 0, null, { timeout: 10000 });
 }
 
 function jsonResponse(payload, status = 200) {
@@ -366,6 +446,14 @@ function jsonResponse(payload, status = 200) {
     status,
     contentType: "application/json; charset=utf-8",
     body: JSON.stringify(payload),
+  };
+}
+
+function sseResponse(events) {
+  return {
+    status: 200,
+    contentType: "text/event-stream; charset=utf-8",
+    body: events.map((event) => `event: ${event.event}\ndata: ${JSON.stringify(event.data || {})}\n\n`).join(""),
   };
 }
 
@@ -419,6 +507,29 @@ async function installMockApi(page) {
   await page.route("**/api/student/posttest/start", (route) => route.fulfill(jsonResponse(mockPosttest)));
   await page.route("**/api/student/posttest/submit", (route) =>
     route.fulfill(jsonResponse({ status: "completed", report: mockReport })),
+  );
+  await page.route("**/api/student/assistant/ask/stream", (route) =>
+    route.fulfill(
+      sseResponse([
+        { event: "status", data: { message: "正在检索课程资料" } },
+        {
+          event: "delta",
+          data: {
+            delta: "### 回答思路\n\n- **现象**：CCl4 层变橙红色通常说明生成了 $\\ce{Br2}$。",
+          },
+        },
+        {
+          event: "final",
+          data: {
+            response: {
+              text: "",
+              source_count: 1,
+              sources: [{ title: "卤素置换实验资料", section: "实验现象", chunk_id: "halogen-displacement" }],
+            },
+          },
+        },
+      ]),
+    ),
   );
   await page.route("**/api/student/assistant/posttest-summary", (route) =>
     route.fulfill(jsonResponse({ text: "### 学习总结\n\n- 本轮重点是 **卤素置换**。", source: "ai", mode: "qa", cached: true })),
@@ -496,8 +607,25 @@ async function checkAuthenticatedFlows(page, viewportName) {
 
   await clickStudentTab(page, "问答");
   await page.locator(".ai-chat-panel").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".ai-starter-mode").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.getByRole("tab", { name: "实验点位" }).first().click();
+  await page.locator(".ai-point-starter").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.getByRole("button", { name: /实验 19-1 卤素/ }).first().click();
+  await page.getByRole("button", { name: /19-1-01/ }).first().click();
+  await page.getByRole("button", { name: /氯水 \+ KBr 溶液 \+ CCl4/ }).first().click();
+  await page.getByRole("button", { name: /背后原理/ }).first().click();
+  await page.getByText("准备提问").first().waitFor({ state: "visible", timeout: 10000 });
   await assertNoHorizontalOverflow(page, `${viewportName}: assistant tab`);
-  await assertNoOverlap(page, `${viewportName}: assistant compose`, [".student-bottom-nav", ".ai-chat-compose"]);
+  await assertNoOverlap(page, `${viewportName}: assistant point starter`, [".student-bottom-nav", ".ai-chat-compose", ".ai-starter-preview button"]);
+  await page.getByRole("button", { name: "发送点位问题" }).first().click();
+  await page.locator(".ai-message.assistant .ai-md-list").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.getByText("完成").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.getByText("引用来源 1").first().waitFor({ state: "visible", timeout: 10000 });
+  const bottomStatusCount = await page.locator(".ai-chat-status").count();
+  if (bottomStatusCount > 0) {
+    throw new Error(`${viewportName}: bottom assistant status row should not render`);
+  }
+  await assertNoHorizontalOverflow(page, `${viewportName}: assistant chat after starter`);
 
   await clickStudentTab(page, "我的");
   await page.locator(".profile-feedback-panel").first().waitFor({ state: "visible", timeout: 10000 });
@@ -522,35 +650,71 @@ async function checkAuthenticatedFlows(page, viewportName) {
   await clickStudentTab(page, "实验");
   await page.locator(".experiment-module-card").first().waitFor({ state: "visible", timeout: 10000 });
   await assertNoHorizontalOverflow(page, `${viewportName}: experiments tab`);
+  await page.locator(".experiment-module-card").first().click();
+  await page.locator(".experiment-list").first().waitFor({ state: "visible", timeout: 10000 });
+  const experimentHeaderActions = page.locator(".student-app-header-actions .student-app-header-action");
+  const experimentHeaderActionCount = await experimentHeaderActions.count();
+  if (experimentHeaderActionCount < 2) {
+    throw new Error(`${viewportName}: experiment module header actions are missing`);
+  }
+  await experimentHeaderActions.first().click();
+  await page.locator(".ai-starter-surface").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.getByText("实验组").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.getByRole("button", { name: /为什么这样设计/ }).first().waitFor({ state: "visible", timeout: 10000 });
+  await assertNoHorizontalOverflow(page, `${viewportName}: assistant experiment context starter`);
+  await assertNoOverlap(page, `${viewportName}: assistant context compose`, [".student-bottom-nav", ".ai-chat-compose", ".ai-starter-preview button"]);
+  await clickStudentTab(page, "实验");
+  await page.locator(".experiment-list").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".student-app-header-actions .student-app-header-action").nth(1).click();
+  await page.locator(".experiment-module-card").first().waitFor({ state: "visible", timeout: 10000 });
 
   await clickStudentTab(page, "学习");
   await waitForAny(
     page,
-    [".chapter-entry-card", ".chapter-context-card", ".selected-element-panel", ".learning-point-card", ".empty-learning-card"],
+    [".chapter-entry-card", ".chapter-view-switcher", ".selected-element-panel", ".learning-point-card", ".empty-learning-card"],
     15000,
   );
   if (await page.locator(".chapter-entry-card").first().isVisible().catch(() => false)) {
     const firstChapterCard = page.locator(".chapter-entry-card").first();
     await firstChapterCard.evaluate((element) => element.scrollIntoView({ block: "center", inline: "nearest" }));
     await firstChapterCard.click();
-    await waitForAny(page, [".chapter-context-card", ".selected-element-panel", ".learning-point-card", ".empty-learning-card"], 15000);
-    if (!(await page.locator(".chapter-context-card").first().isVisible().catch(() => false))) {
-      await page.waitForFunction(
-        () => document.querySelector(".chapter-context-card") || !document.querySelector(".chapter-entry-card"),
-        null,
-        { timeout: 15000 },
-      );
-    }
+    await waitForAny(page, [".chapter-view-switcher", ".selected-element-panel", ".learning-point-card", ".empty-learning-card"], 15000);
   }
-  await page.locator(".chapter-context-card").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".chapter-view-switcher").first().waitFor({ state: "visible", timeout: 10000 });
+  const headerActions = page.locator(".student-app-header-actions .student-app-header-action");
+  const headerActionCount = await headerActions.count();
+  if (headerActionCount < 2) {
+    throw new Error(`${viewportName}: learning chapter header actions are missing`);
+  }
+  await headerActions.first().click();
+  await page.locator(".ai-chat-panel").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".student-bottom-nav button").first().click({ force: true });
+  await page.waitForFunction(
+    () => document.querySelector(".student-bottom-nav button")?.classList.contains("active"),
+    null,
+    { timeout: 10000 },
+  );
+  await page.waitForFunction(() => window.scrollY === 0, null, { timeout: 10000 });
+  await page.locator(".chapter-view-switcher").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".student-app-header-actions .student-app-header-action").nth(1).click();
+  await page.locator(".chapter-entry-card").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".chapter-entry-card").first().click();
   await page.locator(".chapter-view-switcher").first().waitFor({ state: "visible", timeout: 10000 });
   await assertNoOverlap(page, `${viewportName}: local chapter switcher`, [".student-bottom-nav", ".chapter-view-switcher"]);
   await waitForAny(page, [".selected-element-panel", ".element-chip"], 15000);
+  await assertAtomModelRenderable(page, `${viewportName}: atom model initial`);
+  const orbitalModeButton = page.locator(".atom-mode-segment button").nth(1);
+  if (await orbitalModeButton.isEnabled().catch(() => false)) {
+    await orbitalModeButton.click();
+    await page.locator(".orbital-control-row").first().waitFor({ state: "visible", timeout: 10000 });
+    await assertAtomModelRenderable(page, `${viewportName}: atom model orbital`);
+  }
   await assertElementChipRowBalanced(page, `${viewportName}: element chips`);
   const secondElementChip = page.locator(".element-chip").nth(1);
   if (await secondElementChip.isVisible().catch(() => false)) {
     await secondElementChip.click();
     await page.locator(".selected-element-panel").first().waitFor({ state: "visible", timeout: 10000 });
+    await assertAtomModelRenderable(page, `${viewportName}: atom model after chip switch`);
   }
   await page.locator(".chapter-view-switcher button").nth(1).click();
   await waitForAny(page, [".learning-point-card", ".empty-learning-card"], 15000);

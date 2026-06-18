@@ -32,7 +32,15 @@
           "electron_configuration": "[He]2s2 2p5",
           "common_valence": "-1",
           "redox_tendency": "F: X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反",
-          "note": "氟: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。"
+          "note": "氟: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。",
+          "relative_atomic_mass": "18.998",
+          "group": "17",
+          "period": 2,
+          "block": "p",
+          "state_at_20c": "Gas",
+          "density": "0.001553 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/9/fluorine",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Cl",
@@ -43,7 +51,15 @@
           "electron_configuration": "[Ne]3s2 3p5",
           "common_valence": "-1, 0, +1, +3, +5, +7",
           "redox_tendency": "Cl: X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反",
-          "note": "氯: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。"
+          "note": "氯: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。",
+          "relative_atomic_mass": "35.45",
+          "group": "17",
+          "period": 3,
+          "block": "p",
+          "state_at_20c": "Gas",
+          "density": "0.002898 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/17/chlorine",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Br",
@@ -54,7 +70,15 @@
           "electron_configuration": "[Ar]3d10 4s2 4p5",
           "common_valence": "-1, 0, +1, +3, +5",
           "redox_tendency": "Br: X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反",
-          "note": "溴: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。"
+          "note": "溴: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。",
+          "relative_atomic_mass": "79.904",
+          "group": "17",
+          "period": 4,
+          "block": "p",
+          "state_at_20c": "Liquid",
+          "density": "3.1028 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/35/bromine",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "I",
@@ -65,7 +89,15 @@
           "electron_configuration": "[Kr]4d10 5s2 5p5",
           "common_valence": "-1, 0, +1, +5, +7",
           "redox_tendency": "I: X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反",
-          "note": "碘: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。"
+          "note": "碘: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。",
+          "relative_atomic_mass": "126.904",
+          "group": "17",
+          "period": 5,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "4.933 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/53/iodine",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "At",
@@ -76,7 +108,15 @@
           "electron_configuration": "[Xe]4f14 5d10 6s2 6p5",
           "common_valence": "-1, +1",
           "redox_tendency": "At: X₂ 氧化性：F₂ > Cl₂ > Br₂ > I₂；X⁻ 还原性相反",
-          "note": "砹: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。"
+          "note": "砹: 从氟到碘，单质氧化性逐渐减弱，卤离子还原性逐渐增强。",
+          "relative_atomic_mass": "[210]",
+          "group": "17",
+          "period": 6,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "Unknown g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/85/astatine",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         }
       ],
       "property_cards": [
@@ -227,7 +267,15 @@
           "electron_configuration": "[He]2s2 2p4",
           "common_valence": "-2, -1, 0",
           "redox_tendency": "O: O₃、H₂O₂、S₂O₈²⁻ 可显氧化性；SO₂、SO₃²⁻ 常显还原性",
-          "note": "氧: 氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。"
+          "note": "氧: 氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。",
+          "relative_atomic_mass": "15.999",
+          "group": "16",
+          "period": 2,
+          "block": "p",
+          "state_at_20c": "Gas",
+          "density": "0.001308 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/8/oxygen",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "S",
@@ -238,7 +286,15 @@
           "electron_configuration": "[Ne]3s2 3p4",
           "common_valence": "-2, 0, +4, +6",
           "redox_tendency": "S: O₃、H₂O₂、S₂O₈²⁻ 可显氧化性；SO₂、SO₃²⁻ 常显还原性",
-          "note": "硫: 氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。"
+          "note": "硫: 氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。",
+          "relative_atomic_mass": "32.06",
+          "group": "16",
+          "period": 3,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "2.07 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/16/sulfur",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Se",
@@ -249,7 +305,15 @@
           "electron_configuration": "[Ar]3d10 4s2 4p4",
           "common_valence": "-2, 0, +4, +6",
           "redox_tendency": "Se: O₃、H₂O₂、S₂O₈²⁻ 可显氧化性；SO₂、SO₃²⁻ 常显还原性",
-          "note": "硒: 氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。"
+          "note": "硒: 氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。",
+          "relative_atomic_mass": "78.971",
+          "group": "16",
+          "period": 4,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "4.809 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/34/selenium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Te",
@@ -260,7 +324,15 @@
           "electron_configuration": "[Kr]4d10 5s2 5p4",
           "common_valence": "-2, 0, +4, +6",
           "redox_tendency": "Te: O₃、H₂O₂、S₂O₈²⁻ 可显氧化性；SO₂、SO₃²⁻ 常显还原性",
-          "note": "碲: 氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。"
+          "note": "碲: 氧表现强氧化性，硫及其含氧化合物常在氧化剂和还原剂之间切换。",
+          "relative_atomic_mass": "127.60",
+          "group": "16",
+          "period": 5,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "6.232 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/52/tellurium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         }
       ],
       "property_cards": [
@@ -407,7 +479,15 @@
           "electron_configuration": "[He]2s2 2p3",
           "common_valence": "-3, 0, +3, +5",
           "redox_tendency": "N: 硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化",
-          "note": "氮: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。"
+          "note": "氮: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。",
+          "relative_atomic_mass": "14.007",
+          "group": "15",
+          "period": 2,
+          "block": "p",
+          "state_at_20c": "Gas",
+          "density": "0.001145 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/7/nitrogen",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "P",
@@ -418,7 +498,15 @@
           "electron_configuration": "[Ne]3s2 3p3",
           "common_valence": "-3, 0, +3, +5",
           "redox_tendency": "P: 硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化",
-          "note": "磷: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。"
+          "note": "磷: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。",
+          "relative_atomic_mass": "30.974",
+          "group": "15",
+          "period": 3,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "1.823 (white) g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/15/phosphorus",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "As",
@@ -429,7 +517,15 @@
           "electron_configuration": "[Ar]3d10 4s2 4p3",
           "common_valence": "-3, 0, +3, +5",
           "redox_tendency": "As: 硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化",
-          "note": "砷: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。"
+          "note": "砷: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。",
+          "relative_atomic_mass": "74.922",
+          "group": "15",
+          "period": 4,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "5.75 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/33/arsenic",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Sb",
@@ -440,7 +536,15 @@
           "electron_configuration": "[Kr]4d10 5s2 5p3",
           "common_valence": "-3, 0, +3, +5",
           "redox_tendency": "Sb: 硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化",
-          "note": "锑: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。"
+          "note": "锑: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。",
+          "relative_atomic_mass": "121.760",
+          "group": "15",
+          "period": 5,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "6.68 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/51/antimony",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Bi",
@@ -451,7 +555,15 @@
           "electron_configuration": "[Xe]4f14 5d10 6s2 6p3",
           "common_valence": "0, +3, +5",
           "redox_tendency": "Bi: 硝酸盐、亚硝酸盐和磷含氧酸盐常体现氧化态变化",
-          "note": "铋: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。"
+          "note": "铋: 氮、磷及其含氧化合物体现丰富的酸碱性、氧化性和还原性。",
+          "relative_atomic_mass": "208.980",
+          "group": "15",
+          "period": 6,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "9.79 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/83/bismuth",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         }
       ],
       "property_cards": [
@@ -594,7 +706,15 @@
           "electron_configuration": "[He]2s2 2p2",
           "common_valence": "-4, 0, +2, +4",
           "redox_tendency": "C: Sn(II) 常有还原性，Pb(IV) 可有氧化性",
-          "note": "碳: 碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。"
+          "note": "碳: 碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。",
+          "relative_atomic_mass": "12.011",
+          "group": "14",
+          "period": 2,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "3.513 (diamond); 2.2 (graphite) g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/6/carbon",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Si",
@@ -605,7 +725,15 @@
           "electron_configuration": "[Ne]3s2 3p2",
           "common_valence": "-4, 0, +4",
           "redox_tendency": "Si: Sn(II) 常有还原性，Pb(IV) 可有氧化性",
-          "note": "硅: 碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。"
+          "note": "硅: 碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。",
+          "relative_atomic_mass": "28.085",
+          "group": "14",
+          "period": 3,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "2.3296 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/14/silicon",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Sn",
@@ -616,7 +744,15 @@
           "electron_configuration": "[Kr]4d10 5s2 5p2",
           "common_valence": "0, +2, +4",
           "redox_tendency": "Sn: Sn(II) 常有还原性，Pb(IV) 可有氧化性",
-          "note": "锡: 碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。"
+          "note": "锡: 碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。",
+          "relative_atomic_mass": "118.710",
+          "group": "14",
+          "period": 5,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "7.287 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/50/tin",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Pb",
@@ -627,7 +763,15 @@
           "electron_configuration": "[Xe]4f14 5d10 6s2 6p2",
           "common_valence": "0, +2, +4",
           "redox_tendency": "Pb: Sn(II) 常有还原性，Pb(IV) 可有氧化性",
-          "note": "铅: 碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。"
+          "note": "铅: 碳和硅以共价结构为主，锡铅体现 +2/+4 氧化态稳定性变化。",
+          "relative_atomic_mass": "207.2",
+          "group": "14",
+          "period": 6,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "11.3 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/82/lead",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         }
       ],
       "property_cards": [
@@ -759,7 +903,15 @@
           "electron_configuration": "[He]2s2 2p1",
           "common_valence": "0, +3",
           "redox_tendency": "B: 铝单质还原性强，铝氢氧化物显两性",
-          "note": "硼: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。"
+          "note": "硼: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。",
+          "relative_atomic_mass": "10.81",
+          "group": "13",
+          "period": 2,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "2.34 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/5/boron",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Al",
@@ -770,7 +922,15 @@
           "electron_configuration": "[Ne]3s2 3p1",
           "common_valence": "0, +3",
           "redox_tendency": "Al: 铝单质还原性强，铝氢氧化物显两性",
-          "note": "铝: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。"
+          "note": "铝: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。",
+          "relative_atomic_mass": "26.982",
+          "group": "13",
+          "period": 3,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "2.70 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/13/aluminium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Ga",
@@ -781,7 +941,15 @@
           "electron_configuration": "[Ar]3d10 4s2 4p1",
           "common_valence": "0, +3",
           "redox_tendency": "Ga: 铝单质还原性强，铝氢氧化物显两性",
-          "note": "镓: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。"
+          "note": "镓: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。",
+          "relative_atomic_mass": "69.723",
+          "group": "13",
+          "period": 4,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "5.91 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/31/gallium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "In",
@@ -792,7 +960,15 @@
           "electron_configuration": "[Kr]4d10 5s2 5p1",
           "common_valence": "0, +1, +3",
           "redox_tendency": "In: 铝单质还原性强，铝氢氧化物显两性",
-          "note": "铟: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。"
+          "note": "铟: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。",
+          "relative_atomic_mass": "114.818",
+          "group": "13",
+          "period": 5,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "7.31 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/49/indium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Tl",
@@ -803,7 +979,15 @@
           "electron_configuration": "[Xe]4f14 5d10 6s2 6p1",
           "common_valence": "0, +1, +3",
           "redox_tendency": "Tl: 铝单质还原性强，铝氢氧化物显两性",
-          "note": "铊: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。"
+          "note": "铊: 硼以缺电子共价化合物为特征，铝及其氢氧化物体现明显两性。",
+          "relative_atomic_mass": "204.38",
+          "group": "13",
+          "period": 6,
+          "block": "p",
+          "state_at_20c": "Solid",
+          "density": "11.8 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/81/thallium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         }
       ],
       "property_cards": [
@@ -925,7 +1109,15 @@
           "electron_configuration": "[He]2s1",
           "common_valence": "0, +1",
           "redox_tendency": "Li: 单质还原性强，IA 自上而下增强",
-          "note": "锂: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+          "note": "锂: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。",
+          "relative_atomic_mass": "6.94",
+          "group": "1",
+          "period": 2,
+          "block": "s",
+          "state_at_20c": "Solid",
+          "density": "0.534 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/3/lithium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Na",
@@ -936,7 +1128,15 @@
           "electron_configuration": "[Ne]3s1",
           "common_valence": "0, +1",
           "redox_tendency": "Na: 单质还原性强，IA 自上而下增强",
-          "note": "钠: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+          "note": "钠: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。",
+          "relative_atomic_mass": "22.990",
+          "group": "1",
+          "period": 3,
+          "block": "s",
+          "state_at_20c": "Solid",
+          "density": "0.97 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/11/sodium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "K",
@@ -947,7 +1147,15 @@
           "electron_configuration": "[Ar]4s1",
           "common_valence": "0, +1",
           "redox_tendency": "K: 单质还原性强，IA 自上而下增强",
-          "note": "钾: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+          "note": "钾: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。",
+          "relative_atomic_mass": "39.098",
+          "group": "1",
+          "period": 4,
+          "block": "s",
+          "state_at_20c": "Solid",
+          "density": "0.89 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/19/potassium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Mg",
@@ -958,7 +1166,15 @@
           "electron_configuration": "[Ne]3s2",
           "common_valence": "0, +2",
           "redox_tendency": "Mg: 单质还原性强，IA 自上而下增强",
-          "note": "镁: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+          "note": "镁: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。",
+          "relative_atomic_mass": "24.305",
+          "group": "2",
+          "period": 3,
+          "block": "s",
+          "state_at_20c": "Solid",
+          "density": "1.74 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/12/magnesium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Ca",
@@ -969,7 +1185,15 @@
           "electron_configuration": "[Ar]4s2",
           "common_valence": "0, +2",
           "redox_tendency": "Ca: 单质还原性强，IA 自上而下增强",
-          "note": "钙: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+          "note": "钙: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。",
+          "relative_atomic_mass": "40.078",
+          "group": "2",
+          "period": 4,
+          "block": "s",
+          "state_at_20c": "Solid",
+          "density": "1.54 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/20/calcium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Ba",
@@ -980,7 +1204,15 @@
           "electron_configuration": "[Xe]6s2",
           "common_valence": "0, +2",
           "redox_tendency": "Ba: 单质还原性强，IA 自上而下增强",
-          "note": "钡: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。"
+          "note": "钡: 碱金属、碱土金属易失电子，单质还原性强，焰色反应特征明显。",
+          "relative_atomic_mass": "137.327",
+          "group": "2",
+          "period": 6,
+          "block": "s",
+          "state_at_20c": "Solid",
+          "density": "3.62 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/56/barium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         }
       ],
       "property_cards": [
@@ -1111,7 +1343,15 @@
           "electron_configuration": "[Ar]3d10 4s1",
           "common_valence": "0, +1, +2",
           "redox_tendency": "Cu: Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化",
-          "note": "铜: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。"
+          "note": "铜: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。",
+          "relative_atomic_mass": "63.546",
+          "group": "11",
+          "period": 4,
+          "block": "d",
+          "state_at_20c": "Solid",
+          "density": "8.96 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/29/copper",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Ag",
@@ -1122,7 +1362,15 @@
           "electron_configuration": "[Kr]4d10 5s1",
           "common_valence": "0, +1",
           "redox_tendency": "Ag: Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化",
-          "note": "银: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。"
+          "note": "银: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。",
+          "relative_atomic_mass": "107.868",
+          "group": "11",
+          "period": 5,
+          "block": "d",
+          "state_at_20c": "Solid",
+          "density": "10.5 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/47/silver",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Zn",
@@ -1133,7 +1381,15 @@
           "electron_configuration": "[Ar]3d10 4s2",
           "common_valence": "0, +2",
           "redox_tendency": "Zn: Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化",
-          "note": "锌: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。"
+          "note": "锌: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。",
+          "relative_atomic_mass": "65.38",
+          "group": "12",
+          "period": 4,
+          "block": "d",
+          "state_at_20c": "Solid",
+          "density": "7.134 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/30/zinc",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Cd",
@@ -1144,7 +1400,15 @@
           "electron_configuration": "[Kr]4d10 5s2",
           "common_valence": "0, +2",
           "redox_tendency": "Cd: Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化",
-          "note": "镉: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。"
+          "note": "镉: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。",
+          "relative_atomic_mass": "112.414",
+          "group": "12",
+          "period": 5,
+          "block": "d",
+          "state_at_20c": "Solid",
+          "density": "8.69 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/48/cadmium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Hg",
@@ -1155,7 +1419,15 @@
           "electron_configuration": "[Xe]4f14 5d10 6s2",
           "common_valence": "0, +1, +2",
           "redox_tendency": "Hg: Cu(I)/Cu(II)、Hg(I)/Hg(II) 可相互转化",
-          "note": "汞: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。"
+          "note": "汞: 铜、银、锌、镉、汞元素常通过沉淀颜色、配合物和价态转化识别。",
+          "relative_atomic_mass": "200.592",
+          "group": "12",
+          "period": 6,
+          "block": "d",
+          "state_at_20c": "Liquid",
+          "density": "13.5336 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/80/mercury",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         }
       ],
       "property_cards": [
@@ -1302,7 +1574,15 @@
           "electron_configuration": "[Ar]3d2 4s2",
           "common_valence": "0, +3, +4",
           "redox_tendency": "Ti: 低价态常还原，高价态常氧化",
-          "note": "钛: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+          "note": "钛: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。",
+          "relative_atomic_mass": "47.867",
+          "group": "4",
+          "period": 4,
+          "block": "d",
+          "state_at_20c": "Solid",
+          "density": "4.506 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/22/titanium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "V",
@@ -1313,7 +1593,15 @@
           "electron_configuration": "[Ar]3d3 4s2",
           "common_valence": "0, +2, +3, +4, +5",
           "redox_tendency": "V: 低价态常还原，高价态常氧化",
-          "note": "钒: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+          "note": "钒: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。",
+          "relative_atomic_mass": "50.942",
+          "group": "5",
+          "period": 4,
+          "block": "d",
+          "state_at_20c": "Solid",
+          "density": "6.0 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/23/vanadium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Cr",
@@ -1324,7 +1612,15 @@
           "electron_configuration": "[Ar]3d5 4s1",
           "common_valence": "0, +3, +6",
           "redox_tendency": "Cr: 低价态常还原，高价态常氧化",
-          "note": "铬: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+          "note": "铬: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。",
+          "relative_atomic_mass": "51.996",
+          "group": "6",
+          "period": 4,
+          "block": "d",
+          "state_at_20c": "Solid",
+          "density": "7.15 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/24/chromium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Mn",
@@ -1335,7 +1631,15 @@
           "electron_configuration": "[Ar]3d5 4s2",
           "common_valence": "0, +2, +4, +6, +7",
           "redox_tendency": "Mn: 低价态常还原，高价态常氧化",
-          "note": "锰: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+          "note": "锰: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。",
+          "relative_atomic_mass": "54.938",
+          "group": "7",
+          "period": 4,
+          "block": "d",
+          "state_at_20c": "Solid",
+          "density": "7.3 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/25/manganese",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Fe",
@@ -1346,7 +1650,15 @@
           "electron_configuration": "[Ar]3d6 4s2",
           "common_valence": "0, +2, +3",
           "redox_tendency": "Fe: 低价态常还原，高价态常氧化",
-          "note": "铁: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+          "note": "铁: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。",
+          "relative_atomic_mass": "55.845",
+          "group": "8",
+          "period": 4,
+          "block": "d",
+          "state_at_20c": "Solid",
+          "density": "7.87 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/26/iron",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Co",
@@ -1357,7 +1669,15 @@
           "electron_configuration": "[Ar]3d7 4s2",
           "common_valence": "0, +2, +3",
           "redox_tendency": "Co: 低价态常还原，高价态常氧化",
-          "note": "钴: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+          "note": "钴: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。",
+          "relative_atomic_mass": "58.933",
+          "group": "9",
+          "period": 4,
+          "block": "d",
+          "state_at_20c": "Solid",
+          "density": "8.86 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/27/cobalt",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Ni",
@@ -1368,7 +1688,15 @@
           "electron_configuration": "[Ar]3d8 4s2",
           "common_valence": "0, +2",
           "redox_tendency": "Ni: 低价态常还原，高价态常氧化",
-          "note": "镍: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。"
+          "note": "镍: 未充满 d 轨道带来多氧化态、丰富颜色、配位和水解行为。",
+          "relative_atomic_mass": "58.693",
+          "group": "10",
+          "period": 4,
+          "block": "d",
+          "state_at_20c": "Solid",
+          "density": "8.90 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/28/nickel",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         }
       ],
       "property_cards": [
@@ -1514,7 +1842,15 @@
           "electron_configuration": "1s1",
           "common_valence": "-1, 0, +1",
           "redox_tendency": "H: H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
-          "note": "氢: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+          "note": "氢: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。",
+          "relative_atomic_mass": "1.008",
+          "group": "1",
+          "period": 1,
+          "block": "s",
+          "state_at_20c": "Gas",
+          "density": "0.000082 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/1/hydrogen",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "He",
@@ -1525,7 +1861,15 @@
           "electron_configuration": "1s2",
           "common_valence": "0",
           "redox_tendency": "He: H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
-          "note": "氦: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+          "note": "氦: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。",
+          "relative_atomic_mass": "4.003",
+          "group": "18",
+          "period": 1,
+          "block": "s",
+          "state_at_20c": "Gas",
+          "density": "0.000164 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/2/helium",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Ne",
@@ -1536,7 +1880,15 @@
           "electron_configuration": "[He]2s2 2p6",
           "common_valence": "0",
           "redox_tendency": "Ne: H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
-          "note": "氖: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+          "note": "氖: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。",
+          "relative_atomic_mass": "20.180",
+          "group": "18",
+          "period": 2,
+          "block": "p",
+          "state_at_20c": "Gas",
+          "density": "0.000825 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/10/neon",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Ar",
@@ -1547,7 +1899,15 @@
           "electron_configuration": "[Ne]3s2 3p6",
           "common_valence": "0",
           "redox_tendency": "Ar: H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
-          "note": "氩: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+          "note": "氩: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。",
+          "relative_atomic_mass": "39.95",
+          "group": "18",
+          "period": 3,
+          "block": "p",
+          "state_at_20c": "Gas",
+          "density": "0.001633 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/18/argon",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Kr",
@@ -1558,7 +1918,15 @@
           "electron_configuration": "[Ar]3d10 4s2 4p6",
           "common_valence": "0, +2",
           "redox_tendency": "Kr: H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
-          "note": "氪: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+          "note": "氪: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。",
+          "relative_atomic_mass": "83.798",
+          "group": "18",
+          "period": 4,
+          "block": "p",
+          "state_at_20c": "Gas",
+          "density": "0.003425 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/36/krypton",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         },
         {
           "symbol": "Xe",
@@ -1569,7 +1937,15 @@
           "electron_configuration": "[Kr]4d10 5s2 5p6",
           "common_valence": "0, +2, +4, +6, +8",
           "redox_tendency": "Xe: H₂ 可作还原剂；氢化物中 H⁻ 有还原性",
-          "note": "氙: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。"
+          "note": "氙: 氢既可失去电子形成 H⁺，也可获得电子形成 H⁻，周期表位置具有特殊性。",
+          "relative_atomic_mass": "131.293",
+          "group": "18",
+          "period": 5,
+          "block": "p",
+          "state_at_20c": "Gas",
+          "density": "0.005366 g/cm3",
+          "rsc_url": "https://periodic-table.rsc.org/element/54/xenon",
+          "fact_source": "Royal Society of Chemistry Periodic Table"
         }
       ],
       "property_cards": [

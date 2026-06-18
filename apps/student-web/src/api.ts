@@ -108,6 +108,14 @@ export type StudentLearningElementBadge = {
   symbol: string;
   name: string;
   atomic_number?: number | null;
+  relative_atomic_mass?: string | null;
+  group?: string | null;
+  period?: number | null;
+  block?: string | null;
+  state_at_20c?: string | null;
+  density?: string | null;
+  rsc_url?: string | null;
+  fact_source?: string | null;
   state?: string | null;
   group_label?: string | null;
   electron_configuration?: string | null;

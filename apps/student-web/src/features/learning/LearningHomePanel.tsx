@@ -4,10 +4,7 @@ import type { StudentExperimentGroupSummary, StudentLearningPageResponse, Studen
 import { errorMessage, getStudentLearningPage } from "../../api";
 import type { ChapterLearningView } from "../../app/routes";
 import { LearningState } from "../../shared/mobile/LearningState";
-import { compactText } from "../../shared/utils/text";
-import type { AssistantContext } from "../assistant/assistantContext";
 import { stripExperimentPrefix } from "../experiments/experimentFormat";
-import { LearningChapterHeader } from "./LearningChapterHeader";
 import { LearningExperimentsView } from "./LearningExperimentsView";
 import { LearningFactsView } from "./LearningFactsView";
 import { chapterExperimentGroupsForProfile } from "./learningFormat";
@@ -17,19 +14,17 @@ export function LearningHomePanel({
   initialPropertyKey,
   initialElementSymbol,
   initialChapterView,
-  onSwitchChapter,
+  onProfileLoaded,
   onSelectPoint,
   onFinishLearning,
   finishing,
   finishError,
-  assistantEnabled,
-  onOpenAssistant,
 }: {
   profileId?: string | null;
   initialPropertyKey?: string | null;
   initialElementSymbol?: string | null;
   initialChapterView?: ChapterLearningView | null;
-  onSwitchChapter: () => void;
+  onProfileLoaded?: (profile: StudentLearningProfile) => void;
   onSelectPoint: (point: {
     profileId: string;
     propertyKey: string;
@@ -43,8 +38,6 @@ export function LearningHomePanel({
   onFinishLearning: () => void;
   finishing: boolean;
   finishError: string;
-  assistantEnabled: boolean;
-  onOpenAssistant: (context: AssistantContext) => void;
 }) {
   const [page, setPage] = useState<StudentLearningPageResponse | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(profileId || null);
@@ -96,6 +89,10 @@ export function LearningHomePanel({
 
   const profile = page?.active_profile || null;
   useEffect(() => {
+    if (profile) onProfileLoaded?.(profile);
+  }, [profile, onProfileLoaded]);
+
+  useEffect(() => {
     if (!profile) return;
     const keys = profile.property_sections.map((section) => section.key);
     const preferred = initialPropertyKey && keys.includes(initialPropertyKey) ? initialPropertyKey : selectedPropertyKey;
@@ -133,41 +130,12 @@ export function LearningHomePanel({
     null;
   const chapterExperimentGroups = profile ? chapterExperimentGroupsForProfile(profile) : [];
   const relatedPointCount = chapterExperimentGroups.reduce((total, group) => total + group.points.length, 0);
-  const homeAssistantContext: AssistantContext | null = profile
-    ? {
-        context_type: "learning_profile",
-        context_title: profile.title,
-        context_summary: compactText([
-          profile.hero.summary,
-          selectedElement && activeChapterView === "facts"
-            ? `当前元素：${selectedElement.symbol} ${selectedElement.name}，${selectedElement.electron_configuration || ""}，${selectedElement.common_valence || ""}，${selectedElement.redox_tendency || ""}`
-            : null,
-          `全族通性：${(profile.family_common_properties || profile.property_cards).map((card) => `${card.label} ${card.value}`).join("；")}`,
-          selectedSection && activeChapterView === "facts" ? `当前性质：${selectedSection.title} ${selectedSection.summary}` : null,
-          chapterExperimentGroups.length
-            ? `相关实验点：${chapterExperimentGroups.flatMap((group) => group.points.map((point) => point.point_title || point.title)).join("、")}`
-            : null,
-        ]),
-        chapter_id: profile.chapter_id,
-        prompts: [
-          activeChapterView === "facts" && selectedSection ? `${selectedSection.title}怎么理解？` : "这一章先学什么？",
-          "相关实验先看哪一个？",
-          `帮我整理${profile.family_name || profile.title}的记忆表`,
-        ],
-      }
-    : null;
   return (
     <section className="learning-panel" aria-label="实验学习">
       {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载学习资源" /> : null}
       {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
       {!loading && !error && profile ? (
         <>
-          <LearningChapterHeader
-            profile={profile}
-            onSwitchChapter={onSwitchChapter}
-            assistantContext={assistantEnabled ? homeAssistantContext : null}
-            onOpenAssistant={onOpenAssistant}
-          />
           <ChapterViewSwitcher activeView={activeChapterView} experimentCount={relatedPointCount} onChange={changeChapterView} />
 
           {activeChapterView === "facts" ? (

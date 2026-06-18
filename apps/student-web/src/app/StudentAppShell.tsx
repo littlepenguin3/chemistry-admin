@@ -1,4 +1,4 @@
-import { CSSProperties, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Atom,
   BookOpenCheck,
@@ -28,11 +28,13 @@ import { PosttestSummaryPanel } from "../features/assessment/PosttestSummaryPane
 import { ExperimentsOverviewPanel } from "../features/experiments/ExperimentsOverviewPanel";
 import { ExperimentGroupPanel } from "../features/experiments/ExperimentGroupPanel";
 import { ExperimentDetailPanel } from "../features/experiments/ExperimentDetailPanel";
+import { stripExperimentPrefix } from "../features/experiments/experimentFormat";
 import { FinishLearningAction } from "../shared/learning/FinishLearningAction";
 import { LearningState } from "../shared/mobile/LearningState";
 import { compactText } from "../shared/utils/text";
 import { LearningEntryPanel } from "../features/learning/LearningEntryPanel";
 import { LearningHomePanel } from "../features/learning/LearningHomePanel";
+import { formatChapterEntryTitle } from "../features/learning/learningFormat";
 import {
   elementEnglishName,
   elementTileStyle,
@@ -49,6 +51,7 @@ import { AssessmentPanel, type AnswerMap } from "../features/pretest/AssessmentP
 import {
   AuthUser,
   StudentAppConfigResponse,
+  StudentExperimentGroupResponse,
   StudentExperimentGroupSummary,
   StudentLearningChapterExperimentGroup,
   StudentLearningElementBadge,
@@ -69,11 +72,80 @@ import {
 } from "../api";
 import { MobileButton, MobileEmptyState, MobileField } from "../mobile/primitives";
 
+type LearningHeaderMeta = {
+  profileId: string;
+  chapterId?: string | null;
+  title: string;
+  subtitle: string;
+  summary: string;
+};
+
+type ExperimentHeaderMeta = {
+  parentCode: string;
+  chapterId?: string | null;
+  title: string;
+  subtitle: string;
+  summary: string;
+};
+
+function learningHeaderMetaForProfile(profile: StudentLearningProfile | StudentLearningProfileSummary): LearningHeaderMeta {
+  const title = formatChapterEntryTitle(profile);
+  const subtitle = compactText(["当前章节", profile.subtitle].filter(Boolean));
+  const summary = compactText([
+    profile.subtitle,
+    profile.family_name,
+    profile.element_symbols.length ? `元素：${profile.element_symbols.join("、")}` : "",
+  ]);
+  return {
+    profileId: profile.profile_id,
+    chapterId: profile.chapter_id,
+    title,
+    subtitle,
+    summary: summary || title,
+  };
+}
+
+function experimentHeaderMetaForSummary(group: StudentExperimentGroupSummary): ExperimentHeaderMeta {
+  const title = stripExperimentPrefix(group.parent_title);
+  const subtitle = compactText(["当前实验模块", group.area_name].filter(Boolean));
+  const summary = compactText([
+    group.parent_title,
+    group.area_name,
+    `${group.experiment_count} 个实验点`,
+    `${group.question_count} 道练习`,
+  ]);
+  return {
+    parentCode: group.parent_code,
+    chapterId: group.chapter_ids[0] || null,
+    title,
+    subtitle,
+    summary: summary || title,
+  };
+}
+
+function experimentHeaderMetaForGroup(group: StudentExperimentGroupResponse): ExperimentHeaderMeta {
+  const title = stripExperimentPrefix(group.parent_title);
+  const summary = compactText([
+    `实验模块：${group.parent_title}`,
+    `所属区域：${group.area_name}`,
+    group.experiments.length ? `实验点：${group.experiments.map((experiment) => experiment.title).join("、")}` : null,
+  ]);
+  return {
+    parentCode: group.parent_code,
+    chapterId: group.experiments[0]?.chapter_ids[0] || null,
+    title,
+    subtitle: compactText(["当前实验模块", group.area_name].filter(Boolean)),
+    summary: summary || title,
+  };
+}
+
 export function StudentAppShell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState<StudentTab>("learn");
   const [learningRoute, setLearningRoute] = useState<LearningRoute>({ screen: "entry" });
+  const [learningHeaderMeta, setLearningHeaderMeta] = useState<LearningHeaderMeta | null>(null);
   const [assessmentRoute, setAssessmentRoute] = useState<AssessmentRoute>({ screen: "home" });
   const [experimentRoute, setExperimentRoute] = useState<ExperimentTabRoute>({ screen: "overview" });
+  const [experimentHeaderMeta, setExperimentHeaderMeta] = useState<ExperimentHeaderMeta | null>(null);
   const [assistantContext, setAssistantContext] = useState<AssistantContext>(() => defaultAssistantContext());
   const [appConfig, setAppConfig] = useState<StudentAppConfigResponse>(defaultStudentAppConfig);
   const [configError, setConfigError] = useState("");
@@ -162,6 +234,48 @@ export function StudentAppShell({ user, onLogout }: { user: AuthUser; onLogout: 
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
   };
 
+  const rememberLearningProfile = useCallback((profile: StudentLearningProfile) => {
+    setLearningHeaderMeta(learningHeaderMetaForProfile(profile));
+  }, []);
+
+  const chooseAnotherChapter = () => {
+    setLearningRoute({ screen: "entry" });
+    setLearningHeaderMeta(null);
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+  };
+
+  const openCurrentChapterAssistant = () => {
+    if (!learningHeaderMeta) return;
+    openAssistant({
+      context_type: "learning_profile",
+      context_title: learningHeaderMeta.title,
+      context_summary: learningHeaderMeta.summary,
+      chapter_id: learningHeaderMeta.chapterId,
+      prompts: ["帮我梳理本章重点", "我该先复习哪一块？", "解释一个本章实验现象"],
+    });
+  };
+
+  const rememberExperimentGroup = useCallback((group: StudentExperimentGroupResponse) => {
+    setExperimentHeaderMeta(experimentHeaderMetaForGroup(group));
+  }, []);
+
+  const chooseAnotherExperimentGroup = () => {
+    setExperimentRoute({ screen: "overview" });
+    setExperimentHeaderMeta(null);
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+  };
+
+  const openCurrentExperimentAssistant = () => {
+    if (!experimentHeaderMeta) return;
+    openAssistant({
+      context_type: "experiment_group",
+      context_title: experimentHeaderMeta.title,
+      context_summary: experimentHeaderMeta.summary,
+      chapter_id: experimentHeaderMeta.chapterId,
+      prompts: ["这一组实验重点是什么？", "我应该按什么顺序看？", "这组实验会考什么现象？"],
+    });
+  };
+
   const renderLearning = () => {
     if (learningRoute.screen === "point") {
       return (
@@ -195,7 +309,10 @@ export function StudentAppShell({ user, onLogout }: { user: AuthUser; onLogout: 
     if (learningRoute.screen === "entry") {
       return (
         <LearningEntryPanel
-          onSelectProfile={(profileId) => setLearningRoute({ screen: "chapter", profileId })}
+          onSelectProfile={(profile) => {
+            setLearningHeaderMeta(learningHeaderMetaForProfile(profile));
+            setLearningRoute({ screen: "chapter", profileId: profile.profile_id });
+          }}
         />
       );
     }
@@ -206,7 +323,7 @@ export function StudentAppShell({ user, onLogout }: { user: AuthUser; onLogout: 
         initialPropertyKey={learningRoute.propertyKey}
         initialElementSymbol={learningRoute.elementSymbol}
         initialChapterView={learningRoute.chapterView}
-        onSwitchChapter={() => setLearningRoute({ screen: "entry" })}
+        onProfileLoaded={rememberLearningProfile}
         onSelectPoint={(point) =>
           setLearningRoute({
             screen: "point",
@@ -223,8 +340,6 @@ export function StudentAppShell({ user, onLogout }: { user: AuthUser; onLogout: 
         onFinishLearning={finishLearning}
         finishing={posttestLoading}
         finishError={posttestError}
-        assistantEnabled={canUseAssistant}
-        onOpenAssistant={openAssistant}
       />
     );
   };
@@ -234,13 +349,11 @@ export function StudentAppShell({ user, onLogout }: { user: AuthUser; onLogout: 
       return (
         <ExperimentGroupPanel
           parentCode={experimentRoute.parentCode}
-          onBack={() => setExperimentRoute({ screen: "overview" })}
+          onGroupLoaded={rememberExperimentGroup}
           onSelectExperiment={(experimentId) => setExperimentRoute({ screen: "detail", parentCode: experimentRoute.parentCode, experimentId })}
           onFinishLearning={finishLearning}
           finishing={posttestLoading}
           finishError={posttestError}
-          assistantEnabled={canUseAssistant}
-          onOpenAssistant={openAssistant}
         />
       );
     }
@@ -261,7 +374,10 @@ export function StudentAppShell({ user, onLogout }: { user: AuthUser; onLogout: 
     }
     return (
       <ExperimentsOverviewPanel
-        onSelectGroup={(parentCode) => setExperimentRoute({ screen: "group", parentCode })}
+        onSelectGroup={(group) => {
+          setExperimentHeaderMeta(experimentHeaderMetaForSummary(group));
+          setExperimentRoute({ screen: "group", parentCode: group.parent_code });
+        }}
       />
     );
   };
@@ -293,6 +409,43 @@ export function StudentAppShell({ user, onLogout }: { user: AuthUser; onLogout: 
   };
 
   const activeMeta = studentTabMeta[activeTab];
+  const isLearningChapterRoute = activeTab === "learn" && learningRoute.screen !== "entry";
+  const isExperimentModuleRoute = activeTab === "experiments" && experimentRoute.screen !== "overview";
+  const headerMeta =
+    isLearningChapterRoute && learningHeaderMeta
+      ? { title: learningHeaderMeta.title, subtitle: learningHeaderMeta.subtitle }
+      : isExperimentModuleRoute && experimentHeaderMeta
+        ? { title: experimentHeaderMeta.title, subtitle: experimentHeaderMeta.subtitle }
+      : activeMeta;
+  const headerActions = isLearningChapterRoute ? (
+    <div className="student-app-header-actions" aria-label="章节操作">
+      {canUseAssistant ? (
+        <button className="student-app-header-action" type="button" onClick={openCurrentChapterAssistant}>
+          <MessageCircle size={18} />
+          <span>去问答</span>
+        </button>
+      ) : null}
+      <button className="student-app-header-action" type="button" onClick={chooseAnotherChapter}>
+        <Atom size={18} />
+        <span>换章节</span>
+      </button>
+    </div>
+  ) : null;
+  const experimentHeaderActions = isExperimentModuleRoute ? (
+    <div className="student-app-header-actions" aria-label="实验章节操作">
+      {canUseAssistant && experimentHeaderMeta ? (
+        <button className="student-app-header-action" type="button" onClick={openCurrentExperimentAssistant}>
+          <MessageCircle size={18} />
+          <span>去问答</span>
+        </button>
+      ) : null}
+      <button className="student-app-header-action" type="button" onClick={chooseAnotherExperimentGroup}>
+        <Atom size={18} />
+        <span>换章节</span>
+      </button>
+    </div>
+  ) : null;
+  const effectiveHeaderActions = experimentHeaderActions || headerActions;
   const navItems = studentTabItems(canUseAssistant);
   const content =
     activeTab === "learn"
@@ -307,7 +460,7 @@ export function StudentAppShell({ user, onLogout }: { user: AuthUser; onLogout: 
 
   return (
     <section className="student-app-shell" aria-label="学生学习应用">
-      <StudentAppHeader title={activeMeta.title} subtitle={activeMeta.subtitle} user={user} />
+      <StudentAppHeader title={headerMeta.title} subtitle={headerMeta.subtitle} actions={effectiveHeaderActions} />
       {configError ? <div className="form-hint app-config-hint">配置刷新失败，当前页面会继续使用上一次配置：{configError}</div> : null}
       <div className="student-tab-content">{content}</div>
       <StudentBottomNav items={navItems} activeTab={activeTab} onChange={switchTab} />
@@ -333,14 +486,14 @@ function studentTabItems(canUseAssistant: boolean): Array<{ key: StudentTab; lab
   ];
 }
 
-function StudentAppHeader({ title, subtitle, user }: { title: string; subtitle: string; user: AuthUser }) {
+function StudentAppHeader({ title, subtitle, actions }: { title: string; subtitle: string; actions?: ReactNode }) {
   return (
-    <header className="student-app-header">
+    <header className={actions ? "student-app-header has-actions" : "student-app-header"}>
       <div>
         <p>{subtitle}</p>
         <h1>{title}</h1>
       </div>
-      <span>{user.display_name || user.student_id || user.username}</span>
+      {actions}
     </header>
   );
 }

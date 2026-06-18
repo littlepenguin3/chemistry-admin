@@ -15,7 +15,7 @@ from sqlalchemy import text
 from server.app.config import get_settings
 from server.app.database import db_session
 
-ALLOWED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi"}
+ALLOWED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
 ALLOWED_MEDIA_MIME_PREFIXES = ("video/",)
 PROCESSING_JOB_TYPE = "process_uploaded_video"
 

@@ -2,8 +2,7 @@ import type { CSSProperties } from "react";
 import { BookOpenCheck, ChevronRight, FlaskConical, Layers3, Sparkles, Video } from "lucide-react";
 import type { StudentLearningElementBadge, StudentLearningProfile, StudentLearningPropertyCard, StudentLearningPropertySection } from "../../api";
 import { MobileButton } from "../../mobile/primitives";
-import { ElementTileContent } from "../periodic-table/PeriodicElementCell";
-import { elementTileStyle } from "../periodic-table/periodicHelpers";
+import { LearningAtomModelCard } from "../atom-viewer/LearningAtomModelCard";
 import { LearningElementChips } from "./LearningElementChips";
 
 export function LearningFactsView({
@@ -26,7 +25,7 @@ export function LearningFactsView({
   return (
     <div className="chapter-view-panel facts-view" data-view="facts">
       <LearningElementChips elements={elements} activeSymbol={selectedElement?.symbol || ""} onSelectElement={onSelectElement} />
-      {selectedElement ? <LearningSelectedElementFacts element={selectedElement} profile={profile} /> : null}
+      {selectedElement ? <LearningAtomModelCard element={selectedElement} profile={profile} /> : null}
       <LearningReferenceMedia profile={profile} selectedElement={selectedElement} />
       <LearningFamilyCommonProperties profile={profile} />
       <LearningPropertySectionSummaries profile={profile} selectedSection={selectedSection} />
@@ -70,40 +69,6 @@ function LearningPropertySectionSummaries({
             <strong>{section.title}</strong>
             <span>{section.subtitle || section.summary}</span>
             {section.formula ? <small>{section.formula}</small> : null}
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function LearningSelectedElementFacts({ element, profile }: { element: StudentLearningElementBadge; profile: StudentLearningProfile }) {
-  const facts = [
-    { key: "atomic_number", label: "原子序数", value: element.atomic_number != null ? String(element.atomic_number) : "未整理" },
-    { key: "electron_configuration", label: "电子排布", value: element.electron_configuration || "未整理" },
-    { key: "group", label: "所属族", value: element.group_label || profile.title },
-    { key: "common_valence", label: "常见化合价", value: element.common_valence || "未整理" },
-    { key: "state", label: "单质状态", value: element.state || "未整理" },
-    { key: "redox", label: "氧化/还原性", value: element.redox_tendency || "未整理" },
-  ];
-
-  return (
-    <section className="selected-element-panel" aria-label={`${element.name}元素特性`}>
-      <div className="selected-element-head">
-        <div className="selected-element-symbol" style={elementTileStyle(element)}>
-          <ElementTileContent element={element} />
-        </div>
-        <div>
-          <p>当前元素特性</p>
-          <h2>{element.name}在{profile.family_name || profile.title}中的位置</h2>
-          {element.note ? <span>{element.note}</span> : null}
-        </div>
-      </div>
-      <div className="element-fact-grid">
-        {facts.map((fact) => (
-          <article className="element-fact-card" key={fact.key}>
-            <p>{fact.label}</p>
-            <strong>{fact.value}</strong>
           </article>
         ))}
       </div>

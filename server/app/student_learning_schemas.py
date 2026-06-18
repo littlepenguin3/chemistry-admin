@@ -92,6 +92,14 @@ class StudentLearningElementBadge(BaseModel):
     symbol: str
     name: str
     atomic_number: int | None = None
+    relative_atomic_mass: str | None = None
+    group: str | None = None
+    period: int | None = None
+    block: str | None = None
+    state_at_20c: str | None = None
+    density: str | None = None
+    rsc_url: str | None = None
+    fact_source: str | None = None
     state: str | None = None
     group_label: str | None = None
     electron_configuration: str | None = None

@@ -148,6 +148,35 @@
   background: #ffffff;
 }
 
+.assessment-empty-state {
+  justify-content: flex-start;
+  min-height: 76px;
+  padding: 14px;
+}
+
+.assessment-empty-state div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.assessment-empty-state strong,
+.assessment-empty-state small {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.assessment-empty-state strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.assessment-empty-state small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .wrong-list p,
 .wrong-list h4,
 .wrong-list span,
@@ -504,7 +533,7 @@
 
   .learning-shell {
     display: block;
-    padding: 34px 20px 48px;
+    padding: 34px var(--mobile-shell-inline) 48px;
   }
 
   .learning-shell .brand-rail {

@@ -37,7 +37,9 @@
   --mobile-title-md: 24px;
   --mobile-title-xl: 42px;
 
-  --mobile-content-max: 430px;
+  --mobile-content-max: 448px;
+  --mobile-content-inline: max(18px, calc((100vw - var(--mobile-content-max)) / 2 + 18px));
+  --mobile-chrome-inline: max(6px, calc((100vw - var(--mobile-content-max)) / 2 + 6px));
   --mobile-assessment-max: 520px;
   --mobile-floating-width: 420px;
   --mobile-feedback-width: 400px;
@@ -47,8 +49,8 @@
   --mobile-sticky-bottom: max(16px, env(safe-area-inset-bottom));
   --mobile-shell-top: max(22px, env(safe-area-inset-top));
   --mobile-shell-bottom: max(24px, env(safe-area-inset-bottom));
-  --mobile-bottom-nav-height: 76px;
-  --mobile-bottom-action-space: calc(var(--mobile-bottom-nav-height) + 28px + env(safe-area-inset-bottom));
+  --mobile-bottom-nav-height: 68px;
+  --mobile-bottom-action-space: calc(var(--mobile-bottom-nav-height) + 18px + env(safe-area-inset-bottom));
   --mobile-overlay-viewport-gap: 110px;
   --mobile-overlay-max-height: 620px;
 

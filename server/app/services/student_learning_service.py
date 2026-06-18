@@ -73,6 +73,16 @@ REQUIRED_ELEMENT_FACT_KEYS = {
     "state",
     "redox_tendency",
 }
+REQUIRED_ELEMENT_PHYSICAL_FACT_KEYS = {
+    "relative_atomic_mass",
+    "group",
+    "period",
+    "block",
+    "state_at_20c",
+    "density",
+    "rsc_url",
+    "fact_source",
+}
 REFERENCE_MEDIA_REQUIRED_KEYS = {
     "id",
     "usage",
@@ -214,6 +224,11 @@ def validate_student_learning_profiles() -> dict[str, Any]:
             missing_facts = sorted(key for key in REQUIRED_ELEMENT_FACT_KEYS if element.get(key) in (None, ""))
             if missing_facts:
                 errors.append(f"{prefix}: element {symbol} missing facts {', '.join(missing_facts)}")
+            missing_physical_facts = sorted(
+                key for key in REQUIRED_ELEMENT_PHYSICAL_FACT_KEYS if element.get(key) in (None, "")
+            )
+            if missing_physical_facts:
+                errors.append(f"{prefix}: element {symbol} missing physical facts {', '.join(missing_physical_facts)}")
         for media in profile.get("reference_media") or []:
             if not isinstance(media, dict):
                 errors.append(f"{prefix}: reference media is not an object")
@@ -307,6 +322,14 @@ def _element_badges(profile: dict[str, Any]) -> list[StudentLearningElementBadge
             symbol=str(element.get("symbol") or ""),
             name=str(element.get("name") or ""),
             atomic_number=int(element["atomic_number"]) if element.get("atomic_number") is not None else None,
+            relative_atomic_mass=str(element.get("relative_atomic_mass")) if element.get("relative_atomic_mass") else None,
+            group=str(element.get("group")) if element.get("group") else None,
+            period=int(element["period"]) if element.get("period") is not None else None,
+            block=str(element.get("block")) if element.get("block") else None,
+            state_at_20c=str(element.get("state_at_20c")) if element.get("state_at_20c") else None,
+            density=str(element.get("density")) if element.get("density") else None,
+            rsc_url=str(element.get("rsc_url")) if element.get("rsc_url") else None,
+            fact_source=str(element.get("fact_source")) if element.get("fact_source") else None,
             state=str(element.get("state")) if element.get("state") else None,
             group_label=str(element.get("group_label")) if element.get("group_label") else None,
             electron_configuration=str(element.get("electron_configuration")) if element.get("electron_configuration") else None,

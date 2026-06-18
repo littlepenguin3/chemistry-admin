@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { ChevronRight, FlaskConical, LoaderCircle } from "lucide-react";
-import { StudentLearningHomeResponse, errorMessage, getStudentLearningHome } from "../../api";
+import { StudentExperimentGroupSummary, StudentLearningHomeResponse, errorMessage, getStudentLearningHome } from "../../api";
 import { MobileEmptyState } from "../../mobile/primitives";
 import { LearningState } from "../../shared/mobile/LearningState";
 import { stripExperimentPrefix } from "./experimentFormat";
 
-export function ExperimentsOverviewPanel({ onSelectGroup }: { onSelectGroup: (parentCode: string) => void }) {
+export function ExperimentsOverviewPanel({ onSelectGroup }: { onSelectGroup: (group: StudentExperimentGroupSummary) => void }) {
   const [home, setHome] = useState<StudentLearningHomeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -35,19 +35,9 @@ export function ExperimentsOverviewPanel({ onSelectGroup }: { onSelectGroup: (pa
       {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
       {home ? (
         <>
-          <section className="resource-overview-card">
-            <div>
-              <p>实验资源</p>
-              <h2>{home.groups.length} 个实验模块</h2>
-              <span>
-                {home.areas.filter((area) => area.enabled).length} 个学习区域 / {home.groups.reduce((total, group) => total + group.question_count, 0)} 道配套题
-              </span>
-            </div>
-            <FlaskConical size={24} />
-          </section>
           <div className="experiment-module-list">
             {home.groups.map((group) => (
-              <button className={group.recommended ? "experiment-module-card recommended" : "experiment-module-card"} key={group.parent_code} type="button" onClick={() => onSelectGroup(group.parent_code)}>
+              <button className={group.recommended ? "experiment-module-card recommended" : "experiment-module-card"} key={group.parent_code} type="button" onClick={() => onSelectGroup(group)}>
                 {group.recommended ? <em>推荐学习</em> : null}
                 <div>
                   <p>{group.area_name}</p>
