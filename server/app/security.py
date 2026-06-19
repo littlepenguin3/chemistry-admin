@@ -8,7 +8,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from server.app.config import get_settings
+from server.app.infrastructure.settings import get_settings
 
 PASSWORD_ALGORITHM = "pbkdf2_sha256"
 PASSWORD_ITERATIONS = 260_000

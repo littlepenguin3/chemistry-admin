@@ -15,9 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from server.app.database import apply_migrations, db_session
+from server.app.infrastructure.database import apply_migrations, db_session
 from server.app.canonical_evidence import missing_canonical_chunk_ids, resolve_source_refs
-from server.app.services.question_bank_service import _validate_question_payload
+from server.app.domains.questions.bank import _validate_question_payload
 
 LEGACY_BANK_PATH = Path(r"E:\chemistry-rag\data\generated\experiment_question_bank_v1\experiment_question_bank_v1.json")
 FORBIDDEN_ALIAS_NAME = "experiment_question_bank_v1_with_ascii_aliases.json"

@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from server.app.database import apply_migrations, db_session
+from server.app.infrastructure.database import apply_migrations, db_session
 
 DEFAULT_CHUNK_FILE = ROOT / "data" / "seed" / "canonical_rag" / "chunks" / "textbook_experiment_chunks_v1.jsonl"
 DEFAULT_REPORT = ROOT / "artifacts" / "experiment_knowledge_framework_import_report.json"

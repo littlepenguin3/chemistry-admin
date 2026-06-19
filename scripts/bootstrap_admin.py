@@ -5,7 +5,7 @@ import getpass
 
 from sqlalchemy import text
 
-from server.app.database import apply_migrations, db_session
+from server.app.infrastructure.database import apply_migrations, db_session
 from server.app.security import hash_password
 
 

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
-from server.app.database import apply_migrations, db_session
-from server.app.formal_experiments import DEFAULT_FORMAL_EXPERIMENTS_PATH, load_formal_experiment_catalog, seed_formal_experiments
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from server.app.infrastructure.database import apply_migrations, db_session
+from server.app.domains.catalog.formal_experiments import DEFAULT_FORMAL_EXPERIMENTS_PATH, load_formal_experiment_catalog, seed_formal_experiments
 
 
 def main() -> None:

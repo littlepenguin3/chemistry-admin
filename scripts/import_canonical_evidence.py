@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from server.app.database import apply_migrations, db_session
+from server.app.infrastructure.database import apply_migrations, db_session
 
 SEED_RAG_DIR = ROOT / "data" / "seed" / "canonical_rag"
 DEFAULT_CHUNK_FILES = [

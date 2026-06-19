@@ -84,6 +84,14 @@
   font-size: 16px;
 }
 
+.video-placeholder span {
+  max-width: 260px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .experiment-detail-card,
 .detail-section {
   border: 1px solid rgba(0, 88, 38, 0.16);
@@ -114,9 +122,71 @@
 }
 
 .detail-section h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   margin: 0 0 12px;
   color: var(--ink);
   font-size: 17px;
+}
+
+.principle-section p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 760;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.principle-section.equation-mode p {
+  border-radius: 8px;
+  padding: 12px;
+  color: #073b2a;
+  background: rgba(0, 88, 38, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+}
+
+.related-point-section {
+  display: grid;
+  gap: 10px;
+}
+
+.related-point-list {
+  display: grid;
+  gap: 8px;
+}
+
+.related-point-list button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid rgba(0, 88, 38, 0.16);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: rgba(0, 88, 38, 0.05);
+  text-align: left;
+}
+
+.related-point-list span,
+.related-point-list small {
+  overflow-wrap: anywhere;
+}
+
+.related-point-list span {
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.related-point-list small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .candidate-list {
@@ -154,9 +224,14 @@
   border: 0;
   border-radius: 8px;
   padding: 0 12px;
+  color: #fff;
+  background: var(--green);
+  font-weight: 850;
+}
+
+.practice-strip button:disabled {
   color: var(--muted);
   background: rgba(0, 88, 38, 0.08);
-  font-weight: 850;
 }
 
 .finish-learning {

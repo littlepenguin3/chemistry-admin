@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from fastapi import HTTPException
-
-from server.app.services.student_pretest_service import (
+from server.app.domains.errors import DomainHTTPException
+from server.app.domains.assessments.pretest import (
     QuestionCandidate,
     _public_question,
     _select_stage1_questions,
@@ -112,7 +111,7 @@ def test_submitted_answers_reject_duplicate_question_ids() -> None:
 
     try:
         _validate_submitted_answers(["q1", "q2"], payload)
-    except HTTPException as exc:
+    except DomainHTTPException as exc:
         assert exc.status_code == 400
     else:
         raise AssertionError("duplicate question ids should be rejected")

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ClipboardList, FlaskConical, LoaderCircle, MessageCircle, Video } from "lucide-react";
+import type { ReactNode } from "react";
+import { ClipboardList, FlaskConical, LoaderCircle, MessageCircle, ShieldAlert, Video } from "lucide-react";
 import { StudentExperimentDetailResponse, errorMessage, getStudentExperimentDetail, studentMediaUrl } from "../../api";
 import { MobileButton, MobileEmptyState } from "../../mobile/primitives";
 import { FinishLearningAction } from "../../shared/learning/FinishLearningAction";
@@ -25,6 +26,7 @@ export function ExperimentDetailPanel({
   finishError,
   assistantEnabled,
   onOpenAssistant,
+  onOpenRelatedPoint,
 }: {
   experimentId: string;
   profileId?: string | null;
@@ -40,6 +42,7 @@ export function ExperimentDetailPanel({
   finishError: string;
   assistantEnabled: boolean;
   onOpenAssistant: (context: AssistantContext) => void;
+  onOpenRelatedPoint: (target: { experimentId: string; pointKey: string; pointTitle: string }) => void;
 }) {
   const [detail, setDetail] = useState<StudentExperimentDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,7 +52,7 @@ export function ExperimentDetailPanel({
     let cancelled = false;
     setLoading(true);
     setError("");
-    getStudentExperimentDetail(experimentId)
+    getStudentExperimentDetail(experimentId, pointKey)
       .then((payload) => {
         if (!cancelled) setDetail(payload);
       })
@@ -62,32 +65,44 @@ export function ExperimentDetailPanel({
     return () => {
       cancelled = true;
     };
-  }, [experimentId]);
+  }, [experimentId, pointKey]);
 
-  const video = detail?.videos.find((item) => pointKey && item.point_key === pointKey) || detail?.videos[0] || null;
-  const effectivePointTitle = pointTitle || video?.point_title || detail?.video_candidates[0] || detail?.title || "实验点位";
+  const video = detail?.videos[0] || null;
+  const effectivePointTitle =
+    detail?.selected_point_title || pointTitle || video?.point_title || detail?.video_candidates[0] || detail?.title || "实验点位";
+  const published = detail?.point_content_status === "published";
+  const principleText =
+    detail?.principle_mode === "equation" ? detail.principle_equation : detail?.principle_text;
+  const unavailableText =
+    detail?.point_content_status === "draft"
+      ? "该点位内容仍在编辑中，学生端暂不展示草稿。"
+      : detail?.point_content_status === "archived"
+        ? "该点位内容已归档，暂不可学习。"
+        : "该点位还没有发布学习内容。";
   const detailAssistantContext: AssistantContext | null = detail
     ? {
         context_type: "learning_point",
         context_title: effectivePointTitle,
         context_summary: compactText([
-          chapterView ? `当前视图：${chapterView === "experiments" ? "实验视频" : "性质通识"}` : null,
-          propertyTitle ? `相关性质：${propertyTitle}` : null,
+          chapterView ? `当前视图：${chapterView === "experiments" ? "实验视频" : "性质学习"}` : null,
+          propertyTitle ? `关联属性：${propertyTitle}` : null,
           elementSymbol ? `当前元素：${elementSymbol}` : null,
           `实验：${detail.title}`,
           detail.summary || null,
-          pointKey ? `点位标识：${pointKey}` : null,
-          detail.video_candidates.length ? `观察点：${detail.video_candidates.join("、")}` : null,
-          detail.videos.length ? `视频：${detail.videos.map((item) => item.point_title || item.title).join("、")}` : null,
+          detail.selected_point_key ? `点位：${detail.selected_point_key}` : pointKey ? `点位：${pointKey}` : null,
+          published && principleText ? `实验原理：${principleText}` : null,
+          published && detail.phenomenon_explanation ? `现象解释：${detail.phenomenon_explanation}` : null,
+          published && detail.safety_note ? `安全提示：${detail.safety_note}` : null,
         ]),
-        chapter_id: detail.chapter_ids[0] || null,
+        chapter_id: detail.assessment_context.chapter_ids[0] || detail.chapter_ids[0] || null,
         experiment_id: detail.id,
-        point_key: pointKey || video?.point_key || detail.video_candidates[0] || null,
-        prompts: ["这个现象说明什么？", "帮我解释反应原理", "这个实验怎么记？"],
+        point_key: detail.selected_point_key || pointKey || null,
+        prompts: ["解释这个实验现象", "帮我梳理实验原理", "这个实验有哪些安全注意点"],
       }
     : null;
+
   return (
-    <section className="learning-panel" aria-label="实验详情">
+    <section className="learning-panel" aria-label="实验点位详情">
       <PageBar title={effectivePointTitle} onBack={onBack} />
       {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载实验详情" /> : null}
       {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
@@ -104,7 +119,8 @@ export function ExperimentDetailPanel({
             ) : (
               <div className="video-placeholder">
                 <Video size={34} />
-                <strong>实验视频待发布</strong>
+                <strong>暂无可播放视频</strong>
+                <span>学习内容仍可阅读，视频发布后会自动出现在这里。</span>
               </div>
             )}
           </section>
@@ -116,41 +132,93 @@ export function ExperimentDetailPanel({
             {detail.summary ? <span>{detail.summary}</span> : null}
           </section>
 
-          <section className="detail-section">
-            <h3>实验观察与相关点位</h3>
-            {detail.video_candidates.length ? (
-              <div className="candidate-list">
-                {detail.video_candidates.map((candidate) => (
-                  <div key={candidate}>
-                    <FlaskConical size={16} />
-                    <span>{candidate}</span>
-                  </div>
+          {published ? (
+            <>
+              <LearningContentSection
+                title="实验原理"
+                mode={detail.principle_mode}
+                body={principleText || ""}
+              />
+              <LearningContentSection title="现象解释" body={detail.phenomenon_explanation || ""} />
+              <LearningContentSection
+                title="安全提示"
+                body={detail.safety_note || ""}
+                icon={<ShieldAlert size={18} />}
+              />
+            </>
+          ) : (
+            <MobileEmptyState className="empty-learning-card" icon={<FlaskConical size={20} />}>
+              <span>{unavailableText}</span>
+            </MobileEmptyState>
+          )}
+
+          <section className="detail-section related-point-section">
+            <h3>相关实验链接</h3>
+            {detail.related_points.length ? (
+              <div className="related-point-list">
+                {detail.related_points.map((item) => (
+                  <button
+                    type="button"
+                    key={`${item.experiment_id}-${item.point_key}`}
+                    onClick={() =>
+                      onOpenRelatedPoint({
+                        experimentId: item.experiment_id,
+                        pointKey: item.point_key,
+                        pointTitle: item.point_title,
+                      })
+                    }
+                  >
+                    <span>{item.point_title}</span>
+                    {item.experiment_title ? <small>{stripExperimentPrefix(item.experiment_title)}</small> : null}
+                  </button>
                 ))}
               </div>
             ) : (
-              <MobileEmptyState className="empty-learning-card">暂无观察点</MobileEmptyState>
+              <MobileEmptyState className="empty-learning-card">暂无相关实验链接</MobileEmptyState>
             )}
           </section>
 
           <section className="detail-section practice-strip">
             <div>
-              <p>练习</p>
+              <p>去测试</p>
               <h3>{detail.question_count} 题</h3>
             </div>
-            <button type="button" disabled>
+            <button type="button" disabled={finishing} onClick={onFinishLearning}>
               <ClipboardList size={17} />
-              <span>暂未开放</span>
+              <span>开始测试</span>
             </button>
           </section>
           {assistantEnabled && detailAssistantContext ? (
             <MobileButton className="secondary-action full context-assistant-action" type="button" variant="secondary" onClick={() => onOpenAssistant(detailAssistantContext)}>
               <MessageCircle size={18} />
-              <span>带着这个点位去问答</span>
+              <span>带着这个点位问 AI</span>
             </MobileButton>
           ) : null}
           <FinishLearningAction loading={finishing} error={finishError} onClick={onFinishLearning} />
         </>
       ) : null}
+    </section>
+  );
+}
+
+function LearningContentSection({
+  title,
+  body,
+  mode,
+  icon,
+}: {
+  title: string;
+  body: string;
+  mode?: string;
+  icon?: ReactNode;
+}) {
+  return (
+    <section className={mode === "equation" ? "detail-section principle-section equation-mode" : "detail-section principle-section"}>
+      <h3>
+        {icon}
+        <span>{title}</span>
+      </h3>
+      {body ? <p>{body}</p> : <MobileEmptyState className="empty-learning-card">暂无内容</MobileEmptyState>}
     </section>
   );
 }

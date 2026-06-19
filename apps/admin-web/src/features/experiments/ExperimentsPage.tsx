@@ -63,7 +63,94 @@ type VideoPreviewTarget = {
   upload_status?: string | null;
 };
 
-type VideoPointFilter = "all" | "empty" | "referenced" | "published";
+export type VideoPointFilter = "all" | "empty" | "referenced" | "published" | "missing_content" | "draft_content" | "published_content" | "unpublished_video" | "sync_error";
+
+export type PointContentFormValues = {
+  point_title: string;
+  principle_mode: "equation" | "text";
+  principle_equation?: string;
+  principle_text?: string;
+  phenomenon_explanation?: string;
+  safety_note?: string;
+  links?: Array<{
+    target?: string;
+    relation_type?: "manual" | "default_override";
+    hidden?: boolean;
+    sort_order?: number;
+    label?: string;
+  }>;
+};
+
+const videoPointFilterOptions: Array<{ value: VideoPointFilter; label: string }> = [
+  { value: "all", label: "全部" },
+  { value: "empty", label: "无视频" },
+  { value: "referenced", label: "有视频" },
+  { value: "published", label: "已发布视频" },
+  { value: "missing_content", label: "缺内容" },
+  { value: "draft_content", label: "草稿内容" },
+  { value: "published_content", label: "已发布内容" },
+  { value: "unpublished_video", label: "视频未发布" },
+  { value: "sync_error", label: "索引异常" },
+];
+
+type PointRelatedLinkPayload = {
+  target_experiment_id: string;
+  target_point_key: string;
+  relation_type: "manual" | "default_override";
+  hidden: boolean;
+  sort_order: number;
+  label: string | null;
+};
+
+function isPointRelatedLinkPayload(value: PointRelatedLinkPayload | null): value is PointRelatedLinkPayload {
+  return value !== null;
+}
+
+export function buildPointContentRequest(values: PointContentFormValues): Record<string, unknown> {
+  const principleMode = values.principle_mode || "text";
+  return {
+    point_title: values.point_title,
+    principle_mode: principleMode,
+    principle_equation: principleMode === "equation" ? values.principle_equation || "" : "",
+    principle_text: principleMode === "text" ? values.principle_text || "" : "",
+    phenomenon_explanation: values.phenomenon_explanation || "",
+    safety_note: values.safety_note || "",
+  };
+}
+
+export function buildPointRelatedLinksRequest(values: PointContentFormValues): { links: PointRelatedLinkPayload[] } {
+  const links = (values.links || [])
+    .map((link, index): PointRelatedLinkPayload | null => {
+      const [targetExperimentId, targetPointKey] = String(link.target || "").split("::");
+      if (!targetExperimentId || !targetPointKey) return null;
+      return {
+        target_experiment_id: targetExperimentId,
+        target_point_key: targetPointKey,
+        relation_type: link.relation_type || "manual",
+        hidden: Boolean(link.hidden),
+        sort_order: link.sort_order || index + 1,
+        label: link.label || null,
+      };
+    })
+    .filter(isPointRelatedLinkPayload);
+  return { links };
+}
+
+export function buildPointPublicationRequest(action: "publish" | "unpublish" | "archive"): { action: "publish" | "unpublish" | "archive" } {
+  return { action };
+}
+
+export function filterVideoPointsForAdmin(points: ExperimentVideoPoint[], filter: VideoPointFilter): ExperimentVideoPoint[] {
+  if (filter === "empty") return points.filter((point) => point.resource_count === 0);
+  if (filter === "referenced") return points.filter((point) => point.resource_count > 0);
+  if (filter === "published") return points.filter((point) => point.published_count > 0);
+  if (filter === "missing_content") return points.filter((point) => !point.content || point.content.content_status === "missing");
+  if (filter === "draft_content") return points.filter((point) => point.content?.content_status === "draft");
+  if (filter === "published_content") return points.filter((point) => point.content?.content_status === "published");
+  if (filter === "unpublished_video") return points.filter((point) => point.resource_count > 0 && point.published_count === 0);
+  if (filter === "sync_error") return points.filter((point) => point.index_state?.sync_status === "failed");
+  return points;
+}
 
 export function ExperimentsPage() {
   const { message } = AntApp.useApp();
@@ -76,8 +163,10 @@ export function ExperimentsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [form] = Form.useForm();
   const [createForm] = Form.useForm();
+  const [pointContentForm] = Form.useForm<PointContentFormValues>();
   const [videoPointFilter, setVideoPointFilter] = useState<VideoPointFilter>("all");
   const [referencePoint, setReferencePoint] = useState<ExperimentVideoPoint | null>(null);
+  const [contentPoint, setContentPoint] = useState<ExperimentVideoPoint | null>(null);
   const [assetKeyword, setAssetKeyword] = useState("");
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [previewTarget, setPreviewTarget] = useState<VideoPreviewTarget | null>(null);
@@ -138,12 +227,7 @@ export function ExperimentsPage() {
       return `${asset.title} ${asset.original_file_name}`.toLowerCase().includes(keyword);
     });
   }, [assetKeyword, referenceAssets]);
-  const filteredVideoPoints = useMemo(() => {
-    if (videoPointFilter === "empty") return videoPointItems.filter((point) => point.resource_count === 0);
-    if (videoPointFilter === "referenced") return videoPointItems.filter((point) => point.resource_count > 0);
-    if (videoPointFilter === "published") return videoPointItems.filter((point) => point.published_count > 0);
-    return videoPointItems;
-  }, [videoPointFilter, videoPointItems]);
+  const filteredVideoPoints = useMemo(() => filterVideoPointsForAdmin(videoPointItems, videoPointFilter), [videoPointFilter, videoPointItems]);
 
   useEffect(() => {
     if (currentExperiment) {
@@ -162,13 +246,43 @@ export function ExperimentsPage() {
     setAssetKeyword("");
     setSelectedAssetIds([]);
     setPreviewTarget(null);
+    setContentPoint(null);
+    pointContentForm.resetFields();
     setPendingVideoBindingAction(null);
-  }, [selected?.id]);
+  }, [pointContentForm, selected?.id]);
 
   useEffect(() => {
     setSelectedAssetIds([]);
     setAssetKeyword("");
   }, [referencePoint?.point_key]);
+
+  useEffect(() => {
+    if (!contentPoint) {
+      pointContentForm.resetFields();
+      return;
+    }
+    pointContentForm.setFieldsValue({
+      point_title: contentPoint.point_title,
+      principle_mode: contentPoint.content?.principle_mode || "text",
+      principle_equation: contentPoint.content?.principle_equation || "",
+      principle_text: contentPoint.content?.principle_text || "",
+      phenomenon_explanation: contentPoint.content?.phenomenon_explanation || "",
+      safety_note: contentPoint.content?.safety_note || "",
+      links: (contentPoint.related_links || []).map((link, index) => ({
+        target: `${link.target_experiment_id}::${link.target_point_key}`,
+        relation_type: link.relation_type === "default_override" ? "default_override" : "manual",
+        hidden: Boolean(link.hidden),
+        sort_order: link.sort_order || index + 1,
+        label: link.label || "",
+      })),
+    });
+  }, [contentPoint, pointContentForm]);
+
+  useEffect(() => {
+    if (!contentPoint) return;
+    const updated = videoPointItems.find((point) => point.point_key === contentPoint.point_key);
+    if (updated && updated !== contentPoint) setContentPoint(updated);
+  }, [contentPoint, videoPointItems]);
 
   useEffect(() => {
     let objectUrl: string | undefined;
@@ -342,6 +456,48 @@ export function ExperimentsPage() {
     onSettled: () => setPendingVideoBindingAction(null),
   });
 
+  const savePointContent = useMutation({
+    mutationFn: async (values: PointContentFormValues) => {
+      if (!currentExperimentId || !contentPoint) {
+        throw new Error("请选择实验点位");
+      }
+      await putJson<ExperimentVideoPointsResponse>(
+        `/api/admin/experiments/${currentExperimentId}/video-points/${encodeURIComponent(contentPoint.point_key)}/content`,
+        buildPointContentRequest(values),
+      );
+      return putJson<ExperimentVideoPointsResponse>(
+        `/api/admin/experiments/${currentExperimentId}/video-points/${encodeURIComponent(contentPoint.point_key)}/related-links`,
+        buildPointRelatedLinksRequest(values),
+      );
+    },
+    onSuccess: (payload) => {
+      message.success("点位内容已保存");
+      const updated = payload.points.find((point) => point.point_key === contentPoint?.point_key) || null;
+      setContentPoint(updated);
+      invalidateVideoReferenceData(currentExperimentId);
+    },
+    onError: (error) => message.error(errorMessage(error)),
+  });
+
+  const changePointPublication = useMutation({
+    mutationFn: (action: "publish" | "unpublish" | "archive") => {
+      if (!currentExperimentId || !contentPoint) {
+        throw new Error("请选择实验点位");
+      }
+      return postJson<ExperimentVideoPointsResponse>(
+        `/api/admin/experiments/${currentExperimentId}/video-points/${encodeURIComponent(contentPoint.point_key)}/publication`,
+        buildPointPublicationRequest(action),
+      );
+    },
+    onSuccess: (payload) => {
+      message.success("点位发布状态已更新");
+      const updated = payload.points.find((point) => point.point_key === contentPoint?.point_key) || null;
+      setContentPoint(updated);
+      invalidateVideoReferenceData(currentExperimentId);
+    },
+    onError: (error) => message.error(errorMessage(error)),
+  });
+
   const isVideoBindingActionPending = (resource: ExperimentVideoPointResource, action: "publish" | "unpublish" | "delete") =>
     pendingVideoBindingAction?.bindingId === resource.binding_id && pendingVideoBindingAction.action === action;
   const isVideoBindingBusy = (resource: ExperimentVideoPointResource) => pendingVideoBindingAction?.bindingId === resource.binding_id;
@@ -376,6 +532,16 @@ export function ExperimentsPage() {
         { total: 0, draft: 0, published: 0, archived: 0 },
       ),
     [scopedExperiments],
+  );
+  const pointTargetOptions = useMemo(
+    () =>
+      videoPointItems
+        .filter((point) => point.point_key !== contentPoint?.point_key)
+        .map((point) => ({
+          value: `${currentExperimentId}::${point.point_key}`,
+          label: point.point_title,
+        })),
+    [contentPoint?.point_key, currentExperimentId, videoPointItems],
   );
   const hasFilters = Boolean(experimentKeyword || chapterId || statusFilter);
 
@@ -598,12 +764,7 @@ export function ExperimentsPage() {
                     <Segmented
                       value={videoPointFilter}
                       onChange={(value) => setVideoPointFilter(value as VideoPointFilter)}
-                      options={[
-                        { value: "all", label: "全部" },
-                        { value: "empty", label: "未引用" },
-                        { value: "referenced", label: "已引用" },
-                        { value: "published", label: "已发布" },
-                      ]}
+                      options={videoPointFilterOptions}
                     />
                     <Text type="secondary">从视频资源库选择已上传视频，引用到具体候选点。</Text>
                   </Flex>
@@ -630,15 +791,38 @@ export function ExperimentsPage() {
                                 <div className="video-point-title">
                                   <Text strong>{point.point_title}</Text>
                                   <Space size={6} wrap>
+                                    <Tag color={point.content?.content_status === "published" ? "green" : point.content?.content_status === "draft" ? "orange" : "default"}>
+                                      内容 {point.content?.content_status || "missing"}
+                                    </Tag>
+                                    <Tag color={point.validation?.complete ? "green" : "red"}>
+                                      {point.validation?.complete ? "完整" : `缺 ${point.validation?.errors.length || 0}`}
+                                    </Tag>
+                                    <Tag color={point.index_state?.sync_status === "failed" ? "red" : point.index_state?.sync_status === "synced" ? "green" : "blue"}>
+                                      索引 {point.index_state?.sync_status || "pending"}
+                                    </Tag>
                                     <Tag color={point.resource_count ? "blue" : "default"}>已引用 {point.resource_count}</Tag>
                                     <Tag color={point.published_count ? "green" : "default"}>已发布 {point.published_count}</Tag>
                                   </Space>
                                 </div>
                               </Space>
-                              <Button type={point.resource_count ? "default" : "primary"} icon={<PlusOutlined />} onClick={() => setReferencePoint(point)}>
+                              <Space size={8} wrap>
+                                <Button icon={<EditOutlined />} onClick={() => setContentPoint(point)}>
+                                  编辑内容
+                                </Button>
+                                <Button type={point.resource_count ? "default" : "primary"} icon={<PlusOutlined />} onClick={() => setReferencePoint(point)}>
                                 引用视频
-                              </Button>
+                                </Button>
+                              </Space>
                             </Flex>
+
+                            <div className="point-content-summary">
+                              <Text type="secondary">
+                                {point.content?.principle_mode === "equation"
+                                  ? point.content?.principle_equation || "未填写方程式原理"
+                                  : point.content?.principle_text || "未填写文字原理"}
+                              </Text>
+                              <Text type="secondary">{point.content?.phenomenon_explanation || "未填写现象解释"}</Text>
+                            </div>
 
                             {point.resources.length ? (
                               <div className="video-point-resources">
@@ -754,6 +938,107 @@ export function ExperimentsPage() {
           </Space>
         </QueryState>
       </Drawer>
+
+      <Modal
+        title={contentPoint ? `编辑点位：${contentPoint.point_title}` : "编辑点位内容"}
+        open={Boolean(contentPoint)}
+        width={860}
+        onCancel={() => setContentPoint(null)}
+        footer={[
+          <Button key="cancel" onClick={() => setContentPoint(null)}>
+            关闭
+          </Button>,
+          <Button key="archive" danger disabled={!contentPoint} loading={changePointPublication.isPending} onClick={() => changePointPublication.mutate("archive")}>
+            归档内容
+          </Button>,
+          <Button key="unpublish" disabled={!contentPoint} loading={changePointPublication.isPending} onClick={() => changePointPublication.mutate("unpublish")}>
+            撤回发布
+          </Button>,
+          <Button key="save" loading={savePointContent.isPending} onClick={() => pointContentForm.submit()}>
+            保存草稿
+          </Button>,
+          <Button key="publish" type="primary" disabled={!contentPoint} loading={changePointPublication.isPending} onClick={() => changePointPublication.mutate("publish")}>
+            发布并同步搜索
+          </Button>,
+        ]}
+      >
+        <Form form={pointContentForm} layout="vertical" onFinish={(values) => savePointContent.mutate(values)}>
+          <Space orientation="vertical" size={14} className="full">
+            {contentPoint?.validation?.errors.length ? (
+              <Alert
+                type="warning"
+                showIcon
+                title="发布前需要补齐内容"
+                description={contentPoint.validation.errors.join("；")}
+              />
+            ) : null}
+            <Form.Item name="point_title" label="点位标题" rules={[{ required: true, message: "请输入点位标题" }]}>
+              <Input maxLength={200} />
+            </Form.Item>
+            <Form.Item name="principle_mode" label="实验原理类型" rules={[{ required: true }]}>
+              <Segmented
+                options={[
+                  { value: "equation", label: "化学方程式" },
+                  { value: "text", label: "文字描述" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item noStyle shouldUpdate={(prev, next) => prev.principle_mode !== next.principle_mode}>
+              {({ getFieldValue }) =>
+                getFieldValue("principle_mode") === "equation" ? (
+                  <Form.Item name="principle_equation" label="化学方程式" rules={[{ required: true, message: "请输入化学方程式" }]}>
+                    <Input placeholder="Na2S2O3 + 2 HCl = 2 NaCl + S↓ + SO2↑ + H2O" />
+                  </Form.Item>
+                ) : (
+                  <Form.Item name="principle_text" label="原理文字描述" rules={[{ required: true, message: "请输入原理文字描述" }]}>
+                    <Input.TextArea rows={3} maxLength={500} showCount className="fixed-textarea" />
+                  </Form.Item>
+                )
+              }
+            </Form.Item>
+            <Form.Item name="phenomenon_explanation" label="现象解释" rules={[{ required: true, message: "请输入现象解释" }]}>
+              <Input.TextArea rows={4} maxLength={800} showCount className="fixed-textarea" />
+            </Form.Item>
+            <Form.Item name="safety_note" label="安全提示" rules={[{ required: true, message: "请输入安全提示" }]}>
+              <Input.TextArea rows={4} maxLength={800} showCount className="fixed-textarea" />
+            </Form.Item>
+            <Divider>相关实验链接</Divider>
+            <Form.List name="links">
+              {(fields, { add, remove }) => (
+                <Space orientation="vertical" size={10} className="full">
+                  {fields.map((field) => (
+                    <div className="related-link-editor-row" key={field.key}>
+                      <Form.Item name={[field.name, "target"]} rules={[{ required: true, message: "请选择目标点位" }]}>
+                        <Select options={pointTargetOptions} placeholder="选择当前实验的相邻或相关点位" />
+                      </Form.Item>
+                      <Form.Item name={[field.name, "relation_type"]}>
+                        <Select
+                          options={[
+                            { value: "manual", label: "人工链接" },
+                            { value: "default_override", label: "默认链接覆盖" },
+                          ]}
+                        />
+                      </Form.Item>
+                      <Form.Item name={[field.name, "sort_order"]}>
+                        <InputNumber min={1} />
+                      </Form.Item>
+                      <Form.Item name={[field.name, "hidden"]} valuePropName="checked">
+                        <Checkbox>隐藏</Checkbox>
+                      </Form.Item>
+                      <Button danger icon={<DeleteOutlined />} onClick={() => remove(field.name)}>
+                        删除
+                      </Button>
+                    </div>
+                  ))}
+                  <Button icon={<PlusOutlined />} onClick={() => add({ relation_type: "manual", hidden: false, sort_order: fields.length + 1 })}>
+                    添加相关点位
+                  </Button>
+                </Space>
+              )}
+            </Form.List>
+          </Space>
+        </Form>
+      </Modal>
 
       <Modal
         title={referencePoint ? `为「${referencePoint.point_title}」引用视频` : "引用视频"}

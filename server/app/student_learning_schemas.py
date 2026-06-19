@@ -77,7 +77,32 @@ class StudentExperimentGroupResponse(BaseModel):
     experiments: list[StudentExperimentPointSummary] = Field(default_factory=list)
 
 
+class StudentExperimentRelatedPoint(BaseModel):
+    experiment_id: str
+    point_key: str
+    point_title: str
+    experiment_title: str | None = None
+    relation_type: str | None = None
+
+
+class StudentExperimentAssessmentContext(BaseModel):
+    experiment_id: str | None = None
+    chapter_ids: list[str] = Field(default_factory=list)
+    parent_code: str | None = None
+    parent_title: str | None = None
+
+
 class StudentExperimentDetailResponse(StudentExperimentPointSummary):
+    selected_point_key: str | None = None
+    selected_point_title: str | None = None
+    point_content_status: str = "missing"
+    principle_mode: str = "text"
+    principle_equation: str | None = None
+    principle_text: str | None = None
+    phenomenon_explanation: str | None = None
+    safety_note: str | None = None
+    related_points: list[StudentExperimentRelatedPoint] = Field(default_factory=list)
+    assessment_context: StudentExperimentAssessmentContext = Field(default_factory=StudentExperimentAssessmentContext)
     video_candidates: list[str] = Field(default_factory=list)
     videos: list[StudentVideoResource] = Field(default_factory=list)
 

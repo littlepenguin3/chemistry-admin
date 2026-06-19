@@ -2,7 +2,7 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from server.app.admin_main import app
+from server.app.app_runtime.main import app
 from server.app.auth import AuthUser, PasswordChangeRequest, StudentPasswordChangeRequest, require_roles
 
 

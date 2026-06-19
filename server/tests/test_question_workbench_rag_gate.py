@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from server.app.config import Settings
-import server.app.services.question_workbench_service as question_workbench_service
-from server.app.services.question_workbench_service import _question_workbench_rag_gate
+from server.app.infrastructure.settings import Settings
+import server.app.domains.questions.workbench as question_workbench_service
+from server.app.domains.questions.workbench import _question_workbench_rag_gate
 
 
 def _rag_gate_settings(**overrides):

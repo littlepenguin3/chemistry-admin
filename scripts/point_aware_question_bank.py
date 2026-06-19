@@ -17,9 +17,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from server.app.canonical_evidence import resolve_source_refs
-from server.app.database import apply_migrations, db_session
-from server.app.services.experiment_catalog_service import _candidate_point_key, _video_candidates
-from server.app.services.question_bank_service import _validate_question_payload
+from server.app.infrastructure.database import apply_migrations, db_session
+from server.app.domains.catalog.experiments import _video_candidates
+from server.app.domains.experiment_points.canonical_points import candidate_point_key as _candidate_point_key
+from server.app.domains.questions.bank import _validate_question_payload
 
 ARTIFACT_DIR = ROOT / "artifacts" / "point-aware-question-bank"
 SEED_DIR = ROOT / "data" / "seed"

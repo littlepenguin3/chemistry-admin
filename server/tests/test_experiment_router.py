@@ -16,4 +16,8 @@ def test_experiment_video_routes_are_registered_once() -> None:
     assert_route("/api/admin/experiments/{experiment_id}/videos/bind", "POST")
     assert_route("/api/admin/experiments/{experiment_id}/video-points", "GET")
     assert_route("/api/admin/experiments/{experiment_id}/video-points/{point_key}/resources", "POST")
+    assert_route("/api/admin/experiments/{experiment_id}/video-points/{point_key}/content", "PUT")
+    assert_route("/api/admin/experiments/{experiment_id}/video-points/{point_key}/publication", "POST")
+    assert_route("/api/admin/experiments/{experiment_id}/video-points/{point_key}/related-links", "PUT")
     assert_route("/api/admin/experiment-videos", "GET")
+    assert_route("/api/admin/video-library/index/diagnostics", "GET")

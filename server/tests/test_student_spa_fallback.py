@@ -8,7 +8,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
-from server.app import admin_main
+from server.app.app_runtime import main as app_runtime
 
 
 def _prepare_student_dist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -16,12 +16,12 @@ def _prepare_student_dist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Pa
     dist_dir.mkdir()
     index_path = dist_dir / "index.html"
     index_path.write_text("<!doctype html><div id=\"root\"></div>", encoding="utf-8")
-    monkeypatch.setattr(admin_main, "settings", replace(admin_main.settings, student_web_dist=dist_dir))
+    monkeypatch.setattr(app_runtime, "settings", replace(app_runtime.settings, student_web_dist=dist_dir))
     return index_path
 
 
 def _student_fallback(path: str) -> FileResponse:
-    return asyncio.run(admin_main.student_web(path))
+    return asyncio.run(app_runtime.student_web(path))
 
 
 @pytest.mark.parametrize(

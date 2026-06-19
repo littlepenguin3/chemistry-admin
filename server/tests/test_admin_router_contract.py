@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from server.app.admin_main import app
+from server.app.app_runtime.main import app
 
 
 ADMIN_ROUTE_CONTRACTS = [
@@ -59,8 +59,6 @@ ADMIN_ROUTE_CONTRACTS = [
     ("POST", "/api/admin/media/bindings/{binding_id}/publish"),
     ("POST", "/api/admin/media/bindings/{binding_id}/unpublish"),
     ("DELETE", "/api/admin/media/bindings/{binding_id}"),
-    ("POST", "/api/admin/media/bindings/{binding_id}/delete"),
-    ("POST", "/api/admin/media/bindings/{binding_id}/archive"),
 ]
 
 
@@ -86,7 +84,7 @@ def test_admin_routes_are_registered_once(method: str, path: str) -> None:
     assert len(_routes_for(path, method)) == 1
 
 
-def test_media_binding_compatibility_routes_are_registered() -> None:
+def test_media_binding_canonical_routes_are_registered_and_aliases_removed() -> None:
     _routes_for_binding = {
         (method, path): len(_routes_for(path, method))
         for method, path in ADMIN_ROUTE_CONTRACTS
@@ -97,9 +95,10 @@ def test_media_binding_compatibility_routes_are_registered() -> None:
         ("POST", "/api/admin/media/bindings/{binding_id}/publish"): 1,
         ("POST", "/api/admin/media/bindings/{binding_id}/unpublish"): 1,
         ("DELETE", "/api/admin/media/bindings/{binding_id}"): 1,
-        ("POST", "/api/admin/media/bindings/{binding_id}/delete"): 1,
-        ("POST", "/api/admin/media/bindings/{binding_id}/archive"): 1,
     }
+
+    assert _routes_for("/api/admin/media/bindings/{binding_id}/delete", "POST") == []
+    assert _routes_for("/api/admin/media/bindings/{binding_id}/archive", "POST") == []
 
 
 def test_legacy_admin_router_files_are_removed() -> None:

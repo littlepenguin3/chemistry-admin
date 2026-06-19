@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from server.app.admin_main import app
+from server.app.app_runtime.main import app
 
 
 def assert_route(path: str, method: str) -> None:

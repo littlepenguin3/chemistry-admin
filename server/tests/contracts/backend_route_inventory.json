@@ -1,0 +1,812 @@
+{
+  "description": "Canonical FastAPI route inventory for backend-slim-domain-architecture.",
+  "runtime_entrypoint": "server.app.app_runtime.main:app",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/",
+      "name": "student_web",
+      "owner": "runtime"
+    },
+    {
+      "method": "GET",
+      "path": "/admin",
+      "name": "admin_web",
+      "owner": "runtime"
+    },
+    {
+      "method": "MOUNT",
+      "path": "/admin/assets",
+      "name": "admin-assets",
+      "owner": "runtime"
+    },
+    {
+      "method": "GET",
+      "path": "/admin/sysu-logo.svg",
+      "name": "admin_logo",
+      "owner": "runtime"
+    },
+    {
+      "method": "GET",
+      "path": "/admin/{full_path:path}",
+      "name": "admin_web",
+      "owner": "runtime"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/ai-configuration",
+      "name": "admin_get_ai_configuration",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/ai-configuration",
+      "name": "admin_update_ai_configuration",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/analytics/classes/{class_id}/dashboard",
+      "name": "admin_class_dashboard",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/analytics/classes/{class_id}/export",
+      "name": "admin_export_class_report",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/analytics/classes/{class_id}/students/{student_id}",
+      "name": "admin_student_report",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/analytics/classes/{class_id}/weak-points",
+      "name": "admin_class_weak_points",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/classes",
+      "name": "admin_list_classes",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/classes",
+      "name": "admin_create_class",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/classes/{class_id}",
+      "name": "admin_get_class",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/classes/{class_id}",
+      "name": "admin_update_class",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/classes/{class_id}/registration-settings",
+      "name": "admin_get_class_registration_settings",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/classes/{class_id}/registration-settings",
+      "name": "admin_update_class_registration_settings",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/classes/{class_id}/roster/import",
+      "name": "admin_import_roster",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/classes/{class_id}/roster/preview",
+      "name": "admin_preview_roster_import",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/classes/{class_id}/students",
+      "name": "admin_list_roster_students",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/classes/{class_id}/students",
+      "name": "admin_create_roster_student",
+      "owner": "admin-api"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/classes/{class_id}/students/{student_id}",
+      "name": "admin_disable_roster_student",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/classes/{class_id}/students/{student_id}",
+      "name": "admin_update_roster_student",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/classes/{class_id}/students/{student_id}/reset-password",
+      "name": "admin_reset_student_password",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/classes/{class_id}/teachers",
+      "name": "admin_assign_teacher_to_class",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/curriculum/versions",
+      "name": "admin_list_curriculum_versions",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/curriculum/versions",
+      "name": "admin_create_curriculum_version",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/curriculum/versions/{version_id}",
+      "name": "admin_get_curriculum_version",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/curriculum/versions/{version_id}/archive",
+      "name": "admin_archive_curriculum_version",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/curriculum/versions/{version_id}/publish",
+      "name": "admin_publish_curriculum_version",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/experiment-knowledge-framework/overview",
+      "name": "admin_experiment_knowledge_framework_overview",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/experiment-videos",
+      "name": "admin_list_experiment_videos",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/experiments",
+      "name": "admin_list_experiments",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/experiments",
+      "name": "admin_create_experiment",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/experiments/{experiment_id}",
+      "name": "admin_get_experiment",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/experiments/{experiment_id}",
+      "name": "admin_update_experiment",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/experiments/{experiment_id}/chapter-bindings",
+      "name": "admin_replace_chapter_bindings",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/experiments/{experiment_id}/video-points",
+      "name": "admin_get_experiment_video_points",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/experiments/{experiment_id}/video-points/{point_key}/content",
+      "name": "admin_save_experiment_point_content",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/experiments/{experiment_id}/video-points/{point_key}/publication",
+      "name": "admin_set_experiment_point_publication",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/experiments/{experiment_id}/video-points/{point_key}/related-links",
+      "name": "admin_replace_experiment_point_related_links",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/experiments/{experiment_id}/video-points/{point_key}/resources",
+      "name": "admin_add_experiment_video_point_resource",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/experiments/{experiment_id}/videos/bind",
+      "name": "admin_bind_existing_experiment_video",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/experiments/{experiment_id}/videos/upload",
+      "name": "admin_upload_experiment_video",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/feedback",
+      "name": "admin_list_feedback",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/feedback/summary",
+      "name": "admin_feedback_summary",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/feedback/{feedback_id}",
+      "name": "admin_get_feedback",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/feedback/{feedback_id}",
+      "name": "admin_update_feedback",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/feedback/{feedback_id}/attachments/{attachment_id}",
+      "name": "admin_get_feedback_attachment",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/learning-assistant/ask",
+      "name": "admin_test_learning_assistant",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/learning-assistant/ask/stream",
+      "name": "admin_stream_learning_assistant",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/learning-assistant/runtime",
+      "name": "admin_get_learning_assistant_runtime",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/learning-resources/overview",
+      "name": "admin_learning_resources_overview",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/media/assets",
+      "name": "admin_list_media_assets",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/media/assets",
+      "name": "admin_upload_media_asset",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/media/assets/complete-upload",
+      "name": "admin_complete_resumable_media_upload",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/media/assets/precheck",
+      "name": "admin_precheck_media_asset",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/media/assets/processing",
+      "name": "admin_media_processing_status",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/media/assets/{asset_id}/file",
+      "name": "admin_get_media_asset_file",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/media/assets/{asset_id}/replace",
+      "name": "admin_replace_media_asset",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/media/assets/{asset_id}/retry-processing",
+      "name": "admin_retry_media_asset_processing",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/media/assets/{asset_id}/stream",
+      "name": "admin_stream_media_asset_file",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/media/assets/{asset_id}/thumbnail",
+      "name": "admin_get_media_asset_thumbnail",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/media/bindings",
+      "name": "admin_create_media_binding",
+      "owner": "admin-api"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/media/bindings/{binding_id}",
+      "name": "admin_delete_media_binding",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/media/bindings/{binding_id}/publish",
+      "name": "admin_publish_media_binding",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/media/bindings/{binding_id}/unpublish",
+      "name": "admin_unpublish_media_binding",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/media/duplicate-candidates/{candidate_id}",
+      "name": "admin_decide_media_duplicate_candidate",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/platform-settings",
+      "name": "admin_get_platform_settings",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/platform-settings",
+      "name": "admin_update_platform_settings",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/question-banks",
+      "name": "admin_list_question_banks",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/assistant/preview",
+      "name": "admin_question_bank_assistant_preview",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/question-banks/chapter-questions",
+      "name": "admin_list_chapter_questions",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/question-banks/chapters",
+      "name": "admin_list_question_bank_chapters",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/question-banks/drafts",
+      "name": "admin_list_question_drafts",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/question-banks/drafts/{draft_id}",
+      "name": "admin_update_question_draft",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/drafts/{draft_id}/publish",
+      "name": "admin_publish_question_draft",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/drafts/{draft_id}/reject",
+      "name": "admin_reject_question_draft",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/question-banks/export",
+      "name": "admin_export_question_bank",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/generate",
+      "name": "admin_generate_questions",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/import",
+      "name": "admin_import_question_bank",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/point-aware-suggestions",
+      "name": "admin_create_point_aware_suggestions",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/question-banks/questions",
+      "name": "admin_list_questions",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/questions",
+      "name": "admin_create_question",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/question-banks/questions/{question_id}",
+      "name": "admin_update_question",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/questions/{question_id}/disable",
+      "name": "admin_disable_question",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/questions/{question_id}/publish",
+      "name": "admin_publish_question",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/workbench-candidates/{candidate_id}/publish",
+      "name": "admin_publish_question_workbench_candidate",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/workbench-candidates/{candidate_id}/reject",
+      "name": "admin_reject_question_workbench_candidate",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/workbench-sessions",
+      "name": "admin_create_question_workbench_session",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/question-banks/workbench-sessions/{session_id}",
+      "name": "admin_get_question_workbench_session",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/workbench-sessions/{session_id}/messages",
+      "name": "admin_send_question_workbench_message",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/question-banks/workbench-sessions/{session_id}/messages/stream",
+      "name": "admin_stream_question_workbench_message",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/rag-assets",
+      "name": "admin_rag_asset",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/registration-settings",
+      "name": "admin_get_registration_settings",
+      "owner": "admin-api"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/registration-settings",
+      "name": "admin_update_registration_settings",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/review/items",
+      "name": "admin_list_review_items",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/review/items/{item_id}",
+      "name": "admin_get_review_item",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/review/items/{item_id}/actions",
+      "name": "admin_apply_review_action",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/video-library/index/diagnostics",
+      "name": "admin_video_library_index_diagnostics",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "name": "login",
+      "owner": "auth-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "name": "logout",
+      "owner": "auth-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "name": "me",
+      "owner": "auth-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/password",
+      "name": "change_password",
+      "owner": "auth-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/student/login",
+      "name": "student_login",
+      "owner": "auth-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/student/password",
+      "name": "change_student_password",
+      "owner": "auth-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/chapters",
+      "name": "api_chapters",
+      "owner": "student-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/experiment-questions/submit",
+      "name": "submit_experiment_questions",
+      "owner": "student-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/app-config",
+      "name": "student_app_config",
+      "owner": "student-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/assistant/ask/stream",
+      "name": "stream_assistant_answer",
+      "owner": "student-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/assistant/posttest-mistakes",
+      "name": "posttest_mistakes",
+      "owner": "student-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/assistant/posttest-summary",
+      "name": "posttest_summary",
+      "owner": "student-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/experiment-groups/{parent_code}",
+      "name": "experiment_group",
+      "owner": "student-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/experiments/{experiment_id}",
+      "name": "experiment_detail",
+      "owner": "student-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/feedback",
+      "name": "submit_student_feedback_endpoint",
+      "owner": "student-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/learning-home",
+      "name": "learning_home",
+      "owner": "student-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/learning-page",
+      "name": "learning_page",
+      "owner": "student-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/media/assets/{asset_id}/stream",
+      "name": "student_media_stream",
+      "owner": "student-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/media/assets/{asset_id}/thumbnail",
+      "name": "student_media_thumbnail",
+      "owner": "student-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/posttest/start",
+      "name": "start_posttest",
+      "owner": "student-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/posttest/submit",
+      "name": "submit_posttest",
+      "owner": "student-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/pretest/start",
+      "name": "start_pretest",
+      "owner": "student-api"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/pretest/submit",
+      "name": "submit_pretest_stage",
+      "owner": "student-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/video-library/search",
+      "name": "video_library_search",
+      "owner": "student-api"
+    },
+    {
+      "method": "MOUNT",
+      "path": "/assets",
+      "name": "student-assets",
+      "owner": "runtime"
+    },
+    {
+      "method": "GET",
+      "path": "/docs",
+      "name": "swagger_ui_html",
+      "owner": "runtime"
+    },
+    {
+      "method": "GET",
+      "path": "/docs/oauth2-redirect",
+      "name": "swagger_ui_redirect",
+      "owner": "runtime"
+    },
+    {
+      "method": "GET",
+      "path": "/favicon.ico",
+      "name": "favicon",
+      "owner": "runtime"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "name": "health",
+      "owner": "runtime"
+    },
+    {
+      "method": "GET",
+      "path": "/openapi.json",
+      "name": "openapi",
+      "owner": "runtime"
+    },
+    {
+      "method": "GET",
+      "path": "/redoc",
+      "name": "redoc_html",
+      "owner": "runtime"
+    },
+    {
+      "method": "GET",
+      "path": "/{full_path:path}",
+      "name": "student_web",
+      "owner": "runtime"
+    }
+  ],
+  "removed_aliases": [
+    {
+      "method": "POST",
+      "path": "/api/admin/media/bindings/{binding_id}/delete",
+      "replacement": "DELETE /api/admin/media/bindings/{binding_id}",
+      "reason": "Deprecated POST compatibility alias removed by backend slim refactor."
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/media/bindings/{binding_id}/archive",
+      "replacement": "DELETE /api/admin/media/bindings/{binding_id}",
+      "reason": "Deprecated archive compatibility alias removed by backend slim refactor."
+    }
+  ]
+}

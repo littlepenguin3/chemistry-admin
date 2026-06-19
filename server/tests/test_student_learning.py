@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from server.app.auth import AuthUser
-from server.app.services import student_learning_service as learning_service
-from server.app.services.student_learning_service import (
+from server.app.domains.student_learning import point_detail as learning_service
+from server.app.domains.student_learning.point_detail import (
     _areas_for_groups,
     _build_parent_groups,
     _choose_recommendation,
@@ -64,11 +66,134 @@ class _FailingSession:
         self.rolled_back = True
 
 
+@contextmanager
+def _fake_session():
+    yield object()
+
+
+def _student_user() -> AuthUser:
+    return AuthUser(
+        id="00000000-0000-0000-0000-000000000001",
+        username="20240001",
+        role="student",
+        display_name="Student",
+        status="active",
+        must_change_password=False,
+        student_id="20240001",
+        class_id="class-a",
+    )
+
+
 def test_student_learning_routes_are_registered() -> None:
     assert_route("/api/student/learning-home", "GET")
     assert_route("/api/student/learning-page", "GET")
     assert_route("/api/student/experiment-groups/{parent_code}", "GET")
     assert_route("/api/student/experiments/{experiment_id}", "GET")
+
+
+def test_student_experiment_detail_returns_published_point_content_and_selected_video(monkeypatch) -> None:
+    experiment = _experiment(
+        "EXP_POINT",
+        code="19-1-01",
+        title="Halogen displacement",
+        parent_code="19-1",
+        parent_title="Halogens",
+        chapter_id="CH13",
+        display_order=1,
+        questions=2,
+    )
+    experiment["media_resources"] = [
+        {
+            "media_id": "media-orange",
+            "title": "Orange layer video",
+            "point_key": "orange-layer",
+            "point_title": "Orange layer",
+            "mime_type": "video/mp4",
+            "stream_path": "media/orange.mp4",
+            "thumbnail_path": None,
+            "upload_status": "ready",
+            "binding_status": "published",
+        },
+        {
+            "media_id": "media-hidden",
+            "title": "Other point video",
+            "point_key": "other-point",
+            "point_title": "Other point",
+            "mime_type": "video/mp4",
+            "stream_path": "media/other.mp4",
+            "thumbnail_path": None,
+            "upload_status": "ready",
+            "binding_status": "published",
+        },
+    ]
+    events: list[dict[str, Any]] = []
+    monkeypatch.setattr(learning_service, "db_session", _fake_session)
+    monkeypatch.setattr(learning_service, "_load_published_experiments", lambda _session: [experiment])
+    monkeypatch.setattr(learning_service, "_record_learning_event", lambda _session, **payload: events.append(payload))
+    monkeypatch.setattr(
+        learning_service,
+        "student_point_content_payload",
+        lambda _session, experiment_id, point_key=None: {
+            "selected_point_key": point_key,
+            "selected_point_title": "Orange layer",
+            "point_content_status": "published",
+            "principle_mode": "equation",
+            "principle_equation": "Cl2 + 2KBr = 2KCl + Br2",
+            "principle_text": None,
+            "phenomenon_explanation": "Orange organic layer appears.",
+            "safety_note": "Use ventilation.",
+            "related_points": [],
+            "assessment_context": {"experiment_id": experiment_id, "chapter_ids": ["CH13"], "parent_code": "19-1", "parent_title": "Halogens"},
+        },
+    )
+
+    detail = learning_service.get_student_experiment_detail(_student_user(), "EXP_POINT", point_key="orange-layer")
+
+    assert detail.point_content_status == "published"
+    assert detail.principle_equation == "Cl2 + 2KBr = 2KCl + Br2"
+    assert detail.phenomenon_explanation == "Orange organic layer appears."
+    assert detail.safety_note == "Use ventilation."
+    assert [video.point_key for video in detail.videos] == ["orange-layer"]
+    assert events and events[0]["event_type"] == "experiment_detail_opened"
+
+
+def test_student_experiment_detail_missing_content_does_not_expose_body_copy(monkeypatch) -> None:
+    experiment = _experiment(
+        "EXP_POINT",
+        code="19-1-01",
+        title="Halogen displacement",
+        parent_code="19-1",
+        parent_title="Halogens",
+        chapter_id="CH13",
+        display_order=1,
+    )
+    monkeypatch.setattr(learning_service, "db_session", _fake_session)
+    monkeypatch.setattr(learning_service, "_load_published_experiments", lambda _session: [experiment])
+    monkeypatch.setattr(learning_service, "_record_learning_event", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        learning_service,
+        "student_point_content_payload",
+        lambda _session, experiment_id, point_key=None: {
+            "selected_point_key": point_key,
+            "selected_point_title": "Orange layer",
+            "point_content_status": "draft",
+            "principle_mode": "text",
+            "principle_equation": None,
+            "principle_text": None,
+            "phenomenon_explanation": None,
+            "safety_note": None,
+            "related_points": [],
+            "assessment_context": {"experiment_id": experiment_id, "chapter_ids": ["CH13"], "parent_code": "19-1", "parent_title": "Halogens"},
+        },
+    )
+
+    detail = learning_service.get_student_experiment_detail(_student_user(), "EXP_POINT", point_key="orange-layer")
+
+    assert detail.point_content_status == "draft"
+    assert detail.principle_equation is None
+    assert detail.principle_text is None
+    assert detail.phenomenon_explanation is None
+    assert detail.safety_note is None
 
 
 def test_student_learning_profile_seed_is_valid() -> None:

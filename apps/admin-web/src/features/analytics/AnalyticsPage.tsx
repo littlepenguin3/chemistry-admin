@@ -365,7 +365,7 @@ function StudentReportDrawer({
   return (
     <Drawer
       title={`${studentName || studentId || "学生"} · 报告中心`}
-      width={720}
+      size={720}
       open={open}
       onClose={onClose}
       destroyOnHidden
@@ -459,7 +459,7 @@ function FamilyDetailDrawer({
   return (
     <Drawer
       title={`${student?.student_name || student?.student_id || "学生"} · ${group?.title || "实验组"}`}
-      width={780}
+      size={780}
       open={open}
       onClose={onClose}
       destroyOnHidden
@@ -583,7 +583,7 @@ function ExperimentEvidenceDrawer({
   return (
     <Drawer
       title={`${student?.student_name || student?.student_id || "学生"} · ${experiment ? cleanExperimentTitle(experiment.title) : "实验"}`}
-      width={760}
+      size={760}
       open={open}
       onClose={onClose}
       destroyOnHidden

@@ -1,0 +1,5 @@
+ARG ELASTICSEARCH_VERSION=8.11.3
+FROM docker.elastic.co/elasticsearch/elasticsearch:${ELASTICSEARCH_VERSION}
+
+ARG ANALYSIS_IK_VERSION=8.11.3
+RUN bin/elasticsearch-plugin install --batch "https://get.infini.cloud/elasticsearch/analysis-ik/${ANALYSIS_IK_VERSION}"

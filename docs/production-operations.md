@@ -53,9 +53,11 @@ Production deployments must set:
 - `AUTH_SECRET_KEY` with a long random value
 - `AGENT_LLM_PROVIDER=disabled` when no LLM provider is configured, or provider credentials/model when enabled
 - `VIDEO_LIBRARY_SEARCH_ENABLED=true` for the student H5 experiment video library search entry
-- `VIDEO_LIBRARY_SEARCH_BACKEND=local`, `disabled`, or `elasticsearch`; local is the deterministic fallback for development and test runs
-- `VIDEO_LIBRARY_SEARCH_URL`, `VIDEO_LIBRARY_SEARCH_INDEX`, and `VIDEO_LIBRARY_SEARCH_TIMEOUT_SECONDS` when `VIDEO_LIBRARY_SEARCH_BACKEND=elasticsearch`
-- `VIDEO_LIBRARY_SEARCH_LOCAL_FALLBACK=true` if Elasticsearch outages should fall back to student-visible experiment metadata
+- `VIDEO_LIBRARY_SEARCH_BACKEND=elasticsearch`; production video-library search requires Elasticsearch with IK analysis
+- `VIDEO_LIBRARY_SEARCH_URL`, `VIDEO_LIBRARY_SEARCH_INDEX`, `VIDEO_LIBRARY_SEARCH_ANALYZER`, and `VIDEO_LIBRARY_SEARCH_TIMEOUT_SECONDS`
+- `VIDEO_LIBRARY_SEARCH_BOOTSTRAP_INDEX=true` when the backend or rebuild command should create the index mapping
+- `VIDEO_LIBRARY_SEARCH_LOCAL_FALLBACK=false` in production; local fallback is only for explicit local or test runs
+- `VIDEO_LIBRARY_SEARCH_REQUIRE_ES_IN_PRODUCTION=true` so startup/readiness fails when ES/IK is missing
 
 Do not commit real `.env` files or secrets.
 
@@ -77,9 +79,56 @@ docker compose up --build
 Default Compose services:
 
 - `postgres`: pgvector Postgres with `pg_isready` health check.
+- `elasticsearch`: Elasticsearch with the IK analyzer plugin. Compose builds `chemistry-admin-elasticsearch-ik:8.11.3` from Elastic's official `docker.elastic.co/elasticsearch/elasticsearch:8.11.3` image and installs INFINI Labs `analysis-ik` `8.11.3`. It disables security for local development, exposes port `9200`, and health-checks the HTTP endpoint.
 - `backend`: FastAPI service, serves `/health`, the student H5 at `/`, and the admin console at `/admin`.
 - `tusd`: resumable upload receiver sharing `data/media`.
 - `video-worker`: local video processing worker sharing `data/media`.
+
+The backend depends on the PostgreSQL and Elasticsearch health checks. If a production-like run swaps the search image, verify the replacement image provides the `ik_max_word` tokenizer before bootstrapping the `student-video-library` index.
+
+The Compose Postgres service is available to other containers as `postgres:5432`. Its host binding defaults to `127.0.0.1:15432` to avoid collisions with a developer's local Postgres. Override `POSTGRES_HOST_PORT` only when the host port is known to be free.
+
+## Student Video-Library Search Operations
+
+Student video-library search is a PostgreSQL-to-Elasticsearch projection. PostgreSQL point tables are the fact source:
+
+- `experiment_video_points`: stable `(experiment_id, point_key)` identities
+- `experiment_point_learning_content`: teacher-authored principle, phenomenon explanation, safety note, publication audit
+- `experiment_point_related_links`: manual related point links and hidden default overrides
+- `experiment_video_point_search_index_state`: retryable desired search actions and sync status
+
+Elasticsearch stores derived point documents only. Do not edit ES documents by hand and do not treat ES hit sources as student page content.
+
+Bootstrap or rebuild the search index from PostgreSQL:
+
+```powershell
+python scripts/rebuild_video_library_index.py --recreate
+```
+
+Preview the document count without writing to ES:
+
+```powershell
+python scripts/rebuild_video_library_index.py --dry-run
+```
+
+Validate ES/IK readiness in production mode:
+
+```powershell
+python scripts/validate_video_library_search.py
+```
+
+Inspect admin-facing index state through the backend:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/admin/video-library/index/diagnostics -Headers @{ Authorization = "Bearer <token>" }
+```
+
+The chemistry search seed files live under `data/seed/search/`:
+
+- `chemical_aliases.json`: formula and common-name aliases such as HCl/salt acid and Na2S2O3/sodium thiosulfate
+- `chemical_stopwords.txt`: high-frequency workflow words that should carry less search meaning
+
+Admin point content edits write PostgreSQL first. Saving drafts queues a delete from search; publishing queues an upsert; unpublishing, archiving, or video binding changes queue the affected point for refresh. A failed ES write must leave the PostgreSQL content intact and visible in `experiment_video_point_search_index_state` for retry or full rebuild.
 
 Optional RAG reranking service:
 
@@ -121,8 +170,15 @@ Run the full local validation chain with frontend dependency installation:
 python scripts/validate_production_readiness.py --install-frontend
 ```
 
-The command checks protected resources, OpenSpec strict validation, backend import smoke, backend tests, admin frontend typecheck/tests/build, student H5 typecheck/build, and the admin build chunk report.
-The default OpenSpec target is `student-h5-video-library-search-entry`; use `--change <name>` to validate a different active or historical change.
+The command checks protected resources, video-library ES/IK readiness, experiment point identity validation, OpenSpec strict validation, backend import smoke, backend tests, admin frontend typecheck/tests/build, student H5 typecheck/build, and the admin build chunk report.
+The default OpenSpec target is `backend-slim-domain-architecture`; use `--change <name>` to validate a different active or historical change.
+The backend stage also runs:
+
+```powershell
+python scripts/validate_backend_architecture.py
+```
+
+This validates slim import boundaries, deleted compatibility paths, and the canonical route inventory.
 The admin frontend stage also runs `npm run build:report` after `npm run build` so large production chunks stay classified by owner.
 
 For backend/resource-only environments:
@@ -132,6 +188,20 @@ python scripts/validate_production_readiness.py --skip-frontend
 ```
 
 Skipping frontend validation is acceptable only for a scoped backend/resource phase. A production release gate should run the full command.
+
+Run the real Docker Compose application smoke check when deployment wiring changes or when a change makes a service required:
+
+```powershell
+python scripts/validate_production_readiness.py --run-compose-smoke --skip-frontend --skip-backend-tests
+```
+
+This starts or verifies the required default Compose services, verifies backend health, verifies PostgreSQL reachability, verifies `ik_max_word` through Elasticsearch `_analyze`, applies migrations, rebuilds the video-library index, and runs the ES/IK readiness validator with production fallback disabled.
+
+To also rebuild images as part of the smoke check, run the lower-level command explicitly:
+
+```powershell
+python scripts/validate_compose_stack.py --build
+```
 
 Browser e2e smoke is opt-in because it requires a running backend, a running frontend dev server on the allowed local origin, and a local browser runtime:
 
@@ -202,6 +272,7 @@ python scripts/import_experiment_knowledge_framework.py --skip-migrations
 python scripts/point_aware_question_bank.py import --bank-kind default --bank-status published --question-status published --skip-migrations
 python scripts/import_manual_reviewed_point_evidence.py --skip-migrations
 python scripts/validate_production_resources.py
+python scripts/validate_experiment_points.py
 ```
 
 Expected protected baseline counts:
@@ -233,13 +304,33 @@ docker compose exec postgres pg_restore -U chemistry -d chemistry_exam --clean -
 
 Back up `data/media` separately if uploaded media should be preserved. Do not delete media files while database `media_assets` or `media_bindings` records still point to them.
 
+Point learning content is ordinary PostgreSQL state and is covered by the database dump above. After restoring a database, rebuild the derived video-library index instead of restoring stale ES data:
+
+```powershell
+python scripts/rebuild_video_library_index.py --recreate
+python scripts/validate_video_library_search.py
+```
+
+If the ES volume is corrupted or intentionally cleared, keep PostgreSQL and protected seed data intact, recreate the index, and run the rebuild command. Do not delete `experiment_video_point_evidence`, `source_chunks`, or `data/seed/point_evidence/manual_reviewed_point_evidence.jsonl`; those resources remain the assistant/RAG evidence path and are separate from teacher-authored point content.
+
+## Search Rollback Notes
+
+If the point editor or search projection must be rolled back during a release:
+
+- Disable or hide the admin point editor at the frontend/API routing layer while keeping `experiment_video_points` and point content tables in place.
+- Set `VIDEO_LIBRARY_SEARCH_ENABLED=false` only as an emergency product rollback; production readiness should fail until ES/IK search is restored for normal releases.
+- Clear or recreate the ES index with `python scripts/rebuild_video_library_index.py --recreate` after the issue is fixed.
+- Never roll back by deleting manual-reviewed point evidence or canonical chunks; those are protected assistant resources, not search projection cache.
+
+Local developers may set `VIDEO_LIBRARY_SEARCH_BACKEND=local` and `VIDEO_LIBRARY_SEARCH_LOCAL_FALLBACK=true` only for isolated fallback tests. Production-like development should run `docker compose up elasticsearch backend` and use the same ES/IK projection path as production.
+
 ## Release Gate
 
 Before declaring a phase production-ready, run:
 
 ```powershell
 python scripts/validate_production_readiness.py --install-frontend
-openspec validate student-h5-video-library-search-entry --strict
+openspec validate backend-slim-domain-architecture --strict
 git status --short
 ```
 

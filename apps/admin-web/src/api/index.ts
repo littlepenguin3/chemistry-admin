@@ -680,10 +680,51 @@ export type ExperimentVideoPointResource = {
 export type ExperimentVideoPoint = {
   point_key: string;
   point_title: string;
-  source: "candidate" | "stored" | "legacy";
+  display_order?: number;
+  source: "candidate" | "stored" | "legacy" | "seed_candidate" | "media_binding" | "manual";
+  status?: "active" | "archived";
+  metadata?: Record<string, unknown>;
   resources: ExperimentVideoPointResource[];
   resource_count: number;
   published_count: number;
+  content?: {
+    principle_mode: "equation" | "text";
+    principle_equation?: string | null;
+    principle_text?: string | null;
+    phenomenon_explanation?: string | null;
+    safety_note?: string | null;
+    content_status: "missing" | "draft" | "published" | "archived";
+    published_at?: string | null;
+    updated_at?: string | null;
+    metadata?: Record<string, unknown>;
+  };
+  validation?: {
+    complete: boolean;
+    errors: string[];
+    warnings: string[];
+  };
+  related_links?: Array<{
+    id?: string | null;
+    source?: "default" | "default_override" | "manual" | string;
+    relation_type?: string;
+    hidden?: boolean;
+    sort_order?: number;
+    label?: string | null;
+    target_experiment_id: string;
+    target_point_key: string;
+    target_point_title?: string | null;
+    target_experiment_title?: string | null;
+  }>;
+  related_link_count?: number;
+  index_state?: {
+    document_id: string;
+    desired_action: "upsert" | "delete";
+    sync_status: "pending" | "synced" | "failed" | "disabled";
+    attempts: number;
+    last_error?: string | null;
+    indexed_at?: string | null;
+    updated_at?: string | null;
+  };
 };
 
 export type ExperimentVideoPointsResponse = {

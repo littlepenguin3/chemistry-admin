@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from server.app.database import apply_migrations, db_session
+from server.app.infrastructure.database import apply_migrations, db_session
 from server.app.experiment_framework import build_experiment_framework_overview
 
 EXPECTED_CHUNKS = 349

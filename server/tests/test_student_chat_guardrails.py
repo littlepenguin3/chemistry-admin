@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
-import server.app.agent as agent_module
-from server.app.agent import (
+import server.app.domains.assistant.agent as agent_module
+from server.app.domains.assistant.agent import (
     AgentPolicy,
     AgentRunContext,
     StudentAIPolicyDecision,
@@ -11,7 +11,7 @@ from server.app.agent import (
     classify_agent_request,
     run_agent,
 )
-from server.app.config import Settings
+from server.app.infrastructure.settings import Settings
 from server.app.repositories import EmptyMediaRepository, NoopAgentLogRepository, RepositoryProvider, get_repositories
 from server.app.schemas import AgentAskRequest, AgentChatMessage
 from server.app.schemas import RagSource, RagSourceAsset
@@ -261,7 +261,7 @@ def test_rag_disabled_point_request_uses_fixed_point_evidence():
     response = asyncio.run(
         run_agent(
             _request(
-                "请解释这个视频点位为什么会褪色。",
+                "Please explain why this experiment point fades.",
                 chapter_id="CH13",
                 experiment_id="EXP_TEST",
                 point_key=_FakeContentRepository.point_title,
@@ -296,7 +296,7 @@ def test_resource_availability_miss_returns_unavailable_without_scope_refusal():
     response = asyncio.run(
         run_agent(
             _request(
-                "这个实验有没有已发布的视频资源？",
+                "\u8fd9\u4e2a\u5b9e\u9a8c\u6709\u6ca1\u6709\u5df2\u53d1\u5e03\u7684\u89c6\u9891\u8d44\u6e90\uff1f",
                 chapter_id="CH13",
                 experiment_id="EXP_TEST",
                 allow_rag_lookup=False,
@@ -329,8 +329,8 @@ def test_policy_resource_false_positive_does_not_override_point_explanation(monk
     response = asyncio.run(
         run_agent(
             _request(
-                "我正在看【19-1-01 氯、溴、碘的置换次序】里的【氯水 + KBr 溶液 + CCl4】这个视频点位。"
-                "请结合本实验的教材证据，解释这个点位要观察什么、现象说明什么，以及背后的化学原理。",
+                "I am viewing EXP_19_1_01 chlorine bromine iodine displacement, "
+                "please use the experiment evidence to explain what to observe and why.",
                 chapter_id="CH13",
                 allow_rag_lookup=False,
             ),
@@ -349,12 +349,12 @@ def test_policy_resource_false_positive_does_not_override_point_explanation(monk
 
 def test_short_follow_up_policy_question_includes_recent_context():
     request = _request(
-        "为什么？",
+        "Why?",
         chapter_id="CH13",
         experiment_id="EXP_TEST",
         conversation_history=[
-            AgentChatMessage(role="user", content="高锰酸钾为什么有氧化性？"),
-            AgentChatMessage(role="assistant", content="因为锰处于高氧化态，容易接受电子。"),
+            AgentChatMessage(role="user", content="Why is potassium permanganate oxidizing?"),
+            AgentChatMessage(role="assistant", content="Because manganese is in a high oxidation state and can accept electrons."),
         ],
     )
     context = AgentRunContext(
@@ -366,6 +366,6 @@ def test_short_follow_up_policy_question_includes_recent_context():
 
     resolved = agent_module._resolved_policy_question(context)
 
-    assert "为什么？" in resolved
-    assert "高锰酸钾为什么有氧化性？" in resolved
-    assert "锰处于高氧化态" in resolved
+    assert "Why?" in resolved
+    assert "Why is potassium permanganate oxidizing?" in resolved
+    assert "high oxidation state" in resolved

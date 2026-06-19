@@ -25,6 +25,9 @@ EXPECTED_DATABASE_COUNTS = {
     "source_documents": 2,
     "source_chunks": 3637,
     "chunk_embeddings": 3637,
+    "stable_experiment_video_points": 300,
+    "published_point_learning_content_min": 0,
+    "point_related_links_min": 0,
     "point_evidence_bindings": 300,
 }
 
@@ -293,12 +296,26 @@ RESOURCE_SPECS: list[dict[str, Any]] = [
     },
     {
         "id": "experiment_point_inventory",
-        "role": "Current formal experiment point inventory",
+        "role": "Current stable formal experiment video point inventory",
         "path": "data/seed/experiment_points/formal_experiment_point_inventory.json",
         "kind": "json",
         "count": _point_inventory_count,
         "expected_counts": {"experiments": 77, "points": 300},
         "source_path": "artifacts/point-aware-question-bank/formal_experiment_point_inventory.json",
+    },
+    {
+        "id": "chemical_search_aliases",
+        "role": "Chemistry-aware video-library search formula alias dictionary",
+        "path": "data/seed/search/chemical_aliases.json",
+        "kind": "json",
+        "source_path": "data/seed/search/chemical_aliases.json",
+    },
+    {
+        "id": "chemical_search_stopwords",
+        "role": "Chemistry-aware video-library search domain stopword list",
+        "path": "data/seed/search/chemical_stopwords.txt",
+        "kind": "text",
+        "source_path": "data/seed/search/chemical_stopwords.txt",
     },
     {
         "id": "point_aware_question_bank",
@@ -318,7 +335,7 @@ RESOURCE_SPECS: list[dict[str, Any]] = [
     },
     {
         "id": "manual_reviewed_point_evidence",
-        "role": "Current manually reviewed experiment point to canonical chunk evidence bindings",
+        "role": "Assistant-only manually reviewed experiment point to canonical chunk evidence bindings",
         "path": "data/seed/point_evidence/manual_reviewed_point_evidence.jsonl",
         "kind": "jsonl",
         "count": _jsonl_count,

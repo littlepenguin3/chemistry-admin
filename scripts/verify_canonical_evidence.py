@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from server.app.database import db_session
+from server.app.infrastructure.database import db_session
 
 EXPECTED_SOURCE_DOCUMENTS = 2
 EXPECTED_SOURCE_CHUNKS = 3637

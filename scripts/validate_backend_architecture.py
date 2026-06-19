@@ -1,0 +1,180 @@
+from __future__ import annotations
+
+import ast
+import json
+import sys
+from collections import Counter
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+APP_ROOT = REPO_ROOT / "server" / "app"
+ROUTE_INVENTORY = REPO_ROOT / "server" / "tests" / "contracts" / "backend_route_inventory.json"
+
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+LEGACY_PATHS = [
+    APP_ROOT / "media.py",
+    APP_ROOT / "main.py",
+    APP_ROOT / "admin_main.py",
+    APP_ROOT / "config.py",
+    APP_ROOT / "database.py",
+    APP_ROOT / "platform_settings.py",
+    APP_ROOT / "formal_experiments.py",
+    APP_ROOT / "agent.py",
+    APP_ROOT / "video_worker.py",
+    APP_ROOT / "routers",
+    APP_ROOT / "services",
+]
+
+DOMAIN_FORBIDDEN_IMPORTS = (
+    "fastapi",
+    "starlette.responses",
+    "server.app.api",
+    "server.app.auth",
+    "server.app.routers",
+    "server.app.app_runtime",
+    "server.app.services",
+    "server.app.workers",
+)
+
+WORKER_FORBIDDEN_IMPORTS = (
+    "fastapi",
+    "starlette.responses",
+    "server.app.api",
+    "server.app.routers",
+    "server.app.app_runtime",
+    "server.app.services",
+)
+
+API_FORBIDDEN_IMPORTS = ("server.app.workers",)
+
+
+@dataclass(frozen=True)
+class Violation:
+    file: Path
+    message: str
+
+    def render(self) -> str:
+        return f"{self.file.relative_to(REPO_ROOT)}: {self.message}"
+
+
+def _python_files(root: Path) -> Iterable[Path]:
+    if not root.exists():
+        return []
+    return sorted(path for path in root.rglob("*.py") if path.is_file())
+
+
+def _imports(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imports: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                imports.append(node.module)
+    return imports
+
+
+def _matches(module: str, forbidden: tuple[str, ...]) -> str | None:
+    for prefix in forbidden:
+        if module == prefix or module.startswith(f"{prefix}."):
+            return prefix
+    return None
+
+
+def validate_import_boundaries() -> list[Violation]:
+    checks = [
+        (APP_ROOT / "domains", DOMAIN_FORBIDDEN_IMPORTS, "domain module imports forbidden runtime/web owner"),
+        (APP_ROOT / "workers", WORKER_FORBIDDEN_IMPORTS, "worker module imports forbidden runtime/web owner"),
+        (APP_ROOT / "api", API_FORBIDDEN_IMPORTS, "api module imports worker entrypoint"),
+    ]
+    violations: list[Violation] = []
+    for root, forbidden, label in checks:
+        for path in _python_files(root):
+            for module in _imports(path):
+                matched = _matches(module, forbidden)
+                if matched:
+                    violations.append(Violation(path, f"{label}: {module} matches {matched}"))
+    return violations
+
+
+def validate_legacy_paths_removed() -> list[Violation]:
+    violations: list[Violation] = []
+    for path in LEGACY_PATHS:
+        if path.exists():
+            violations.append(Violation(path, "legacy compatibility path must not exist"))
+    return violations
+
+
+def route_table() -> list[dict[str, str]]:
+    from server.app.app_runtime.main import app
+
+    rows: list[dict[str, str]] = []
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        name = getattr(route, "name", "")
+        methods = sorted(getattr(route, "methods", set()) or [])
+        if not methods:
+            rows.append({"method": "MOUNT", "path": path, "name": name})
+            continue
+        for method in methods:
+            if method in {"HEAD", "OPTIONS"}:
+                continue
+            rows.append({"method": method, "path": path, "name": name})
+    return sorted(rows, key=lambda item: (item["path"], item["method"], item["name"]))
+
+
+def validate_route_inventory() -> list[Violation]:
+    if not ROUTE_INVENTORY.exists():
+        return [Violation(ROUTE_INVENTORY, "route inventory file is missing")]
+    expected = json.loads(ROUTE_INVENTORY.read_text(encoding="utf-8"))
+    expected_pairs = [(item["method"], item["path"]) for item in expected["routes"]]
+    actual_rows = route_table()
+    actual_pairs = [(item["method"], item["path"]) for item in actual_rows]
+    violations: list[Violation] = []
+
+    actual_counts = Counter(actual_pairs)
+    duplicates = sorted(pair for pair, count in actual_counts.items() if count != 1)
+    for method, path in duplicates:
+        violations.append(Violation(ROUTE_INVENTORY, f"route registered {actual_counts[(method, path)]} times: {method} {path}"))
+
+    missing = sorted(set(expected_pairs) - set(actual_pairs))
+    extra = sorted(set(actual_pairs) - set(expected_pairs))
+    for method, path in missing:
+        violations.append(Violation(ROUTE_INVENTORY, f"missing canonical route: {method} {path}"))
+    for method, path in extra:
+        violations.append(Violation(ROUTE_INVENTORY, f"route not in canonical inventory: {method} {path}"))
+
+    for removed in expected.get("removed_aliases", []):
+        pair = (removed["method"], removed["path"])
+        if pair in actual_pairs:
+            violations.append(Violation(ROUTE_INVENTORY, f"removed alias is still registered: {pair[0]} {pair[1]}"))
+    return violations
+
+
+def validate() -> list[Violation]:
+    return [
+        *validate_import_boundaries(),
+        *validate_legacy_paths_removed(),
+        *validate_route_inventory(),
+    ]
+
+
+def main() -> int:
+    violations = validate()
+    if not violations:
+        print("Backend architecture validation passed")
+        return 0
+    print("Backend architecture validation failed:")
+    for violation in violations:
+        print(f"- {violation.render()}")
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

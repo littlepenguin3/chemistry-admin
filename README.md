@@ -43,7 +43,7 @@ npm install
 Run the admin backend:
 
 ```powershell
-python -m uvicorn server.app.admin_main:app --host 127.0.0.1 --port 8000 --reload
+python -m uvicorn server.app.app_runtime.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Run the admin frontend:
@@ -83,7 +83,7 @@ Set-Location ..\..
 Then run the backend with the built student H5 mounted at `/` and the built admin frontend mounted at `/admin`:
 
 ```powershell
-python -m uvicorn server.app.admin_main:app --host 0.0.0.0 --port 8000
+python -m uvicorn server.app.app_runtime.main:app --host 0.0.0.0 --port 8000
 ```
 
 For Docker Compose, copy `.env.example` to `.env`, adjust secrets and database settings, then run:
@@ -91,6 +91,8 @@ For Docker Compose, copy `.env.example` to `.env`, adjust secrets and database s
 ```powershell
 docker compose up --build
 ```
+
+The default Compose stack is the production-style application unit: Postgres, Elasticsearch with IK analysis, the FastAPI backend serving both built frontends, tusd uploads, and the local video worker. The optional RAG service is behind the `rag` profile.
 
 See `docs/production-operations.md` for health checks, migration discipline, backup/restore, and restore-from-seed instructions.
 
@@ -128,6 +130,12 @@ Run the production-readiness validation chain:
 python scripts/validate_production_readiness.py --install-frontend
 ```
 
+For a real Docker Compose application smoke check, including Postgres, Elasticsearch/IK, backend health, migrations, and video-library index readiness:
+
+```powershell
+python scripts/validate_production_readiness.py --run-compose-smoke --skip-frontend --skip-backend-tests
+```
+
 For backend/resource-only phases:
 
 ```powershell
@@ -151,7 +159,7 @@ The student H5 currently has no separate test script; its focused validation is 
 Validate OpenSpec:
 
 ```powershell
-openspec validate production-hardening-iteration-two --strict
+openspec validate experiment-point-learning-content-search-refactor --strict
 ```
 
 ## GitHub Publishing

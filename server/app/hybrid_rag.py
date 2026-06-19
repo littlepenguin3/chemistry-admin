@@ -9,8 +9,8 @@ from typing import Any, Callable
 
 from sqlalchemy import text
 
-from server.app.config import Settings
-from server.app.database import db_session
+from server.app.infrastructure.settings import Settings
+from server.app.infrastructure.database import db_session
 from server.app.repositories import RepositoryProvider
 from server.app.schemas import AgentAskRequest
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from server.app.agent import classify_agent_request
+from server.app.domains.assistant.agent import classify_agent_request
 from server.app.schemas import AgentAskRequest
 from server.tests.route_helpers import assert_route
 

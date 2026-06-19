@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from server.app.config import get_settings
-from server.app.media import media_cleanup_dry_run
+from server.app.infrastructure.settings import get_settings
+from server.app.domains.media.lifecycle import media_cleanup_dry_run
 
 
 def _format_bytes(value: int) -> str:

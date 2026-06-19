@@ -1,8 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from server.app.admin_main import app
+from server.app.app_runtime.main import app
 from server.app.auth import AuthUser, get_current_user
 
 
@@ -11,12 +11,12 @@ def _student_user() -> AuthUser:
         id="student-feedback-user",
         username="20249997",
         role="student",
-        display_name="反馈测试学生",
+        display_name="Feedback Test Student",
         status="active",
         must_change_password=False,
         student_id="20249997",
         class_id="class-feedback",
-        class_name="反馈测试班",
+        class_name="Feedback Test Class",
     )
 
 
@@ -28,7 +28,7 @@ def test_student_feedback_submission_accepts_page_context_and_attachment() -> No
                 "/api/student/feedback",
                 data={
                     "feedback_type": "course_content",
-                    "content": "报告里的说明需要更清楚",
+                    "content": "The report explanation needs more detail.",
                     "page_path": "/",
                     "experiment_id": "EXP_19_1_01",
                     "metadata": '{"page_type":"posttest_report","context":{"session_id":"session-test"}}',
@@ -51,7 +51,7 @@ def test_student_feedback_rejects_non_image_attachment() -> None:
                 "/api/student/feedback",
                 data={
                     "feedback_type": "system_issue",
-                    "content": "页面按钮无法正常点击",
+                    "content": "The page button is not working.",
                     "metadata": '{"page_type":"learning_home"}',
                 },
                 files={"attachment": ("debug.txt", b"not an image", "text/plain")},

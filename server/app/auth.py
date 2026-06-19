@@ -8,7 +8,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from server.app.database import db_session
+from server.app.infrastructure.database import db_session
 from server.app.security import AuthError, create_access_token, hash_password, verify_password, decode_access_token
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])

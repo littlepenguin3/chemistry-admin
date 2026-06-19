@@ -86,6 +86,22 @@
   margin-bottom: 12px;
 }
 
+.point-content-summary {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px 42px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0, 88, 38, 0.05);
+}
+
+.point-content-summary .ant-typography {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .video-point-heading {
   min-width: 0;
   flex: 1;
@@ -264,6 +280,25 @@
 .video-point-empty:hover {
   border-color: var(--sysu-primary);
   background: var(--sysu-soft);
+}
+
+.related-link-editor-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 150px 88px 82px auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--sysu-line);
+}
+
+.related-link-editor-row .ant-form-item {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .related-link-editor-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .experiment-video-preview-stage {

@@ -17,7 +17,7 @@ FRONTENDS = [
 ]
 ADMIN_FRONTEND_DIR = ROOT / "apps" / "admin-web"
 STUDENT_FRONTEND_DIR = ROOT / "apps" / "student-web"
-DEFAULT_CHANGE = "student-h5-video-library-search-entry"
+DEFAULT_CHANGE = "backend-slim-domain-architecture"
 
 
 @dataclass
@@ -106,11 +106,30 @@ def _frontend_dependencies_stage(args: argparse.Namespace) -> list[Stage]:
 
 def _stages(args: argparse.Namespace) -> list[Stage]:
     stages: list[Stage] = []
+    if args.run_compose_smoke:
+        stages.append(
+            Stage(
+                "Docker Compose required services smoke",
+                [sys.executable, "scripts/validate_compose_stack.py"],
+            )
+        )
     if not args.skip_resource_validation:
         stages.append(
             Stage(
                 "protected resource manifest",
                 [sys.executable, "scripts/validate_production_resources.py"],
+            )
+        )
+        stages.append(
+            Stage(
+                "video-library ES/IK readiness",
+                [sys.executable, "scripts/validate_video_library_search.py"],
+            )
+        )
+        stages.append(
+            Stage(
+                "experiment point identity validation",
+                [sys.executable, "scripts/validate_experiment_points.py"],
             )
         )
     if not args.skip_openspec:
@@ -123,7 +142,13 @@ def _stages(args: argparse.Namespace) -> list[Stage]:
     stages.append(
         Stage(
             "admin app import smoke",
-            [sys.executable, "-c", "import server.app.admin_main as m; print(m.app.title)"],
+            [sys.executable, "-c", "import server.app.app_runtime.main as m; print(m.app.title)"],
+        )
+    )
+    stages.append(
+        Stage(
+            "backend slim architecture validation",
+            [sys.executable, "scripts/validate_backend_architecture.py"],
         )
     )
     if not args.skip_backend_tests:
@@ -159,6 +184,11 @@ def main() -> None:
         "--run-e2e",
         action="store_true",
         help="Run opt-in browser e2e smoke. Requires backend and frontend to be running.",
+    )
+    parser.add_argument(
+        "--run-compose-smoke",
+        action="store_true",
+        help="Run a Docker Compose smoke check for required Postgres, Elasticsearch/IK, and backend services.",
     )
     args = parser.parse_args()
 

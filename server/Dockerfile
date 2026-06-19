@@ -17,4 +17,4 @@ COPY apps/student-web/dist ./apps/student-web/dist
 
 EXPOSE 8000
 
-CMD ["uvicorn", "server.app.admin_main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "server.app.app_runtime.main:app", "--host", "0.0.0.0", "--port", "8000"]

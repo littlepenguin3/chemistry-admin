@@ -135,3 +135,31 @@ class ExperimentVideoPointResourceRequest(BaseModel):
     media_asset_id: str = Field(min_length=1)
     title: str | None = None
     status: str = Field(default="draft", pattern="^(draft|published)$")
+
+
+class ExperimentPointLearningContentRequest(BaseModel):
+    point_title: str | None = Field(default=None, min_length=1, max_length=200)
+    principle_mode: str = Field(default="text", pattern="^(equation|text)$")
+    principle_equation: str | None = None
+    principle_text: str | None = None
+    phenomenon_explanation: str | None = None
+    safety_note: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExperimentPointPublicationRequest(BaseModel):
+    action: str = Field(pattern="^(publish|unpublish|archive)$")
+
+
+class ExperimentPointRelatedLinkRequest(BaseModel):
+    target_experiment_id: str = Field(min_length=1)
+    target_point_key: str = Field(min_length=1)
+    relation_type: str = Field(default="manual", pattern="^(manual|default_override)$")
+    hidden: bool = False
+    sort_order: int = 0
+    label: str | None = Field(default=None, max_length=200)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExperimentPointRelatedLinksRequest(BaseModel):
+    links: list[ExperimentPointRelatedLinkRequest] = Field(default_factory=list)

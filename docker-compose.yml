@@ -6,12 +6,34 @@ services:
       POSTGRES_USER: chemistry
       POSTGRES_PASSWORD: chemistry
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_BIND:-127.0.0.1}:${POSTGRES_HOST_PORT:-15432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U chemistry -d chemistry_exam"]
       interval: 5s
+      timeout: 5s
+      retries: 20
+
+  elasticsearch:
+    build:
+      context: .
+      dockerfile: server/Dockerfile.elasticsearch-ik
+      args:
+        ELASTICSEARCH_VERSION: "8.11.3"
+        ANALYSIS_IK_VERSION: "8.11.3"
+    image: chemistry-admin-elasticsearch-ik:8.11.3
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "${ELASTICSEARCH_HOST_BIND:-127.0.0.1}:${ELASTICSEARCH_HOST_PORT:-9200}:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null"]
+      interval: 10s
       timeout: 5s
       retries: 20
 
@@ -35,6 +57,12 @@ services:
       RAG_BGE_TIMEOUT_SECONDS: "60"
       RAG_RERANK_TOP_K: "9"
       CHEMISTRY_RAG_ROOT: /chemistry-rag
+      VIDEO_LIBRARY_SEARCH_ENABLED: "true"
+      VIDEO_LIBRARY_SEARCH_BACKEND: elasticsearch
+      VIDEO_LIBRARY_SEARCH_URL: http://elasticsearch:9200
+      VIDEO_LIBRARY_SEARCH_INDEX: student-video-library
+      VIDEO_LIBRARY_SEARCH_ANALYZER: ik_max_word
+      VIDEO_LIBRARY_SEARCH_LOCAL_FALLBACK: "false"
     ports:
       - "8000:8000"
     volumes:
@@ -44,6 +72,8 @@ services:
       - E:/chemistry-rag:/chemistry-rag:ro
     depends_on:
       postgres:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
@@ -119,4 +149,5 @@ services:
 
 volumes:
   postgres_data:
+  elasticsearch_data:
   bge_models:

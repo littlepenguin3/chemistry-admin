@@ -6,9 +6,9 @@ from typing import Any, Protocol
 
 from sqlalchemy import text
 
-from server.app.config import get_settings
+from server.app.infrastructure.settings import get_settings
 from server.app import data_loader
-from server.app.database import db_session
+from server.app.infrastructure.database import db_session
 
 
 class ContentRepository(Protocol):

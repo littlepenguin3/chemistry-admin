@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy import text
 
-from server.app.database import db_session
+from server.app.infrastructure.database import db_session
 
 TARGET_TABLES = {
     "question": ("questions", "content_status"),

@@ -115,4 +115,4 @@ RUN rm -rf /wheels
 
 COPY server ./server
 
-CMD ["python", "-m", "server.app.video_worker"]
+CMD ["python", "-m", "server.app.workers.video_worker"]

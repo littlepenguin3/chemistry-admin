@@ -44,7 +44,7 @@ npm install
 Run the admin backend:
 
 ```powershell
-python -m uvicorn server.app.admin_main:app --host 127.0.0.1 --port 8000 --reload
+python -m uvicorn server.app.app_runtime.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Run the admin frontend:
@@ -80,7 +80,7 @@ Set-Location ..\..
 Then run the backend with the built student H5 mounted at `/` and the built admin frontend mounted at `/admin`:
 
 ```powershell
-python -m uvicorn server.app.admin_main:app --host 0.0.0.0 --port 8000
+python -m uvicorn server.app.app_runtime.main:app --host 0.0.0.0 --port 8000
 ```
 
 For Docker Compose, copy `.env.example` to `.env`, adjust secrets and database settings, then run:
@@ -116,7 +116,7 @@ python scripts/publish_reviewed_curriculum.py
 Validate backend import:
 
 ```powershell
-python -c "import server.app.admin_main as m; print(m.app.title)"
+python -c "import server.app.app_runtime.main as m; print(m.app.title)"
 ```
 
 Validate the frontend:

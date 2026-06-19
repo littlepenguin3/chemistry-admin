@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from collections import Counter
@@ -14,16 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from server.app.database import apply_migrations, db_session
+from server.app.infrastructure.database import apply_migrations, db_session
+from server.app.domains.experiment_points.canonical_points import candidate_point_key as _candidate_point_key
 
 DEFAULT_EVIDENCE_PATH = ROOT / "data" / "seed" / "point_evidence" / "manual_reviewed_point_evidence.jsonl"
 
 ALLOWED_GRADES = {"pass", "usable", "weak_but_best_available"}
-
-
-def _candidate_point_key(index: int, title: str) -> str:
-    digest = hashlib.sha1(title.strip().encode("utf-8")).hexdigest()[:8]
-    return f"candidate-{index + 1}-{digest}"
 
 
 def _json(value: Any) -> str:

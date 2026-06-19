@@ -1,7 +1,7 @@
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { ExperimentDetailPanel } from "../../features/experiments/ExperimentDetailPanel";
 import type { StudentRouteSearch } from "../../app/router/routeTypes";
-import { navigateToAiChat, navigateToAssessmentSession } from "../../app/router/navigation";
+import { navigateToAiChat, navigateToAssessmentSession, navigateToPoint } from "../../app/router/navigation";
 import { useDetailBack } from "../../app/shell/useDetailBack";
 import { useStudentRuntime } from "../../app/shell/studentAppContext";
 
@@ -34,6 +34,17 @@ export function ExperimentPointPage() {
       finishError={posttestError}
       assistantEnabled={canUseAssistant}
       onOpenAssistant={(context) => navigateToAiChat(navigate, context, "point")}
+      onOpenRelatedPoint={(target) =>
+        navigateToPoint(navigate, target.experimentId, {
+          from: "point",
+          profileId: search.profileId,
+          propertyKey: search.propertyKey,
+          propertyTitle: search.propertyTitle,
+          elementSymbol: search.elementSymbol,
+          pointKey: target.pointKey,
+          pointTitle: target.pointTitle,
+        })
+      }
     />
   );
 }

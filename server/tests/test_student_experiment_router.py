@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from server.app.services.student_experiment_service import _normalize_answer
+from server.app.domains.assessments.student_experiment import _normalize_answer
 from server.tests.route_helpers import assert_route
 
 

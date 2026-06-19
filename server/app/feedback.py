@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy import text
 
-from server.app.config import get_settings
+from server.app.infrastructure.settings import get_settings
 from server.app.schemas import FeedbackSubmitRequest, StudentEventRequest
 
 FEEDBACK_TYPES = {"course_content", "experiment_resource", "ai_answer", "system_issue", "other"}
@@ -292,7 +292,7 @@ def create_feedback_attachment_record(
         return _attachment_to_item(row)
 
     if session is None:
-        from server.app.database import db_session
+        from server.app.infrastructure.database import db_session
 
         with db_session() as db:
             return create_feedback_attachment_record(
@@ -369,7 +369,7 @@ def create_feedback_record(
     if get_settings().data_backend != "postgres":
         return _memory_feedback_record(payload, source_event_id=source_event_id)
     if session is None:
-        from server.app.database import db_session
+        from server.app.infrastructure.database import db_session
 
         with db_session() as db:
             return create_feedback_record(payload, session=db, source_event_id=source_event_id)

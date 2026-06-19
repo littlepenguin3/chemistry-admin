@@ -294,6 +294,29 @@ const experimentDetail: StudentExperimentDetailResponse = {
   video_candidate_count: learningPoint.video_candidate_count,
   published_video_count: learningPoint.published_video_count,
   question_count: learningPoint.question_count,
+  selected_point_key: "halogen-displacement",
+  selected_point_title: "Orange layer observation",
+  point_content_status: "published",
+  principle_mode: "equation",
+  principle_equation: "Cl2 + 2 KBr = 2 KCl + Br2",
+  principle_text: null,
+  phenomenon_explanation: "Chlorine displaces bromine ions, and bromine dissolves into the organic layer.",
+  safety_note: "Handle chlorine water in a ventilated space and avoid direct inhalation.",
+  related_points: [
+    {
+      experiment_id: learningPoint.id,
+      point_key: "iodine-displacement",
+      point_title: "Iodine comparison",
+      experiment_title: learningPoint.title,
+      relation_type: "default",
+    },
+  ],
+  assessment_context: {
+    experiment_id: learningPoint.id,
+    chapter_ids: learningPoint.chapter_ids,
+    parent_code: learningPoint.parent_code,
+    parent_title: learningPoint.parent_title,
+  },
   video_candidates: learningPoint.video_candidates,
   videos: [],
 };
@@ -620,6 +643,26 @@ describe("student app route stack", () => {
         metadata: expect.objectContaining({ route: "feedback_new", from: "profile" }),
       }),
     );
+  });
+
+  it("renders structured point detail content, related links, and the fixed test handoff", async () => {
+    await renderAuthenticatedApp("/point/EXP_19_1_01?from=chapter&pointKey=halogen-displacement&pointTitle=Orange%20layer%20observation");
+
+    await waitFor(() => expect(apiMocks.getStudentExperimentDetail).toHaveBeenCalledWith("EXP_19_1_01", "halogen-displacement"));
+    expect(screen.getByText("暂无可播放视频")).toBeInTheDocument();
+    expect(screen.getByText("实验原理")).toBeInTheDocument();
+    expect(screen.getByText("Cl2 + 2 KBr = 2 KCl + Br2")).toBeInTheDocument();
+    expect(screen.getByText("现象解释")).toBeInTheDocument();
+    expect(screen.getByText("安全提示")).toBeInTheDocument();
+    expect(screen.queryByText("Halogen evidence")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Iodine comparison").closest("button")!);
+    await waitFor(() => expect(window.location.search).toContain("iodine-displacement"));
+    expect(apiMocks.getStudentExperimentDetail).toHaveBeenLastCalledWith("EXP_19_1_01", "iodine-displacement");
+
+    fireEvent.click(screen.getByRole("button", { name: "开始测试" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/assessment/session/posttest-session-e2e"));
+    expectBottomNavHidden();
   });
 
   it("serves direct root and detail client routes with route-level navigation visibility", async () => {

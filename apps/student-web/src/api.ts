@@ -189,6 +189,27 @@ export type StudentVideoResource = {
 };
 
 export type StudentExperimentDetailResponse = StudentExperimentPointSummary & {
+  selected_point_key?: string | null;
+  selected_point_title?: string | null;
+  point_content_status: "missing" | "draft" | "published" | "archived" | string;
+  principle_mode: "equation" | "text" | string;
+  principle_equation?: string | null;
+  principle_text?: string | null;
+  phenomenon_explanation?: string | null;
+  safety_note?: string | null;
+  related_points: Array<{
+    experiment_id: string;
+    point_key: string;
+    point_title: string;
+    experiment_title?: string | null;
+    relation_type?: string | null;
+  }>;
+  assessment_context: {
+    experiment_id?: string | null;
+    chapter_ids: string[];
+    parent_code?: string | null;
+    parent_title?: string | null;
+  };
   video_candidates: string[];
   videos: StudentVideoResource[];
 };
@@ -673,8 +694,11 @@ export function getStudentExperimentGroup(parentCode: string): Promise<StudentEx
   return api<StudentExperimentGroupResponse>(`/api/student/experiment-groups/${encodeURIComponent(parentCode)}`);
 }
 
-export function getStudentExperimentDetail(experimentId: string): Promise<StudentExperimentDetailResponse> {
-  return api<StudentExperimentDetailResponse>(`/api/student/experiments/${encodeURIComponent(experimentId)}`);
+export function getStudentExperimentDetail(experimentId: string, pointKey?: string | null): Promise<StudentExperimentDetailResponse> {
+  const params = new URLSearchParams();
+  if (pointKey) params.set("point_key", pointKey);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return api<StudentExperimentDetailResponse>(`/api/student/experiments/${encodeURIComponent(experimentId)}${query}`);
 }
 
 export function searchStudentVideoLibrary(query = "", limit = 24): Promise<StudentVideoLibrarySearchResponse> {

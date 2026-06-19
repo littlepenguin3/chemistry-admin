@@ -9,7 +9,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from server.app.curriculum import create_curriculum_draft, load_curriculum_artifact, publish_curriculum_version
-from server.app.database import apply_migrations
+from server.app.infrastructure.database import apply_migrations
 
 DEFAULT_CURRICULUM = ROOT / "data" / "seed" / "knowledge_framework" / "reviewed_curriculum.json"
 

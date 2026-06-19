@@ -542,6 +542,17 @@ async function assertAtomModelRenderable(page, label) {
     throw new Error(`${label}: atom mode controls are too narrow ${JSON.stringify(metrics)}`);
   }
 }
+
+async function assertStructuredPointDetail(page, label) {
+  await page.locator(".video-placeholder").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".principle-section").filter({ hasText: "实验原理" }).first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".principle-section.equation-mode").first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".detail-section").filter({ hasText: "现象解释" }).first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".detail-section").filter({ hasText: "安全提示" }).first().waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".related-point-section button").first().waitFor({ state: "visible", timeout: 10000 });
+  await assertNoHorizontalOverflow(page, label + ": structured point detail");
+}
+
 async function waitForAny(page, selectors, timeout = 10000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -652,7 +663,7 @@ async function installMockApi(page) {
   await page.route("**/api/student/learning-page**", (route) => route.fulfill(jsonResponse(mockLearningPage)));
   await page.route("**/api/student/experiment-groups/19-1", (route) => route.fulfill(jsonResponse(mockExperimentGroup)));
   await page.route("**/api/student/video-library/search**", (route) => route.fulfill(jsonResponse(mockVideoLibrary)));
-  await page.route("**/api/student/experiments/EXP_19_1_01", (route) =>
+  await page.route("**/api/student/experiments/EXP_19_1_01**", (route) =>
     route.fulfill(
       jsonResponse({
         id: mockLearningPoint.id,
@@ -666,6 +677,29 @@ async function installMockApi(page) {
         video_candidate_count: mockLearningPoint.video_candidate_count,
         published_video_count: mockLearningPoint.published_video_count,
         question_count: mockLearningPoint.question_count,
+        selected_point_key: "halogen-displacement",
+        selected_point_title: "卤素置换观察",
+        point_content_status: "published",
+        principle_mode: "equation",
+        principle_equation: "Cl2 + 2 KBr = 2 KCl + Br2",
+        principle_text: null,
+        phenomenon_explanation: "氯气将溴离子氧化为溴单质，CCl4 层出现橙红色。",
+        safety_note: "使用氯水和 CCl4 时保持通风，避免直接闻嗅。",
+        related_points: [
+          {
+            experiment_id: mockLearningPoint.id,
+            point_key: "iodine-displacement",
+            point_title: "碘的置换观察",
+            experiment_title: mockLearningPoint.title,
+            relation_type: "default",
+          },
+        ],
+        assessment_context: {
+          experiment_id: mockLearningPoint.id,
+          chapter_ids: mockLearningPoint.chapter_ids,
+          parent_code: mockLearningPoint.parent_code,
+          parent_title: mockLearningPoint.parent_title,
+        },
         video_candidates: mockLearningPoint.video_candidates,
         videos: [],
       }),
@@ -795,6 +829,7 @@ async function checkAuthenticatedFlows(page, viewportName) {
   await page.locator('.video-library-results .video-result-card').first().click();
   await page.waitForURL(/\/point\/EXP_19_1_01/, { timeout: 10000 });
   await expectBottomNavHidden(page, viewportName + ': video-library result point detail');
+  await assertStructuredPointDetail(page, viewportName + ': video-library result point detail');
   await page.goBack({ waitUntil: 'networkidle' });
   await page.waitForURL(/\/video-library/, { timeout: 10000 });
   await expectBottomNavHidden(page, viewportName + ': back to video library');
@@ -842,6 +877,7 @@ async function checkAuthenticatedFlows(page, viewportName) {
   await page.locator('.learning-point-card').first().click();
   await page.waitForURL(/\/point\/EXP_19_1_01/, { timeout: 10000 });
   await expectBottomNavHidden(page, viewportName + ': point detail');
+  await assertStructuredPointDetail(page, viewportName + ': point detail');
   await assertNoHorizontalOverflow(page, viewportName + ': point detail');
   await assertNoOverlap(page, viewportName + ': point detail fixed action', ['.finish-action', '.pagebar']);
 
@@ -930,6 +966,7 @@ async function checkElementDetailPreview(page, viewportName) {
   await assertNoHorizontalOverflow(page, viewportName + ': direct element detail');
   await assertAtomModelRenderable(page, viewportName + ': direct element atom model');
 }
+
 const playwright = await loadPlaywright();
 const chromium = playwright.chromium || playwright.default?.chromium;
 if (!chromium) {

@@ -4,11 +4,11 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
-from server.app.agent import AgentPolicy, run_agent
-from server.app.config import Settings
+from server.app.domains.assistant.agent import AgentPolicy, run_agent
+from server.app.infrastructure.settings import Settings
 from server.app.repositories import EmptyMediaRepository, NoopAgentLogRepository, RepositoryProvider
 from server.app.schemas import AgentAskRequest
-from server.app.services.agent_retrieval import (
+from server.app.domains.assistant.retrieval import (
     agent_to_rag_request,
     generate_retrieval_queries,
     rag_to_agent_request,

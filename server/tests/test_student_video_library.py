@@ -2,15 +2,16 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from typing import Any
+import urllib.error
 
 import pytest
 from fastapi import HTTPException
 
 from server.app.auth import AuthUser
-from server.app.config import Settings
-from server.app.routers import student_video_library
-from server.app.services import student_video_library_service
-from server.app.services.student_video_library_service import _build_documents, search_student_video_library
+from server.app.infrastructure.settings import Settings
+from server.app.api.student import student_video_library
+from server.app.domains.video_library import search as student_video_library_service
+from server.app.domains.video_library.search import ElasticsearchVideoLibrarySearchAdapter, _build_documents, search_student_video_library
 from server.tests.route_helpers import assert_route
 
 
@@ -89,6 +90,40 @@ def _profiles() -> list[dict[str, Any]]:
     ]
 
 
+def _point_row(
+    experiment: dict[str, Any],
+    *,
+    point_key: str = "orange-layer",
+    point_title: str = "Orange layer observation",
+    principle_mode: str = "equation",
+    principle_equation: str = "Cl2 + 2 KBr = 2 KCl + Br2",
+    principle_text: str = "",
+    phenomenon_explanation: str = "Chlorine water turns the CCl4 layer orange by producing bromine.",
+    safety_note: str = "Handle chlorine water in a ventilated space.",
+    videos: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return {
+        "experiment_id": experiment["id"],
+        "code": experiment["code"],
+        "experiment_title": experiment["title"],
+        "summary": experiment["summary"],
+        "experiment_status": experiment["status"],
+        "display_order": experiment["display_order"],
+        "experiment_metadata": experiment["metadata"],
+        "chapter_bindings": experiment["chapter_bindings"],
+        "point_key": point_key,
+        "point_title": point_title,
+        "point_order": 1,
+        "principle_mode": principle_mode,
+        "principle_equation": principle_equation,
+        "principle_text": principle_text,
+        "phenomenon_explanation": phenomenon_explanation,
+        "safety_note": safety_note,
+        "content_updated_at": "2026-06-19T00:00:00Z",
+        "videos": videos if videos is not None else experiment["media_resources"],
+    }
+
+
 @contextmanager
 def _fake_session():
     yield object()
@@ -127,10 +162,42 @@ def test_video_library_documents_only_include_student_visible_material() -> None
     assert all(document.target for document in documents)
 
 
+def test_video_library_point_documents_use_teacher_content_without_ai_evidence() -> None:
+    experiment = _experiment("EXP_POINT", title="Sodium thiosulfate and acid")
+    point_rows = [
+        _point_row(
+            experiment,
+            point_key="thiosulfate-acid",
+            point_title="Na2S2O3 and HCl reaction",
+            principle_equation="Na2S2O3 + 2 HCl = 2 NaCl + SↁE+ SO2ↁE+ H2O",
+            phenomenon_explanation="Teacher-authored sulfur precipitation and sulfur dioxide explanation.",
+            safety_note="Teacher-authored SO2 safety note.",
+            videos=[],
+        )
+    ]
+
+    documents = _build_documents([experiment], _profiles(), point_rows=point_rows)
+
+    assert len(documents) == 1
+    document = documents[0]
+    assert document.target and document.target.point_key == "thiosulfate-acid"
+    assert "Teacher-authored sulfur precipitation" in document.search_text
+    assert "source_chunks" not in document.search_text
+    assert "experiment_video_point_evidence" not in document.search_text
+    assert document.index_source
+    assert document.index_source["has_video"] is False
+    assert "NA2S2O3" in document.index_source["formulae"]
+    assert "gas_generation" in document.index_source["reaction_features"]
+    assert "precipitation" in document.index_source["reaction_features"]
+
+
 def test_video_library_local_search_returns_grouped_actionable_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    experiment = _experiment("EXP_VISIBLE", title="Visible chlorine displacement")
     monkeypatch.setattr(student_video_library_service, "db_session", _fake_session)
-    monkeypatch.setattr(student_video_library_service, "_load_published_experiments", lambda _session: [_experiment("EXP_VISIBLE", title="Visible chlorine displacement")])
+    monkeypatch.setattr(student_video_library_service, "_load_published_experiments", lambda _session: [experiment])
+    monkeypatch.setattr(student_video_library_service, "_load_published_point_rows", lambda _session: [_point_row(experiment)])
     monkeypatch.setattr(student_video_library_service, "_learning_profiles", _profiles)
+    monkeypatch.setattr(student_video_library_service, "get_settings", lambda: Settings(video_library_search_backend="local"))
 
     response = search_student_video_library(_student_user(), query="orange", limit=10)
 
@@ -140,11 +207,19 @@ def test_video_library_local_search_returns_grouped_actionable_results(monkeypat
     assert response.groups
     assert all(item.target for group in response.groups for item in group.items)
     assert any(item.target and item.target.kind == "point_detail" for group in response.groups for item in group.items)
+    assert any(
+        item.target and item.target.point_key == "orange-layer"
+        for group in response.groups
+        for item in group.items
+        if item.type == "video_point"
+    )
 
 
 def test_video_library_disabled_search_returns_controlled_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    experiment = _experiment("EXP_VISIBLE", title="Visible chlorine displacement")
     monkeypatch.setattr(student_video_library_service, "db_session", _fake_session)
-    monkeypatch.setattr(student_video_library_service, "_load_published_experiments", lambda _session: [_experiment("EXP_VISIBLE", title="Visible chlorine displacement")])
+    monkeypatch.setattr(student_video_library_service, "_load_published_experiments", lambda _session: [experiment])
+    monkeypatch.setattr(student_video_library_service, "_load_published_point_rows", lambda _session: [_point_row(experiment)])
     monkeypatch.setattr(student_video_library_service, "_learning_profiles", _profiles)
     monkeypatch.setattr(
         student_video_library_service,
@@ -158,3 +233,58 @@ def test_video_library_disabled_search_returns_controlled_state(monkeypatch: pyt
     assert response.backend == "disabled"
     assert response.groups == []
     assert response.browse.recommended
+
+
+def test_elasticsearch_adapter_returns_only_known_typed_documents(monkeypatch: pytest.MonkeyPatch) -> None:
+    experiment = _experiment("EXP_VISIBLE", title="Visible chlorine displacement")
+    documents = _build_documents([experiment], _profiles(), point_rows=[_point_row(experiment)])
+    known_id = documents[0].id
+
+    class _Response:
+        def __enter__(self) -> "_Response":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return (
+                b'{"hits":{"hits":[{"_source":{"id":"'
+                + known_id.encode("utf-8")
+                + b'"}},{"_source":{"id":"missing"}}]}}'
+            )
+
+    monkeypatch.setattr(student_video_library_service.urllib.request, "urlopen", lambda *_args, **_kwargs: _Response())
+
+    adapter = ElasticsearchVideoLibrarySearchAdapter(base_url="http://search:9200", index="student-video-library", timeout=1)
+    results = adapter.search("orange", documents, limit=10)
+
+    assert [item.id for item in results] == [known_id]
+
+
+def test_elasticsearch_failure_without_local_fallback_returns_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    experiment = _experiment("EXP_VISIBLE", title="Visible chlorine displacement")
+    monkeypatch.setattr(student_video_library_service, "db_session", _fake_session)
+    monkeypatch.setattr(student_video_library_service, "_load_published_experiments", lambda _session: [experiment])
+    monkeypatch.setattr(student_video_library_service, "_load_published_point_rows", lambda _session: [_point_row(experiment)])
+    monkeypatch.setattr(student_video_library_service, "_learning_profiles", _profiles)
+    monkeypatch.setattr(
+        student_video_library_service,
+        "get_settings",
+        lambda: Settings(
+            video_library_search_backend="elasticsearch",
+            video_library_search_url="http://search:9200",
+            video_library_search_local_fallback=False,
+        ),
+    )
+    monkeypatch.setattr(
+        ElasticsearchVideoLibrarySearchAdapter,
+        "search",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(urllib.error.URLError("search down")),
+    )
+
+    response = search_student_video_library(_student_user(), query="orange", limit=10)
+
+    assert response.status == "error"
+    assert response.backend == "elasticsearch"
+    assert response.groups == []

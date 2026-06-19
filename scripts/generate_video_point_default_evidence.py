@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
+import sys
 import time
 import urllib.request
 import unicodedata
@@ -12,6 +12,12 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import bindparam, create_engine, text
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from server.app.domains.experiment_points.canonical_points import candidate_point_key as _candidate_point_key
 
 
 DEFAULT_DATABASE_URL = "postgresql+psycopg://chemistry:chemistry@localhost:5432/chemistry_exam"
@@ -180,11 +186,6 @@ def _json_dumps(value: Any) -> str:
 
 def _utc_run_id() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
-
-def _candidate_point_key(index: int, title: str) -> str:
-    digest = hashlib.sha1(title.strip().encode("utf-8")).hexdigest()[:8]
-    return f"candidate-{index + 1}-{digest}"
 
 
 def _metadata_dict(value: Any) -> dict[str, Any]:

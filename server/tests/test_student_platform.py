@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from server.app.auth import AuthUser
-from server.app.routers import student_platform
+from server.app.api.student import student_platform
 from server.app.student_app_schemas import StudentFeedbackSubmitRequest
 from server.tests.route_helpers import assert_route
 

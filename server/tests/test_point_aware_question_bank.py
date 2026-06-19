@@ -2,21 +2,21 @@ from __future__ import annotations
 
 import json
 
-import server.app.services.question_workbench_service as question_workbench_service
+import server.app.domains.questions.workbench as question_workbench_service
 from scripts.point_aware_question_bank import prepare_import_rows
 from server.app.experiment_admin_schemas import PointAwareSuggestionRequest
-from server.app.services.question_workbench_service import (
+from server.app.domains.questions.workbench import (
     _record_workbench_generation_failure,
     _workbench_candidate_validation_errors,
     _workbench_context,
     _question_snapshot,
 )
-from server.app.services.point_aware_question_service import (
+from server.app.domains.questions.point_aware import (
     _local_point_aware_suggestions,
     _with_point_aware_metadata,
 )
-from server.app.services.question_bank_service import _validate_question_payload
-from server.app.services.student_experiment_service import _attempt_diagnostic_metadata
+from server.app.domains.questions.bank import _validate_question_payload
+from server.app.domains.assessments.student_experiment import _attempt_diagnostic_metadata
 
 
 def test_prepare_import_rows_preserves_point_metadata(tmp_path):
