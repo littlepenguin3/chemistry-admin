@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from server.app.domains.catalog_tree.common import node_card
+from server.app.domains.catalog_tree.common import node_card, node_select, row_dict
 from server.app.domains.catalog_tree.directories import create_node_params, normalize_point_card_presentation
 
 
@@ -64,7 +64,67 @@ def test_directory_card_payload_is_student_visible_but_teacher_note_is_not() -> 
     assert card["actions"] == ["open_directory"]
     assert card["student_description"] == "student-facing card"
     assert card["card_presentation"] == {"badge": "Lab"}
+    assert card["descendant_point_count"] == 0
     assert "teacher_note" not in card
+
+
+def test_catalog_node_card_exposes_recursive_point_count_contract() -> None:
+    directory_row = row_dict(
+        {
+            "node_id": "cat-dir-1",
+            "chapter_id": "CH1",
+            "parent_id": None,
+            "node_kind": "directory",
+            "title": "Oxidation categories",
+            "summary": "",
+            "student_description": "",
+            "card_presentation": {},
+            "point_card_presentation": {},
+            "status": "published",
+            "display_order": 1,
+            "has_children": True,
+            "descendant_point_count": "3",
+            "has_point_content": False,
+            "media_count": "0",
+            "published_media_count": "0",
+        }
+    )
+    point_row = row_dict(
+        {
+            "node_id": "cat-point-1",
+            "chapter_id": "CH1",
+            "parent_id": "cat-dir-1",
+            "node_kind": "point",
+            "title": "Chlorine water reaction",
+            "summary": "",
+            "student_description": "",
+            "card_presentation": {},
+            "point_card_presentation": {},
+            "status": "draft",
+            "display_order": 1,
+            "has_children": False,
+            "descendant_point_count": "9",
+            "has_point_content": True,
+            "media_count": "1",
+            "published_media_count": "1",
+        }
+    )
+
+    assert directory_row["descendant_point_count"] == 3
+    assert node_card(directory_row)["descendant_point_count"] == 3
+    assert node_card(point_row)["descendant_point_count"] == 0
+
+
+def test_catalog_node_select_counts_non_archived_descendant_points_recursively() -> None:
+    query = node_select("WHERE n.id = :node_id")
+
+    assert "AS descendant_point_count" in query
+    assert "WITH RECURSIVE descendant_tree AS" in query
+    assert "WHERE child.parent_id = n.id" in query
+    assert "JOIN descendant_tree parent ON child.parent_id = parent.id" in query
+    assert query.count("child.status <> 'archived'") >= 3
+    assert "WHERE node_kind = 'point'" in query
+    assert "ELSE 0" in query
 
 
 def test_point_card_payload_is_constrained_and_does_not_inherit_directory_layout() -> None:

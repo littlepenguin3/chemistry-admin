@@ -134,6 +134,16 @@ export function hydrateCatalogPointContentForm(detail: CatalogNodeDetail | null 
   };
 }
 
+export function displayCatalogPointTitle(detail: CatalogNodeDetail | null | undefined): string {
+  return detail?.point_content?.point_title?.trim() || detail?.node.title || "";
+}
+
+export function hasDivergentPointTitle(detail: CatalogNodeDetail | null | undefined): boolean {
+  const nodeTitle = detail?.node.title?.trim();
+  const pointTitle = detail?.point_content?.point_title?.trim();
+  return Boolean(nodeTitle && pointTitle && nodeTitle !== pointTitle);
+}
+
 export function buildCatalogPointContentPayload(values: CatalogPointContentFormValues): CatalogPointContentPayload {
   const principleMode = values.principle_mode || "text";
   return {
@@ -206,4 +216,16 @@ export function catalogStatusColor(status: string): string {
   if (status === "published") return "green";
   if (status === "archived") return "default";
   return "gold";
+}
+
+export function catalogStatusLabel(status: string): string {
+  if (status === "published") return "已发布";
+  if (status === "archived") return "已归档";
+  return "草稿";
+}
+
+export function catalogStatusDotClass(status: string): string {
+  if (status === "published") return "is-published";
+  if (status === "archived") return "is-archived";
+  return "is-draft";
 }

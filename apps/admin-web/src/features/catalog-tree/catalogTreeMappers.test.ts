@@ -5,6 +5,10 @@ import {
   buildCatalogNodeCreatePayload,
   buildCatalogPointContentPayload,
   buildCatalogRelatedLinksPayload,
+  catalogStatusDotClass,
+  catalogStatusLabel,
+  displayCatalogPointTitle,
+  hasDivergentPointTitle,
   hydrateCatalogNodeForm,
   hydrateCatalogPointContentForm,
   hydrateCatalogRelatedLinksForm,
@@ -105,6 +109,22 @@ describe("catalog tree mappers", () => {
     });
   });
 
+  it("uses one visible point title and detects divergent stored titles", () => {
+    const aligned = {
+      node: { title: "氯水 + KBr", node_kind: "point" },
+      point_content: { point_title: "氯水 + KBr" },
+    } as CatalogNodeDetail;
+    const divergent = {
+      node: { title: "Tree title", node_kind: "point" },
+      point_content: { point_title: "Point title" },
+    } as CatalogNodeDetail;
+
+    expect(displayCatalogPointTitle(aligned)).toBe("氯水 + KBr");
+    expect(displayCatalogPointTitle(divergent)).toBe("Point title");
+    expect(hasDivergentPointTitle(aligned)).toBe(false);
+    expect(hasDivergentPointTitle(divergent)).toBe(true);
+  });
+
   it("uses point node ids for editable related links", () => {
     const detail = {
       related_links: [
@@ -160,5 +180,14 @@ describe("catalog tree mappers", () => {
       { node_id: "cat-c", display_order: 2 },
       { node_id: "cat-b", display_order: 3 },
     ]);
+  });
+
+  it("maps catalog status to Chinese labels and sidebar dot classes", () => {
+    expect(catalogStatusLabel("published")).toBe("已发布");
+    expect(catalogStatusLabel("draft")).toBe("草稿");
+    expect(catalogStatusLabel("archived")).toBe("已归档");
+    expect(catalogStatusDotClass("published")).toBe("is-published");
+    expect(catalogStatusDotClass("draft")).toBe("is-draft");
+    expect(catalogStatusDotClass("archived")).toBe("is-archived");
   });
 });

@@ -39,6 +39,7 @@ export type CatalogNodeCard = {
   point_card_presentation: Record<string, unknown>;
   actions: string[];
   has_children: boolean;
+  descendant_point_count: number;
   has_point_content: boolean;
   media_count: number;
   published_media_count: number;

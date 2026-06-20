@@ -245,3 +245,5 @@ export function useCatalogMutations(message: MessageApi) {
     changeMediaStatus,
   };
 }
+
+export type CatalogMutations = ReturnType<typeof useCatalogMutations>;

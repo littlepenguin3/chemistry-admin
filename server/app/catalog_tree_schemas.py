@@ -118,6 +118,7 @@ class CatalogNodeCard(BaseModel):
     point_card_presentation: dict[str, Any] = Field(default_factory=dict)
     actions: list[str] = Field(default_factory=list)
     has_children: bool = False
+    descendant_point_count: int = 0
     has_point_content: bool = False
     media_count: int = 0
     published_media_count: int = 0

@@ -8,6 +8,8 @@ const legacyApiImportPattern =
   /from\s+["'](?:\.\.\/)+(?:api|api\/index)["']|from\s+["']@\/api(?:\/index)?["']|import\s*\(\s*["'](?:\.\.\/)+(?:api|api\/index)["']\s*\)/;
 const forbiddenDomainImportPattern = /from\s+["'](?:\.\.\/)+features\//;
 const apiReactImportPattern = /from\s+["']react(?:\/[^"']*)?["']/;
+const arboristImportPattern = /from\s+["']react-arborist(?:\/[^"']*)?["']/;
+const lucideImportPattern = /from\s+["']lucide-react(?:\/[^"']*)?["']/;
 
 async function collectFiles(dir) {
   const entries = await readdir(dir);
@@ -37,6 +39,12 @@ for (const file of files) {
   }
   if (relative.startsWith("src/api/") && apiReactImportPattern.test(source)) {
     failures.push(`${relative}: api domain modules must not import React`);
+  }
+  if (arboristImportPattern.test(source) && !relative.startsWith("src/features/catalog-tree/")) {
+    failures.push(`${relative}: react-arborist must stay route-owned by the catalog tree feature`);
+  }
+  if (lucideImportPattern.test(source) && !relative.startsWith("src/features/catalog-tree/")) {
+    failures.push(`${relative}: lucide-react imports from this change must stay in catalog tree UI modules`);
   }
 }
 

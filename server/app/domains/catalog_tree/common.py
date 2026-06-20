@@ -69,6 +69,25 @@ def node_select(where_clause: str) -> str:
             SELECT 1 FROM experiment_catalog_nodes child
             WHERE child.parent_id = n.id AND child.status <> 'archived'
           ) AS has_children,
+          CASE
+            WHEN n.node_kind = 'directory' THEN (
+              WITH RECURSIVE descendant_tree AS (
+                SELECT child.id, child.parent_id, child.node_kind
+                FROM experiment_catalog_nodes child
+                WHERE child.parent_id = n.id
+                  AND child.status <> 'archived'
+                UNION ALL
+                SELECT child.id, child.parent_id, child.node_kind
+                FROM experiment_catalog_nodes child
+                JOIN descendant_tree parent ON child.parent_id = parent.id
+                WHERE child.status <> 'archived'
+              )
+              SELECT COUNT(*)
+              FROM descendant_tree
+              WHERE node_kind = 'point'
+            )
+            ELSE 0
+          END AS descendant_point_count,
           EXISTS (
             SELECT 1 FROM experiment_catalog_point_content pc
             WHERE pc.node_id = n.id
@@ -100,6 +119,7 @@ def node_select(where_clause: str) -> str:
 def row_dict(row: Any) -> dict[str, Any]:
     item = dict(row)
     item["node_id"] = str(item.get("node_id") or item.get("id") or "")
+    item["descendant_point_count"] = int(item.get("descendant_point_count") or 0)
     item["media_count"] = int(item.get("media_count") or 0)
     item["published_media_count"] = int(item.get("published_media_count") or 0)
     if item.get("card_image_asset_id") is not None:
@@ -137,6 +157,7 @@ def node_card(
         "display_order": int(node.get("display_order") or 0),
         "actions": actions_for_kind(kind),
         "has_children": bool(node.get("has_children")),
+        "descendant_point_count": int(node.get("descendant_point_count") or 0) if kind == "directory" else 0,
         "has_point_content": bool(node.get("has_point_content")),
         "media_count": int(node.get("media_count") or 0),
         "published_media_count": int(node.get("published_media_count") or 0),

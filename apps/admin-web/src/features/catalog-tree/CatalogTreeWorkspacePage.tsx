@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { App as AntApp, Button, Flex, Form, Input, Modal, Radio, Select, Space, Tag, Typography } from "antd";
-import { FileTextOutlined, FolderOpenOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { FlaskConical, Folder } from "lucide-react";
 
 import type { CatalogNodeCard, CatalogNodeKind } from "../../api/catalogTree";
 import { PageTitle } from "../../components/PageTitle";
@@ -22,8 +23,8 @@ type CreateIntent = {
 };
 
 function kindIcon(kind: CatalogNodeKind) {
-  if (kind === "point") return <FileTextOutlined />;
-  return <FolderOpenOutlined />;
+  if (kind === "point") return <FlaskConical size={14} />;
+  return <Folder size={14} />;
 }
 
 export function CatalogTreeWorkspacePage() {
@@ -105,57 +106,16 @@ export function CatalogTreeWorkspacePage() {
     <div className="catalog-workspace">
       <PageTitle
         title="章节目录与点位工作台"
-        description="章节、多级目录、点位、快捷入口统一维护。"
+        description="在当前章节下维护多级目录和视频点位，目录负责分组导航，点位负责学习内容。"
         extra={
           <Space wrap>
             {validationSummary}
             <Button icon={<ReloadOutlined />} onClick={() => roots.refetch()}>
               刷新
             </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => openCreate("directory")}>
-              新建根目录
-            </Button>
           </Space>
         }
       />
-
-      <div className="catalog-workspace-toolbar">
-        <Select
-          className="catalog-chapter-select"
-          value={chapterId}
-          onChange={setChapterId}
-          loading={chapters.isLoading}
-          options={chapterOptions}
-          placeholder="选择章节"
-        />
-        <Input
-          prefix={<SearchOutlined />}
-          value={searchText}
-          onChange={(event) => setSearchText(event.target.value)}
-          placeholder="搜索目录、点位、老师备注或旧身份"
-          allowClear
-        />
-      </div>
-
-      {searchText.trim().length >= 2 ? (
-        <div className="catalog-search-results">
-          <QueryState loading={search.isFetching} error={search.error} empty={!search.data?.items.length}>
-            <Flex gap={8} wrap>
-              {(search.data?.items || []).map((item) => (
-                <Button
-                  key={item.node_id}
-                  icon={kindIcon(item.node_kind)}
-                  onClick={() => selectNode(item)}
-                  className={selectedNodeId === item.node_id ? "is-selected-search" : ""}
-                >
-                  {item.title}
-                  <Text type="secondary"> · {catalogNodeKindLabel(item.node_kind)}</Text>
-                </Button>
-              ))}
-            </Flex>
-          </QueryState>
-        </div>
-      ) : null}
 
       <div className="catalog-workspace-grid">
         <aside className="catalog-tree-panel">
@@ -164,18 +124,50 @@ export function CatalogTreeWorkspacePage() {
               <Text type="secondary">当前章节</Text>
               <Title level={4}>{currentChapter ? formatChapterTitle(currentChapter.chapter_title, currentChapter.chapter_id) : "未选择"}</Title>
             </div>
-            <Space.Compact>
-              <Button icon={<FolderOpenOutlined />} onClick={() => openCreate("directory")}>目录</Button>
-              <Button icon={<FileTextOutlined />} onClick={() => openCreate("point")}>点位</Button>
-            </Space.Compact>
           </Flex>
+          <div className="catalog-tree-filterbar">
+            <Select
+              className="catalog-chapter-select"
+              value={chapterId}
+              onChange={setChapterId}
+              loading={chapters.isLoading}
+              options={chapterOptions}
+              placeholder="选择章节"
+            />
+            <Input
+              prefix={<SearchOutlined />}
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder="搜索目录、点位、老师备注或旧身份"
+              allowClear
+            />
+          </div>
+          {searchText.trim().length >= 2 ? (
+            <div className="catalog-search-results catalog-tree-search-results">
+              <QueryState loading={search.isFetching} error={search.error} empty={!search.data?.items.length}>
+                <Flex gap={8} wrap>
+                  {(search.data?.items || []).map((item) => (
+                    <Button
+                      key={item.node_id}
+                      icon={kindIcon(item.node_kind)}
+                      onClick={() => selectNode(item)}
+                      className={selectedNodeId === item.node_id ? "is-selected-search" : ""}
+                    >
+                      {item.title}
+                      <Text type="secondary"> · {catalogNodeKindLabel(item.node_kind)}</Text>
+                    </Button>
+                  ))}
+                </Flex>
+              </QueryState>
+            </div>
+          ) : null}
           <CatalogTreeNodeList
             nodes={rootItems}
             selectedNodeId={selectedNodeId}
             loading={roots.isLoading}
             error={roots.error}
             onSelect={selectNode}
-            onAddRoot={() => openCreate("directory")}
+            onAddRoot={(kind) => openCreate(kind)}
             onAddChild={(node, kind = "directory") => openCreate(kind, node.node_id)}
             onMove={(nodeId, payload) => mutations.moveNode.mutate({ nodeId, payload })}
             onReorder={(items) => mutations.reorderNodes.mutate(items)}
@@ -196,11 +188,12 @@ export function CatalogTreeWorkspacePage() {
       </div>
 
       <Modal
-        title={createIntent?.parentId ? "新增子节点" : "新增根节点"}
+        title={createIntent?.parentId ? "新增子节点" : "添加到本章"}
         open={Boolean(createIntent)}
         onCancel={() => setCreateIntent(null)}
         onOk={submitCreate}
         okButtonProps={{ loading: mutations.createNode.isPending }}
+        forceRender
         destroyOnHidden
       >
         <Form form={createForm} layout="vertical">
