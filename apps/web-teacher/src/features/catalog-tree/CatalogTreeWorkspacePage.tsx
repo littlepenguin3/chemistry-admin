@@ -1,0 +1,239 @@
+import { useEffect, useMemo, useState } from "react";
+import { App as AntApp, Button, Dropdown, Flex, Form, Input, Modal, Radio, Space, Tag, Typography } from "antd";
+import { DownOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { FlaskConical, Folder } from "lucide-react";
+
+import type { CatalogNodeCard, CatalogNodeKind } from "../../api/catalogTree";
+import { PageTitle } from "../../components/PageTitle";
+import { QueryState } from "../../components/QueryState";
+import { formatChapterTitle } from "../../lib/resourceUtils";
+import { CatalogTreeEditor } from "./CatalogTreeEditor";
+import { useCatalogChildren, useCatalogChapters, useCatalogMutations, useCatalogNodeDetail, useCatalogRoots, useCatalogSearch } from "./catalogTreeHooks";
+import { CatalogTreeNodeList } from "./CatalogTreeNodeList";
+import { buildCatalogNodeCreatePayload, catalogNodeKindLabel } from "./catalogTreeMappers";
+import type { CatalogNodeFormValues } from "./catalogTreeMappers";
+import "./catalogTree.css";
+
+const { Text } = Typography;
+
+type CreateIntent = {
+  parentId?: string | null;
+  chapterId: string;
+  kind: CatalogNodeKind;
+};
+
+function kindIcon(kind: CatalogNodeKind) {
+  if (kind === "point") return <FlaskConical size={14} />;
+  return <Folder size={14} />;
+}
+
+export function CatalogTreeWorkspacePage() {
+  const { message } = AntApp.useApp();
+  const [chapterId, setChapterId] = useState<string>();
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState("");
+  const [createIntent, setCreateIntent] = useState<CreateIntent | null>(null);
+  const [createForm] = Form.useForm<CatalogNodeFormValues>();
+  const chapters = useCatalogChapters();
+  const roots = useCatalogRoots(chapterId);
+  const selectedDetail = useCatalogNodeDetail(selectedNodeId || undefined);
+  const selectedParentId = selectedDetail.data?.node.parent_id || undefined;
+  const selectedSiblingChildren = useCatalogChildren(selectedParentId, Boolean(selectedParentId));
+  const search = useCatalogSearch(searchText, chapterId, searchText.trim().length >= 2);
+  const mutations = useCatalogMutations(message);
+
+  useEffect(() => {
+    if (!chapterId && chapters.data?.length) {
+      setChapterId(chapters.data.find((chapter) => chapter.chapter_id !== "CH00")?.chapter_id || chapters.data[0].chapter_id);
+    }
+  }, [chapterId, chapters.data]);
+
+  useEffect(() => {
+    setSelectedNodeId(null);
+  }, [chapterId]);
+
+  useEffect(() => {
+    if (createIntent) {
+      createForm.setFieldsValue({
+        title: "",
+        summary: "",
+        node_kind: createIntent.kind,
+        student_description: "",
+        teacher_note: "",
+        card_layout: "default",
+        point_card_emphasis: false,
+      });
+    }
+  }, [createForm, createIntent]);
+
+  const chapterOptions = (chapters.data || []).map((chapter) => ({
+    value: chapter.chapter_id,
+    label: formatChapterTitle(chapter.chapter_title, chapter.chapter_id),
+  }));
+  const chapterMenuItems = chapterOptions.map((chapter) => ({
+    key: chapter.value,
+    label: chapter.label,
+  }));
+  const rootItems = roots.data?.nodes || [];
+  const siblingItems = selectedDetail.data?.node.parent_id ? selectedSiblingChildren.data?.children || [] : rootItems;
+  const currentChapter = chapters.data?.find((chapter) => chapter.chapter_id === chapterId);
+  const currentChapterLabel = currentChapter ? formatChapterTitle(currentChapter.chapter_title, currentChapter.chapter_id) : "未选择章节";
+  const selectedValidation = selectedDetail.data?.validation;
+  const validationSummary = useMemo(() => {
+    if (!selectedValidation) return null;
+    if (selectedValidation.errors.length) return <Tag color="red">错误 {selectedValidation.errors.length}</Tag>;
+    if (selectedValidation.warnings.length) return <Tag color="gold">提示 {selectedValidation.warnings.length}</Tag>;
+    return <Tag color="green">可发布</Tag>;
+  }, [selectedValidation]);
+
+  const openCreate = (kind: CatalogNodeKind, parentId?: string | null) => {
+    if (!chapterId) return;
+    setCreateIntent({ chapterId, parentId: parentId || null, kind });
+  };
+
+  const submitCreate = async () => {
+    if (!createIntent) return;
+    const values = await createForm.validateFields();
+    mutations.createNode.mutate(buildCatalogNodeCreatePayload(values, createIntent.chapterId, createIntent.parentId), {
+      onSuccess: (detail) => {
+        setSelectedNodeId(detail.node.node_id);
+        setCreateIntent(null);
+      },
+    });
+  };
+
+  const selectNode = (node: CatalogNodeCard) => {
+    if (node.chapter_id !== chapterId) setChapterId(node.chapter_id);
+    setSelectedNodeId(node.node_id);
+  };
+
+  return (
+    <div className="catalog-workspace">
+      <PageTitle
+        title="章节目录与点位工作台"
+        description="在当前章节下维护多级目录和视频点位，目录负责分组导航，点位负责学习内容。"
+        extra={
+          <Space wrap>
+            {validationSummary}
+            <Button icon={<ReloadOutlined />} onClick={() => roots.refetch()}>
+              刷新
+            </Button>
+          </Space>
+        }
+      />
+
+      <div className="catalog-workspace-grid">
+        <aside className="catalog-tree-panel">
+          <Flex align="center" justify="space-between" className="catalog-panel-heading">
+            <div className="catalog-chapter-heading-copy">
+              <Text type="secondary">当前章节</Text>
+              <Dropdown
+                trigger={["click"]}
+                disabled={chapters.isLoading || !chapterMenuItems.length}
+                menu={{
+                  items: chapterMenuItems,
+                  selectedKeys: chapterId ? [chapterId] : [],
+                  onClick: ({ key }) => setChapterId(String(key)),
+                }}
+              >
+                <button
+                  type="button"
+                  className="catalog-chapter-switcher"
+                  aria-label="切换当前章节"
+                  title={chapters.isLoading ? "章节加载中" : "切换当前章节"}
+                >
+                  <span>{currentChapterLabel}</span>
+                  <DownOutlined />
+                </button>
+              </Dropdown>
+            </div>
+          </Flex>
+          <div className="catalog-tree-filterbar catalog-tree-searchbar">
+            <Input
+              prefix={<SearchOutlined />}
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder="搜索目录、点位、教学备注或旧身份"
+              allowClear
+            />
+          </div>
+          {searchText.trim().length >= 2 ? (
+            <div className="catalog-search-results catalog-tree-search-results">
+              <QueryState loading={search.isFetching} error={search.error} empty={!search.data?.items.length}>
+                <Flex gap={8} wrap>
+                  {(search.data?.items || []).map((item) => (
+                    <Button
+                      key={item.node_id}
+                      icon={kindIcon(item.node_kind)}
+                      onClick={() => selectNode(item)}
+                      className={selectedNodeId === item.node_id ? "is-selected-search" : ""}
+                    >
+                      {item.title}
+                      <Text type="secondary"> · {catalogNodeKindLabel(item.node_kind)}</Text>
+                    </Button>
+                  ))}
+                </Flex>
+              </QueryState>
+            </div>
+          ) : null}
+          <CatalogTreeNodeList
+            nodes={rootItems}
+            selectedNodeId={selectedNodeId}
+            loading={roots.isLoading}
+            error={roots.error}
+            onSelect={selectNode}
+            onAddRoot={(kind) => openCreate(kind)}
+            onAddChild={(node, kind = "directory") => openCreate(kind, node.node_id)}
+            onMove={(nodeId, payload) => mutations.moveNode.mutateAsync({ nodeId, payload })}
+            onReorder={(items) => mutations.reorderNodes.mutateAsync(items)}
+            onRefreshRoots={() => roots.refetch()}
+            onChangeStatus={(node, action) => mutations.changeNodeStatus.mutate({ nodeId: node.node_id, action })}
+          />
+        </aside>
+
+        <main className="catalog-editor-panel">
+          <CatalogTreeEditor
+            detail={selectedDetail.data}
+            loading={selectedDetail.isLoading}
+            error={selectedDetail.error}
+            siblings={siblingItems}
+            onSelectNode={setSelectedNodeId}
+            mutations={mutations}
+          />
+        </main>
+      </div>
+
+      <Modal
+        title={createIntent?.parentId ? "新增子节点" : "添加到本章"}
+        open={Boolean(createIntent)}
+        onCancel={() => setCreateIntent(null)}
+        onOk={submitCreate}
+        okButtonProps={{ loading: mutations.createNode.isPending }}
+        forceRender
+        destroyOnHidden
+      >
+        <Form form={createForm} layout="vertical">
+          <Form.Item name="title" label="节点标题" rules={[{ required: true, message: "请输入节点标题" }]}>
+            <Input autoFocus />
+          </Form.Item>
+          <Form.Item name="node_kind" label="节点类型" rules={[{ required: true }]}>
+            <Radio.Group optionType="button" buttonStyle="solid">
+              <Radio.Button value="directory">目录</Radio.Button>
+              <Radio.Button value="point">点位</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+          <Form.Item
+            name="teacher_note"
+            label="教学备注"
+            extra="仅教师端可见，不进入学生端、学生搜索或题目证据链。"
+          >
+            <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} />
+          </Form.Item>
+          <Form.Item name="student_description" label="学生端卡片描述">
+            <Input.TextArea autoSize={{ minRows: 2, maxRows: 3 }} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+}

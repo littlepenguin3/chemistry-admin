@@ -13,6 +13,8 @@ from server.app.security import AuthError, create_access_token, hash_password, v
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 bearer = HTTPBearer(auto_error=False)
+PLATFORM_ADMIN_ROLE = "platform_admin"
+TEACHER_CONSOLE_ROLES = frozenset({"admin", "teacher"})
 
 
 class LoginRequest(BaseModel):
@@ -602,6 +604,22 @@ def require_roles(*roles: str) -> Callable[[AuthUser], AuthUser]:
         return user
 
     return dependency
+
+
+def is_teacher_console_role(role: str) -> bool:
+    return role in TEACHER_CONSOLE_ROLES
+
+
+async def require_platform_admin(user: AuthUser = Depends(get_current_user)) -> AuthUser:
+    if user.role != PLATFORM_ADMIN_ROLE:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Platform admin account required")
+    return user
+
+
+async def require_teacher_console_user(user: AuthUser = Depends(get_current_user)) -> AuthUser:
+    if not is_teacher_console_role(user.role):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher console account required")
+    return user
 
 
 @router.get("/me", response_model=AuthUser)
