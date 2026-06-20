@@ -68,6 +68,43 @@ def test_directory_card_payload_is_student_visible_but_teacher_note_is_not() -> 
     assert "teacher_note" not in card
 
 
+def test_legacy_summary_does_not_fallback_to_student_description() -> None:
+    params = create_node_params(
+        {
+            "summary": "Teacher-only legacy summary",
+            "teacher_note": "private author note",
+            "student_description": "",
+        },
+        kind="directory",
+    )
+
+    assert params["summary"] == "Teacher-only legacy summary"
+    assert params["teacher_note"] == "private author note"
+    assert params["student_description"] == ""
+
+    card = node_card(
+        {
+            "node_id": "cat-dir-1",
+            "chapter_id": "CH1",
+            "parent_id": None,
+            "node_kind": "directory",
+            "title": "Oxidation categories",
+            "summary": "Teacher-only legacy summary",
+            "student_description": "",
+            "card_presentation": {},
+            "point_card_presentation": {},
+            "status": "published",
+            "display_order": 1,
+            "has_children": True,
+            "has_point_content": False,
+            "media_count": 0,
+            "published_media_count": 0,
+        }
+    )
+
+    assert card["student_description"] == ""
+
+
 def test_catalog_node_card_exposes_recursive_point_count_contract() -> None:
     directory_row = row_dict(
         {

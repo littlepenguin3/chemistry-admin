@@ -671,7 +671,21 @@ def list_question_banks(
     for bank in banks:
         banks_by_experiment.setdefault(bank["experiment_id"], []).append(bank)
     items = [{**experiment, "banks": banks_by_experiment.get(experiment["id"], [])} for experiment in experiments]
-    return {"items": items, "total": len(items)}
+    question_count = sum(int(bank.get("question_count") or 0) for bank in banks)
+    return {
+        "items": items,
+        "total": len(items),
+        "baseline": {
+            "question_bank_empty": question_count == 0,
+            "retired_legacy_seed": question_count == 0,
+            "message": (
+                "旧题库已随新版实验目录重置退休；新题库需等待目录点位证据重新生成后再创建。"
+                if question_count == 0
+                else ""
+            ),
+            "requires_catalog_node_evidence": True,
+        },
+    }
 
 
 def list_questions(

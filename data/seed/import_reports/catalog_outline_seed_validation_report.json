@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "errors": [],
+  "counts": {
+    "total_nodes": 569,
+    "directory_nodes": 176,
+    "point_nodes": 393,
+    "chapter_21_nodes": 0,
+    "placeholder_nodes": 0,
+    "point_content_examples": 30,
+    "unique_target_seed_keys": 30
+  },
+  "corrected_hypochlorite_points": [
+    "NaClO + MnSO₄",
+    "NaClO + 品红溶液"
+  ],
+  "catalog_seed": "data/seed/experiment_catalog/catalog_tree.json",
+  "point_content_examples_seed": "data/seed/experiment_catalog/point_content_examples.json"
+}

@@ -1,0 +1,630 @@
+{
+  "metadata": {
+    "artifact_type": "experiment_catalog_point_content_examples",
+    "version": "catalog-outline-30-examples-v1",
+    "source_doc": "docs/30点位例子.txt",
+    "mapping_source": "openspec/changes/replace-legacy-experiment-seeds-with-catalog-outline-seed/design.md",
+    "content_status": "published"
+  },
+  "examples": [
+    {
+      "example_number": 1,
+      "example_title": "第18章 五 焰色反应",
+      "example_title_from_source": "第18章 五 焰色反应",
+      "target_seed_key": "cat-outline-ch18-40e11e0b9857d44c",
+      "target_path_titles": [
+        "第18章 碱金属和碱土金属",
+        "五、焰色反应",
+        "锂、钠、钾、钙、锶、钡盐的焰色反应"
+      ],
+      "target_path": "第18章 碱金属和碱土金属 / 五、焰色反应 / 锂、钠、钾、钙、锶、钡盐的焰色反应",
+      "principle_mode": "text",
+      "principle_text": "金属原子受热时，外层价电子（ns/np）吸收热能，从基态跃迁至激发态；随即以辐射方式跳回低能级，释放特征频率光子（ΔE = hν）。因各元素原子能级差固定，故发射光谱具有唯一性，呈现特征焰色。钾的紫光需通过钴玻璃滤除钠黄光干扰。",
+      "phenomenon_explanation": "各离子焰色（实验记录参考）：\n•\tLi⁺：洋红色（紫红）\n•\tNa⁺：黄色（持久明亮）\n•\tK⁺：紫色（需透过钴玻璃观察）\n•\tCa²⁺：砖红色（橙红）\n•\tSr²⁺：猩红色（洋红）\n•\tBa²⁺：黄绿色（苹果绿）",
+      "safety_note": "1.\t防烫伤：镍丝在火焰中灼烧后温度极高，冷却前勿触碰或接触点滴板。\n2.\t防腐蚀：蘸取浓盐酸时需在通风处操作，避免皮肤接触（盐酸有腐蚀性）。\n3.\t防火源：蘸取溶液前确保镍丝已冷却，否则高温遇酒精蒸气可能引燃（若使用酒精灯）。\n4.\t废液处理：实验后的含金属离子废液应回收，勿随意倾倒。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 1,
+      "source_line_end": 19
+    },
+    {
+      "example_number": 2,
+      "example_title": "第18章 一 1.钠加热燃烧实验",
+      "example_title_from_source": "第18章 一 1.钠加热燃烧实验",
+      "target_seed_key": "cat-outline-ch18-1b02c72d04c4aff1",
+      "target_path_titles": [
+        "第18章 碱金属和碱土金属",
+        "一、碱金属、碱土金属单质活泼性的比较",
+        "钠加热燃烧实验"
+      ],
+      "target_path": "第18章 碱金属和碱土金属 / 一、碱金属、碱土金属单质活泼性的比较 / 钠加热燃烧实验",
+      "principle_mode": "text",
+      "principle_text": "2 Na + O2 = Na2O2\n2 Na2O2 +2 H2O = 4 NaOH + O2↑\nNa2O2 + 2 H2O = 2 NaOH + H2O2↑\n2 H2O2 = 2 H2O + O2↑\n2 KMnO4 + 5 H2O2 + 3 H2SO4 = K2SO4 + 2 MnSO4 + 5 O2↑+ 8 H2O",
+      "phenomenon_explanation": "1.钠燃烧：钠受热先熔化成银白色小球，然后剧烈燃烧，发出黄色火焰，生成淡黄色固体\n2.加水：淡黄色固体遇水剧烈反应，放出大量无色无味气体（氧气），溶液呈强碱性（pH 试 纸变蓝或酚酞变红）。\n3.酸化后加 KMnO₄：紫色高锰酸钾溶液迅速褪为无色（或浅粉色），同时可能产生少量气泡。",
+      "safety_note": "1.\t防燃烧爆炸：钠燃烧时火焰剧烈，切勿近距离直视，蒸发皿下方需垫石棉网，周围移除所有易燃物。\n2.\t防腐蚀灼伤：过氧化钠（Na₂O₂）具强氧化性和腐蚀性，切勿用手直接接触产物；用玻璃棒捣碎时需戴护目镜，防碎屑飞溅入眼。\n3.\t防喷溅：产物溶于水时放热剧烈，试管口切勿对人，应缓慢加水并冷却，防止碱性溶液喷溅。\n4.\t酸液安全：使用6 mol/L H₂SO₄时需戴手套，避免皮肤接触（浓硫酸稀释错误操作会放热，但本实验仅为酸化，仍需谨慎）。KMnO₄溶液沾到皮肤可用大量水冲洗。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 20,
+      "source_line_end": 38
+    },
+    {
+      "example_number": 3,
+      "example_title": "第18章 一 2.镁条燃烧实验",
+      "example_title_from_source": "第18章 一 2.镁条燃烧实验",
+      "target_seed_key": "cat-outline-ch18-8e83644ae6ab6577",
+      "target_path_titles": [
+        "第18章 碱金属和碱土金属",
+        "一、碱金属、碱土金属单质活泼性的比较",
+        "镁条燃烧实验"
+      ],
+      "target_path": "第18章 碱金属和碱土金属 / 一、碱金属、碱土金属单质活泼性的比较 / 镁条燃烧实验",
+      "principle_mode": "text",
+      "principle_text": "2Mg + O₂ → 2MgO\n3Mg + N₂ → Mg₃N₂\n2Mg + CO₂ → 2MgO + C\nMg3N2 + 6 H2O = 3 Mg(OH)2 + 2 NH3↑",
+      "phenomenon_explanation": "1.镁条剧烈燃烧，发出耀眼的白光，放出大量热。\n2.生成白色固体（主要产物为 MgO），同时伴有少量白烟（MgO 的微小颗粒）。\n3.若在空气中燃烧，产物中还可能含有少量淡黄色的氮化镁（Mg3N2），以及少量黑色物质（碳单质）。\n4.燃烧后的白色固体落入蒸发皿中，质地疏松。",
+      "safety_note": "1.\t防强光伤害：镁燃烧发出强烈白光并含紫外线，严禁肉眼直接长时间注视，应佩戴墨镜或护目镜，或侧面观察。\n2.\t防高温灼伤：燃烧时温度极高（约3000°C），镁条下方必须垫石棉网或沙土，防止烧坏桌面；熔化的氧化镁会滴落，注意远离易燃物。\n3.\t防错误灭火：绝对不能用CO₂灭火器，因镁会与CO₂反应（2Mg + CO₂ → 2MgO + C），应用干沙覆盖灭火。\n4.\t操作规范：用坩埚钳夹紧镁条末端，手臂勿伸入火焰正上方，身体与火焰保持安全距离。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 39,
+      "source_line_end": 56
+    },
+    {
+      "example_number": 4,
+      "example_title": "第18章 一 3.钠与水反应",
+      "example_title_from_source": "第18章 一 3.钠与水反应",
+      "target_seed_key": "cat-outline-ch18-77bd43568497dcce",
+      "target_path_titles": [
+        "第18章 碱金属和碱土金属",
+        "一、碱金属、碱土金属单质活泼性的比较",
+        "钠与水反应"
+      ],
+      "target_path": "第18章 碱金属和碱土金属 / 一、碱金属、碱土金属单质活泼性的比较 / 钠与水反应",
+      "principle_mode": "text",
+      "principle_text": "2 Na + 2 H2O = 2 NaOH + H2↑",
+      "phenomenon_explanation": "1.钠浮在水面上（密度小于水），熔化成银白色小球（反应放热，钠熔点低）。\n2.小球在水面上迅速游动，发出“嘶嘶”声，并逐渐变小直至消失。\n3.有无色无味气体放出（氢气）。\n4.滴加酚酞，溶液变红（生成 NaOH，溶液呈强碱性）。\n5.递变规律:同一主族从上到下(Na→K→Rb→Cs)金属性增强，与水反应剧烈程度增加；同周期Na比Mg 活泼， Mg比AI活泼。碱土金属中Ca比Mg活泼，但Ca与水反应仍不如Na剧烈，因Na的金属性更强。",
+      "safety_note": "1.\t防爆炸：钠与水反应剧烈放热并产生H₂，H₂与空气混合遇明火易爆炸，烧杯口应用漏斗盖住，远离火源。\n2.\t防腐蚀灼伤：反应后溶液含强碱NaOH，具有腐蚀性，避免皮肤接触；若不慎沾到，立即用大量水冲洗。\n3.\t防碎片飞溅：钠反应可能剧烈到使小块金属弹跳或飞溅，应保持观察距离，必要时戴护目镜。\n4.\t用剩处理：未反应的钠绝对不可丢入水槽或垃圾桶，应放回煤油中保存。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 57,
+      "source_line_end": 73
+    },
+    {
+      "example_number": 5,
+      "example_title": "第18章 一 5.镁与冷／热水反应",
+      "example_title_from_source": "第18章 一 5镁与冷／热水反应",
+      "target_seed_key": "cat-outline-ch18-3d9f4090e3f6d2af",
+      "target_path_titles": [
+        "第18章 碱金属和碱土金属",
+        "一、碱金属、碱土金属单质活泼性的比较",
+        "镁与冷／热水反应"
+      ],
+      "target_path": "第18章 碱金属和碱土金属 / 一、碱金属、碱土金属单质活泼性的比较 / 镁与冷／热水反应",
+      "principle_mode": "text",
+      "principle_text": "Mg + 2 H2O = Mg(OH)2 + H2↑",
+      "phenomenon_explanation": "1.\t冷水：反应极慢，几乎观察不到气泡，数分钟后可能有极少量气泡附着在镁条表面，溶液 仍为中性（滴加酚酞不变红）。\n2.\t热水：镁条表面迅速产生大量无色气泡（氢气），溶液逐渐变浑浊（生成 Mg(OH)₂沉淀）， 滴加酚酞变红（溶液呈弱碱性）。\n3.\t镁与水反应生成的 Mg(OH)2 难溶于水，覆盖在镁表面阻碍反应；加热时 Mg(OH)2 溶解度增 大且反应速率加快。\n4.\t递变规律:同一主族从上到下(Na→K→Rb→Cs)金属性增强，与水反应剧烈程度增加；同周期Nal比Mg 活泼， Mg比AI活泼。碱土金属中Ca比Mg活泼，但Ca与水反应仍不如Na剧烈，因Na的金属性更强。",
+      "safety_note": "1.\t防烫伤：热水试管温度较高，用试管夹夹持，勿直接触碰。\n2.\t防火防爆：反应释放H₂，远离明火，试管口勿对人。\n3.\t防划伤：打磨镁条时注意砂纸或镁条边缘划伤手指。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 74,
+      "source_line_end": 88
+    },
+    {
+      "example_number": 6,
+      "example_title": "第18章 一 6.钙与水反应",
+      "example_title_from_source": "第18章 一 6.钙与水反应",
+      "target_seed_key": "cat-outline-ch18-cc4b433dd5ba5dd8",
+      "target_path_titles": [
+        "第18章 碱金属和碱土金属",
+        "一、碱金属、碱土金属单质活泼性的比较",
+        "钙与水反应"
+      ],
+      "target_path": "第18章 碱金属和碱土金属 / 一、碱金属、碱土金属单质活泼性的比较 / 钙与水反应",
+      "principle_mode": "text",
+      "principle_text": "Ca + 2 H2O = Ca(OH)2 + H2↑",
+      "phenomenon_explanation": "1.\t钙块沉入水底（密度大于水，但较钠略大），反应放出无色气泡（氢气），钙块表面产生大 量气泡，逐渐溶解。\n2.\t溶液变浑浊（生成 Ca(OH)₂微溶于水），滴加酚酞变红（溶液呈碱性）。\n3.\t反应比钠与水的反应稍缓和（钠更剧烈），但明显比镁剧烈。",
+      "safety_note": "1.\t防腐蚀灼伤：反应生成Ca(OH)₂（强碱性），具有腐蚀性，避免皮肤接触；若不慎沾到，立即用大量水冲洗。\n2.\t防火防爆：反应释放H₂，遇明火易爆燃，试管口远离火源，勿对准他人。\n3.\t防试管破裂：钙与水反应放热，试管外壁可能变烫，勿用手直接握持，可用试管夹夹持。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 89,
+      "source_line_end": 102
+    },
+    {
+      "example_number": 7,
+      "example_title": "第15章 二 （1）亚硝酸的生成与分解",
+      "example_title_from_source": "第15章 二 （1）亚硝酸的生成与分解",
+      "target_seed_key": "cat-outline-ch15-c4fe7d0d80c2763d",
+      "target_path_titles": [
+        "第15章 氮族元素",
+        "二、亚硝酸及其盐的性质",
+        "亚硝酸的生成与分解"
+      ],
+      "target_path": "第15章 氮族元素 / 二、亚硝酸及其盐的性质 / 亚硝酸的生成与分解",
+      "principle_mode": "text",
+      "principle_text": "2NaNO₂ + H₂SO₄ → 2HNO₂ + Na₂SO₄\n2HNO₂ → N₂O₃ + H₂O\n2N₂O₃ → NO↑ + NO₂↑\n2HNO₂ → NO↑ + NO₂↑ + H₂O\n3NO₂ + H₂O → NO↑ + 2HNO₃",
+      "phenomenon_explanation": "将冷冻的饱和NaNO₂溶液与稀H₂SO₄混合后，溶液由无色变为蓝色（生成亚硝酸，N₂O₃使溶液呈淡蓝色），同时产生红棕色气体（NO₂）。放置一段时间后，蓝色逐渐褪去（亚硝酸完全分解），溶液变为无色（最终生成稀硝酸），红棕色气体也慢慢消失（NO₂与水反应生成HNO₃和NO）。",
+      "safety_note": "1.\t防中毒：反应产生NO和NO₂均为有毒气体，实验必须在通风橱中进行，避免吸入。\n2.\t防腐蚀：H₂SO₄和生成的HNO₃具有腐蚀性，避免皮肤接触；若不慎沾到，立即用大量水冲洗。\n3.\t低温操作：NaNO₂溶液需提前用冰水冷冻，操作时注意手部防冻（可用夹子取放试管）。\n4.\t废液处理：反应后废液含亚硝酸盐和硝酸盐，具毒性，应回收处理，勿随意倾倒。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 103,
+      "source_line_end": 119
+    },
+    {
+      "example_number": 8,
+      "example_title": "第15章 二 （2）亚硝酸的氧化性",
+      "example_title_from_source": "第15章 二 （2）亚硝酸的氧化性",
+      "target_seed_key": "cat-outline-ch15-f28700d261463104",
+      "target_path_titles": [
+        "第15章 氮族元素",
+        "二、亚硝酸及其盐的性质",
+        "亚硝酸的氧化性"
+      ],
+      "target_path": "第15章 氮族元素 / 二、亚硝酸及其盐的性质 / 亚硝酸的氧化性",
+      "principle_mode": "text",
+      "principle_text": "2NO₂⁻ + 2I⁻ + 4H⁺ → 2NO↑ + I₂↓ + 2H₂O\n2NO + O₂ → 2NO₂\n2HNO₂ → NO↑ + NO₂↑ + H₂O",
+      "phenomenon_explanation": "1.常温：溶液立即由无色变为棕黄色（生成I₂），试管口有红棕色烟雾（NO遇O₂氧化为NO₂）。\n2.加热：棕黄色加深（升温加快反应，生成更多I₂），随后颜色变浅（I₂受热升华逸出），试管口出现紫红色蒸气（I₂升华），同时伴有红棕色气体（HNO₂分解产生NO₂）。",
+      "safety_note": "1.\t防中毒：反应产生NO和NO₂均为有毒气体，必须在通风橱中操作，避免吸入。\n2.\t防腐蚀：H₂SO₄具有腐蚀性，避免皮肤接触。\n3.\t防烫伤：微热试管时用试管夹夹持，勿直接用手握持加热部分。\n4.\t废液处理：含I₂和亚硝酸盐的废液具毒性，应回收处理，勿随意倾倒。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 120,
+      "source_line_end": 135
+    },
+    {
+      "example_number": 9,
+      "example_title": "第15章 二 （3）亚硝酸的还原性",
+      "example_title_from_source": "第15章 二 （3）亚硝酸的还原性",
+      "target_seed_key": "cat-outline-ch15-99145d9a1767ad82",
+      "target_path_titles": [
+        "第15章 氮族元素",
+        "二、亚硝酸及其盐的性质",
+        "亚硝酸的还原性"
+      ],
+      "target_path": "第15章 氮族元素 / 二、亚硝酸及其盐的性质 / 亚硝酸的还原性",
+      "principle_mode": "text",
+      "principle_text": "5NO₂⁻ + 2MnO₄⁻ + 6H⁺ → 5NO₃⁻ + 2Mn²⁺ + 3H₂O",
+      "phenomenon_explanation": "1.\t未酸化时，KMnO₄溶液紫红色无明显变化（中性条件下NO₂⁻还原性较弱，反应速率极慢）；\n2.\t酸化后紫红色迅速褪去，溶液变为无色或极浅粉红色（MnO₄⁻被NO₂⁻还原为Mn²⁺）。",
+      "safety_note": "1.\t防腐蚀：H₂SO₄具有腐蚀性，避免皮肤接触。\n2.\t废液处理：含KMnO₄和亚硝酸盐的废液应回收处理，勿随意倾倒。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 136,
+      "source_line_end": 147
+    },
+    {
+      "example_number": 10,
+      "example_title": "NaNO₂ + 对氨基苯磺酸 + 萘胺 | HAc酸性体系",
+      "example_title_from_source": "第15章 二 （4） 1. NaNO₂ + 对氨基苯磺酸 + 萘胺 | HAc酸性体系",
+      "target_seed_key": "cat-outline-ch15-97a2987ba0a476d0",
+      "target_path_titles": [
+        "第15章 氮族元素",
+        "二、亚硝酸及其盐的性质",
+        "亚硝酸根的检验方法",
+        "NaNO₂ + 对氨基苯磺酸 + 萘胺 | HAc酸性体系"
+      ],
+      "target_path": "第15章 氮族元素 / 二、亚硝酸及其盐的性质 / 亚硝酸根的检验方法 / NaNO₂ + 对氨基苯磺酸 + 萘胺 | HAc酸性体系",
+      "principle_mode": "text",
+      "principle_text": "NO₂⁻ + 对氨基苯磺酸 + 萘胺 → 粉红色偶氮化合物",
+      "phenomenon_explanation": "在点滴板上，用HAc酸化NaNO₂溶液后，加入对氨基苯磺酸和萘胺溶液，溶液显粉红色（生成特征偶氮染料，此为NO₂⁻的灵敏鉴定反应）。",
+      "safety_note": "1.\t防腐蚀：HAc具有腐蚀性，避免皮肤接触。\n2.\t防毒害：对氨基苯磺酸和萘胺具一定毒性，避免吸入或接触皮肤，实验后及时洗手。\n3.\t废液处理：含有机试剂和亚硝酸盐的废液应回收处理，勿随意倾倒。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 148,
+      "source_line_end": 159
+    },
+    {
+      "example_number": 11,
+      "example_title": "NaNO₂ + KI + CCl₄ | H₂SO₄酸性体系",
+      "example_title_from_source": "第15章 二 （4）2. NaNO₂ + KI + CCl₄ | H₂SO₄酸性体系",
+      "target_seed_key": "cat-outline-ch15-21a87562de5f2db2",
+      "target_path_titles": [
+        "第15章 氮族元素",
+        "二、亚硝酸及其盐的性质",
+        "亚硝酸根的检验方法",
+        "NaNO₂ + KI + CCl₄ | H₂SO₄酸性体系"
+      ],
+      "target_path": "第15章 氮族元素 / 二、亚硝酸及其盐的性质 / 亚硝酸根的检验方法 / NaNO₂ + KI + CCl₄ | H₂SO₄酸性体系",
+      "principle_mode": "text",
+      "principle_text": "2NO₂⁻ + 2I⁻ + 4H⁺ → I₂ + 2NO↑ + 2H₂O",
+      "phenomenon_explanation": "向NaNO₂溶液中加入KI溶液和CCl₄，振荡后CCl₄层显紫色（I⁻被NO₂⁻氧化为I₂，I₂在CCl₄中呈紫色），水层可能呈棕黄色。",
+      "safety_note": "1.\t防中毒：反应可能产生少量NO气体，应在通风处操作。\n2.\t防腐蚀：若酸化使用H₂SO₄，避免皮肤接触。\n3.\t废液处理：含I₂和CCl₄的废液应回收处理（CCl₄为有毒有机溶剂），勿随意倾倒。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 160,
+      "source_line_end": 171
+    },
+    {
+      "example_number": 12,
+      "example_title": "浓硝酸 + 硫粉",
+      "example_title_from_source": "第15章 三 （1）1.浓硝酸 + 硫粉",
+      "target_seed_key": "cat-outline-ch15-ba89df3d9fa3118c",
+      "target_path_titles": [
+        "第15章 氮族元素",
+        "三、硝酸及其盐的性质",
+        "硝酸的氧化性",
+        "浓硝酸 + 硫粉"
+      ],
+      "target_path": "第15章 氮族元素 / 三、硝酸及其盐的性质 / 硝酸的氧化性 / 浓硝酸 + 硫粉",
+      "principle_mode": "text",
+      "principle_text": "S + 6HNO₃(浓) → H₂SO₄ + 6NO₂↑ + 2H₂O",
+      "phenomenon_explanation": "加热条件下，硫粉溶解，产生大量红棕色气体（NO₂），溶液可能变浑浊（生成SO₂或H₂SO₄，硫被氧化为硫酸）。",
+      "safety_note": "1.\t防中毒：反应产生大量NO₂有毒气体，必须在通风橱中操作。\n2.\t防腐蚀：浓硝酸具有强腐蚀性，避免皮肤接触。\n3.\t防烫伤：加热时用试管夹夹持，勿直接握持。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 172,
+      "source_line_end": 183
+    },
+    {
+      "example_number": 13,
+      "example_title": "浓硝酸 + Na₂S",
+      "example_title_from_source": "第15章 三 （1）2.浓硝酸 + Na2S",
+      "target_seed_key": "cat-outline-ch15-e8ac03d9e1a3dbfa",
+      "target_path_titles": [
+        "第15章 氮族元素",
+        "三、硝酸及其盐的性质",
+        "硝酸的氧化性",
+        "浓硝酸 + Na2S"
+      ],
+      "target_path": "第15章 氮族元素 / 三、硝酸及其盐的性质 / 硝酸的氧化性 / 浓硝酸 + Na2S",
+      "principle_mode": "text",
+      "principle_text": "Na₂S + 4HNO₃(浓) → S↓ + 2NaNO₃ + 2NO₂↑ + 2H₂O\n（若硝酸过量，S可进一步被氧化为SO₄²⁻）",
+      "phenomenon_explanation": "剧烈反应，产生大量红棕色气体（NO₂），溶液析出淡黄色沉淀（S被氧化为硫单质）。",
+      "safety_note": "1.\t防中毒：反应产生NO₂有毒气体，在通风橱中操作。\n2.\t防腐蚀：浓硝酸具有强腐蚀性，避免皮肤接触。\n3.\t防喷溅：反应剧烈，试管口勿对人。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 184,
+      "source_line_end": 196
+    },
+    {
+      "example_number": 14,
+      "example_title": "浓硝酸/稀硝酸 + 铜",
+      "example_title_from_source": "第15章 三 （1）3.浓硝酸/稀硝酸 + 铜",
+      "target_seed_key": "cat-outline-ch15-f712cd6fab94bc46",
+      "target_path_titles": [
+        "第15章 氮族元素",
+        "三、硝酸及其盐的性质",
+        "硝酸的氧化性",
+        "浓硝酸/稀硝酸 + 铜"
+      ],
+      "target_path": "第15章 氮族元素 / 三、硝酸及其盐的性质 / 硝酸的氧化性 / 浓硝酸/稀硝酸 + 铜",
+      "principle_mode": "text",
+      "principle_text": "Cu + 4HNO₃(浓) → Cu(NO₃)₂ + 2NO₂↑ + 2H₂O\n3Cu + 8HNO₃(稀) → 3Cu(NO₃)₂ + 2NO↑ + 4H₂O\n2NO + O₂ → 2NO₂",
+      "phenomenon_explanation": "1.\t浓硝酸：铜片溶解，溶液变为蓝绿色（生成Cu²⁺），产生大量红棕色气体（NO₂），溶液可能因NO₂溶解而呈黄绿色。\n2.\t稀硝酸：铜片溶解，溶液变为蓝色（生成Cu²⁺），产生无色气体（NO），在试管口遇空气变为红棕色（NO被O₂氧化为NO₂）。\n3.\t硝酸浓度越高，氧化性越强，但还原产物中氮的氧化数降低较少（主要生成 NO₂）；浓度越 低，氧化性减弱，但还原产物中氮的氧化数降低更多（生成 NO、N₂O 甚至 NH₄⁺）。这是因 为稀硝酸有大量水，有利于氮的深度还原。",
+      "safety_note": "1.\t防中毒：反应产生NO₂有毒气体，在通风橱中操作。\n2.\t防腐蚀：浓硝酸具有强腐蚀性，避免皮肤接触。\n3.\t废液处理：含Cu²⁺的废液应回收处理，勿随意倾倒。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 197,
+      "source_line_end": 212
+    },
+    {
+      "example_number": 15,
+      "example_title": "FeSO₄·7H₂O + NaNO₃ + 浓硫酸",
+      "example_title_from_source": "第15章 三 （3）2. FeSO₄·7H₂O + NaNO₃ + 浓硫酸",
+      "target_seed_key": "cat-outline-ch15-44d3c5cf420ccfdf",
+      "target_path_titles": [
+        "第15章 氮族元素",
+        "三、硝酸及其盐的性质",
+        "硝酸根的检验",
+        "FeSO₄·7H₂O + NaNO₃ + 浓硫酸"
+      ],
+      "target_path": "第15章 氮族元素 / 三、硝酸及其盐的性质 / 硝酸根的检验 / FeSO₄·7H₂O + NaNO₃ + 浓硫酸",
+      "principle_mode": "text",
+      "principle_text": "3Fe²⁺ + NO₃⁻ + 4H⁺ → 3Fe³⁺ + NO↑ + 2H₂O\n3Fe²⁺ + NO + SO₄²⁻ → [Fe(NO)]SO₄（棕色）",
+      "phenomenon_explanation": "斜持试管，沿管壁缓慢加入浓H₂SO₄后，在两液面交界处出现一棕色环（生成亚硝酸合铁(Ⅱ)配合物[Fe(NO)]SO₄，特征反应，用于检验NO₃⁻）。",
+      "safety_note": "1.\t防腐蚀：浓H₂SO₄具有强腐蚀性和脱水性，操作时戴手套，缓慢沿管壁加入，避免飞溅。\n2.\t防烫伤：浓H₂SO₄稀释时大量放热，试管外壁可能发烫，用手持试管上部或使用试管夹。\n3.\t防污染：实验后试管含重金属离子废液，应回收处理，勿随意倾倒。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 213,
+      "source_line_end": 225
+    },
+    {
+      "example_number": 16,
+      "example_title": "难溶性硅酸盐的生成——“水中花园”",
+      "example_title_from_source": "第17章 一 （5）难溶性硅酸盐的生成——“水中花园”",
+      "target_seed_key": "cat-outline-ch17-977997f9b4b8c751",
+      "target_path_titles": [
+        "第17章 硼族元素",
+        "一、硼、硅的相似相异性",
+        "难溶性硅酸盐的生成——“水中花园”"
+      ],
+      "target_path": "第17章 硼族元素 / 一、硼、硅的相似相异性 / 难溶性硅酸盐的生成——“水中花园”",
+      "principle_mode": "text",
+      "principle_text": "Na₂SiO₃ + M²⁺ → MSiO₃↓（有色硅酸盐沉淀）\n（M²⁺ = Ca²⁺、Cu²⁺、Co²⁺、Ni²⁺、Mn²⁺、Zn²⁺、Fe²⁺、Fe³⁺等）",
+      "phenomenon_explanation": "通过金属盐与硅酸钠反应，生成不同颜色的金属硅酸盐胶体，在固液接触面形成半透膜，由于渗透压的关系，水不断渗入膜内，胀破半透膜使金属盐又与硅酸钠接触，又生成新的胶状金属硅酸盐。 反复渗透，反复生成出芽状或树枝状的硅酸盐，从而产生水中花园的奇妙现象。",
+      "safety_note": "1.\t防腐蚀：水玻璃（Na₂SiO₃溶液）呈碱性，具有腐蚀性，避免皮肤接触。\n2.\t防中毒：Co(NO₃)₂、NiSO₄、MnSO₄、CuSO₄等重金属盐具有毒性，避免接触和吸入，实验后及时洗手。\n3.\t废液处理：含重金属离子的废液应回收处理，勿随意倾倒",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 226,
+      "source_line_end": 237
+    },
+    {
+      "example_number": 17,
+      "example_title": "KI + 浓硫酸 | 湿的醋酸铅试纸",
+      "example_title_from_source": "第13章 三 1 ①KI + 浓硫酸 | 湿的醋酸铅试纸",
+      "target_seed_key": "cat-outline-ch13-676141c80b619ea2",
+      "target_path_titles": [
+        "第13章 卤族元素",
+        "三、卤素离子的还原性（通风橱内进行）",
+        "利用浓硫酸比较卤素离子的还原性",
+        "KI + 浓硫酸 | 湿的醋酸铅试纸"
+      ],
+      "target_path": "第13章 卤族元素 / 三、卤素离子的还原性（通风橱内进行） / 利用浓硫酸比较卤素离子的还原性 / KI + 浓硫酸 | 湿的醋酸铅试纸",
+      "principle_mode": "text",
+      "principle_text": "8KI + 9H₂SO₄(浓) → 4I₂ + 8KHSO₄ + H₂S↑ + 4H₂O\nPb(Ac)₂ + H₂S → PbS↓ + 2HAc",
+      "phenomenon_explanation": "•\t生成紫黑色固体（I₂）和臭鸡蛋气味气体（H₂S），醋酸铅试纸变黑（H₂S与Pb(Ac)₂生成PbS黑色沉淀），KI-淀粉试纸变蓝（I₂遇淀粉），pH试纸变红（生成酸性气体）。",
+      "safety_note": "1.\t防中毒：反应产生H₂S（有毒）和I₂蒸气，必须在通风橱中操作。\n2.\t防腐蚀：浓硫酸具有强腐蚀性，避免皮肤接触。\n3.\t防烫伤：反应放热剧烈，试管口勿对人。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 238,
+      "source_line_end": 249
+    },
+    {
+      "example_number": 18,
+      "example_title": "KBr + 浓硫酸 | 湿的KI-淀粉试纸",
+      "example_title_from_source": "KBr + 浓硫酸 | 湿的KI-淀粉试纸",
+      "target_seed_key": "cat-outline-ch13-9e5c61ce88d07d97",
+      "target_path_titles": [
+        "第13章 卤族元素",
+        "三、卤素离子的还原性（通风橱内进行）",
+        "利用浓硫酸比较卤素离子的还原性",
+        "KBr + 浓硫酸 | 湿的KI-淀粉试纸"
+      ],
+      "target_path": "第13章 卤族元素 / 三、卤素离子的还原性（通风橱内进行） / 利用浓硫酸比较卤素离子的还原性 / KBr + 浓硫酸 | 湿的KI-淀粉试纸",
+      "principle_mode": "text",
+      "principle_text": "2KBr + 3H₂SO₄(浓) → Br₂ + 2KHSO₄ + SO₂↑ + 2H₂O\nSO₂ + I₂ + 2H₂O → H₂SO₄ + 2HI",
+      "phenomenon_explanation": "•\t生成棕色物质（Br₂）和刺激性气味气体（SO₂），KI-淀粉试纸变蓝（SO₂还原I₂为I⁻，但实际反应中Br₂氧化I⁻生成I₂使试纸变蓝），pH试纸变红（SO₂溶于水生成H₂SO₃）。",
+      "safety_note": "1.\t防中毒：反应产生Br₂蒸气和SO₂有毒气体，在通风橱中操作。\n2.\t防腐蚀：浓硫酸和Br₂均有腐蚀性，避免皮肤接触。\n3.\t防烫伤：反应放热，用试管夹夹持。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 250,
+      "source_line_end": 260
+    },
+    {
+      "example_number": 19,
+      "example_title": "KCl + 浓硫酸 | 湿的pH试纸",
+      "example_title_from_source": "KCl + 浓硫酸 | 湿的pH试纸",
+      "target_seed_key": "cat-outline-ch13-bc335996943d5515",
+      "target_path_titles": [
+        "第13章 卤族元素",
+        "三、卤素离子的还原性（通风橱内进行）",
+        "利用浓硫酸比较卤素离子的还原性",
+        "KCl + 浓硫酸 | 湿的pH试纸"
+      ],
+      "target_path": "第13章 卤族元素 / 三、卤素离子的还原性（通风橱内进行） / 利用浓硫酸比较卤素离子的还原性 / KCl + 浓硫酸 | 湿的pH试纸",
+      "principle_mode": "text",
+      "principle_text": "KCl + H₂SO₄(浓) → KHSO₄ + HCl↑",
+      "phenomenon_explanation": "•\t产生刺激性气味气体（HCl），pH试纸变红（HCl溶于水呈酸性），醋酸铅试纸和KI-淀粉试纸无明显变化（无H₂S和氧化性气体生成）。",
+      "safety_note": "1.\t防中毒：HCl气体有刺激性，在通风橱中操作。\n2.\t防腐蚀：浓硫酸具有腐蚀性，避免皮肤接触。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 261,
+      "source_line_end": 269
+    },
+    {
+      "example_number": 20,
+      "example_title": "NaClO + MnSO₄",
+      "example_title_from_source": "NaClO + MnSO₄",
+      "target_seed_key": "cat-outline-ch13-903a60aff825f385",
+      "target_path_titles": [
+        "第13章 卤族元素",
+        "五、卤素含氧酸盐的氧化性",
+        "次氯酸盐的氧化性",
+        "NaClO + MnSO₄"
+      ],
+      "target_path": "第13章 卤族元素 / 五、卤素含氧酸盐的氧化性 / 次氯酸盐的氧化性 / NaClO + MnSO₄",
+      "principle_mode": "text",
+      "principle_text": "Mn²⁺ + ClO⁻ + 2OH⁻ → MnO₂↓ + Cl⁻ + H₂O\n（注：NaClO溶液本身呈碱性，提供OH⁻）",
+      "phenomenon_explanation": "•\t溶液中迅速产生棕黑色沉淀（MnO₂），并可能伴有少量气泡（O₂，H₂O₂分解副反应）。",
+      "safety_note": "1.\t防腐蚀：NaClO具有腐蚀性和漂白性，避免皮肤接触。\n2.\t废液处理：含重金属Mn的废液应回收处理。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 270,
+      "source_line_end": 279
+    },
+    {
+      "example_number": 21,
+      "example_title": "NaClO + 品红溶液",
+      "example_title_from_source": "NaClO + 品红溶液",
+      "target_seed_key": "cat-outline-ch13-e97d7e5395a8f8c6",
+      "target_path_titles": [
+        "第13章 卤族元素",
+        "五、卤素含氧酸盐的氧化性",
+        "次氯酸盐的氧化性",
+        "NaClO + 品红溶液"
+      ],
+      "target_path": "第13章 卤族元素 / 五、卤素含氧酸盐的氧化性 / 次氯酸盐的氧化性 / NaClO + 品红溶液",
+      "principle_mode": "text",
+      "principle_text": "NaClO + 品红 → 无色产物（氧化还原反应，破坏发色基团）",
+      "phenomenon_explanation": "•\t品红溶液的红色立即褪去（NaClO具有强氧化性，能破坏品红中的共轭体系，使其褪色，此为漂白性）。",
+      "safety_note": "1.\t防腐蚀：NaClO具有腐蚀性和漂白性，避免皮肤接触衣物。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 280,
+      "source_line_end": 287
+    },
+    {
+      "example_number": 22,
+      "example_title": "NaClO + KI-淀粉 | 酸性体系",
+      "example_title_from_source": "NaClO + KI-淀粉 | 酸性体系",
+      "target_seed_key": "cat-outline-ch13-5c607884c70ae66e",
+      "target_path_titles": [
+        "第13章 卤族元素",
+        "五、卤素含氧酸盐的氧化性",
+        "次氯酸盐的氧化性",
+        "NaClO + KI-淀粉 | 酸性体系"
+      ],
+      "target_path": "第13章 卤族元素 / 五、卤素含氧酸盐的氧化性 / 次氯酸盐的氧化性 / NaClO + KI-淀粉 | 酸性体系",
+      "principle_mode": "text",
+      "principle_text": "2I⁻ + ClO⁻ + 2H⁺ → I₂ + Cl⁻ + H₂O\nI₂ + 5ClO⁻ + H₂O → 2IO₃⁻ + 5Cl⁻ + 2H⁺（ClO⁻过量时）",
+      "phenomenon_explanation": "•\t溶液立即变为蓝色（I₂遇淀粉），继续滴加NaClO，蓝色褪去（I₂被过量ClO⁻进一步氧化为无色的IO₃⁻）。",
+      "safety_note": "1.\t防腐蚀：NaClO和H₂SO₄具有腐蚀性，避免皮肤接触。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 288,
+      "source_line_end": 296
+    },
+    {
+      "example_number": 23,
+      "example_title": "KClO₃ + 浓盐酸 | 湿 KI-淀粉试纸",
+      "example_title_from_source": "KClO₃ + 浓盐酸 | 湿 KI-淀粉试纸",
+      "target_seed_key": "cat-outline-ch13-a7a48444e7cde31c",
+      "target_path_titles": [
+        "第13章 卤族元素",
+        "五、卤素含氧酸盐的氧化性",
+        "氯酸盐的氧化性",
+        "KClO₃ + 浓盐酸 | 湿 KI-淀粉试纸"
+      ],
+      "target_path": "第13章 卤族元素 / 五、卤素含氧酸盐的氧化性 / 氯酸盐的氧化性 / KClO₃ + 浓盐酸 | 湿 KI-淀粉试纸",
+      "principle_mode": "text",
+      "principle_text": "KClO₃ + 6HCl(浓) → 3Cl₂↑ + KCl + 3H₂O",
+      "phenomenon_explanation": "•\t产生黄绿色气体（Cl₂），有刺激性气味，湿润的KI-淀粉试纸变蓝（Cl₂氧化I⁻为I₂）。",
+      "safety_note": "1.\t防中毒：反应产生Cl₂有毒气体，必须在通风橱中操作。\n2.\t防腐蚀：浓盐酸具有腐蚀性，避免皮肤接触。\n3.\t防爆炸：KClO₃与还原剂混合加热可能爆炸，避免混入有机物。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 297,
+      "source_line_end": 306
+    },
+    {
+      "example_number": 24,
+      "example_title": "KClO₃ + Na₂SO₃ + AgNO₃",
+      "example_title_from_source": "KClO₃ + Na₂SO₃ + AgNO₃",
+      "target_seed_key": "cat-outline-ch13-a2ede09dc72bc203",
+      "target_path_titles": [
+        "第13章 卤族元素",
+        "五、卤素含氧酸盐的氧化性",
+        "氯酸盐的氧化性",
+        "KClO₃ + Na₂SO₃ + AgNO₃"
+      ],
+      "target_path": "第13章 卤族元素 / 五、卤素含氧酸盐的氧化性 / 氯酸盐的氧化性 / KClO₃ + Na₂SO₃ + AgNO₃",
+      "principle_mode": "text",
+      "principle_text": "ClO₃⁻ + 3SO₃²⁻ + 6H⁺ → Cl⁻ + 3SO₄²⁻ + 3H₂O",
+      "phenomenon_explanation": "•\t中性条件：无明显现象（反应动力学缓慢，实际观察不到反应）。\n•\t酸性条件：反应发生，酸化后用AgNO₃检验有白色沉淀（生成Cl⁻，与Ag⁺生成AgCl沉淀）。",
+      "safety_note": "1.\t防腐蚀：H₂SO₄具有腐蚀性，避免皮肤接触。\n2.\t废液处理：含Ag⁺的废液应回收处理（Ag⁺为重金属，污染环境）。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 307,
+      "source_line_end": 316
+    },
+    {
+      "example_number": 25,
+      "example_title": "KClO₃ + KI + CCl₄",
+      "example_title_from_source": "KClO₃ + KI + CCl₄",
+      "target_seed_key": "cat-outline-ch13-a81e86881db272ec",
+      "target_path_titles": [
+        "第13章 卤族元素",
+        "五、卤素含氧酸盐的氧化性",
+        "氯酸盐的氧化性",
+        "KClO₃ + KI + CCl₄"
+      ],
+      "target_path": "第13章 卤族元素 / 五、卤素含氧酸盐的氧化性 / 氯酸盐的氧化性 / KClO₃ + KI + CCl₄",
+      "principle_mode": "text",
+      "principle_text": "6I⁻ + ClO₃⁻ + 6H⁺ → 3I₂ + Cl⁻ + 3H₂O\n3I₂ + 5ClO₃⁻ + 3H₂O → 5Cl⁻ + 6IO₃⁻（ClO₃⁻过量时）\n5Cl⁻ + ClO₃⁻ + 6H⁺ → 3Cl₂↑ + 3H₂O",
+      "phenomenon_explanation": "•\t中性条件：CCl₄层无色（ClO₃⁻氧化性较弱，不能氧化I⁻）。\n•\t酸性条件：CCl₄层逐渐呈现紫红色（I₂在CCl₄中的特征颜色），继续反应颜色可能变浅并产生黄绿色气体（I₂被进一步氧化为IO₃⁻，Cl⁻与ClO₃⁻反应生成Cl₂）。",
+      "safety_note": "1.\t防中毒：反应可能产生Cl₂，在通风橱中操作。\n2.\t防腐蚀：H₂SO₄具有腐蚀性，避免皮肤接触。\n3.\t废液处理：含CCl₄和I₂的废液应回收处理。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 317,
+      "source_line_end": 329
+    },
+    {
+      "example_number": 26,
+      "example_title": "KClO₃ + KI-淀粉 | 酸性体系",
+      "example_title_from_source": "KClO₃ + KI-淀粉 | 酸性体系",
+      "target_seed_key": "cat-outline-ch13-5a2197ce330eaf92",
+      "target_path_titles": [
+        "第13章 卤族元素",
+        "五、卤素含氧酸盐的氧化性",
+        "氯酸盐的氧化性",
+        "KClO₃ + KI-淀粉 | 酸性体系"
+      ],
+      "target_path": "第13章 卤族元素 / 五、卤素含氧酸盐的氧化性 / 氯酸盐的氧化性 / KClO₃ + KI-淀粉 | 酸性体系",
+      "principle_mode": "text",
+      "principle_text": "ClO₃⁻ + 6I⁻ + 6H⁺ → 3I₂ + Cl⁻ + 3H₂O",
+      "phenomenon_explanation": "•\tKClO₃ + KI-淀粉（中性）：无明显现象（中性条件ClO₃⁻氧化性弱）。\n•\t酸化后：KClO₃能使KI-淀粉变蓝（酸性条件氧化性增强）。",
+      "safety_note": "1.\t防腐蚀：H₂SO₄具有腐蚀性，避免皮肤接触",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 330,
+      "source_line_end": 338
+    },
+    {
+      "example_number": 27,
+      "example_title": "高氯酸盐的氧化性",
+      "example_title_from_source": "高氯酸盐的氧化性",
+      "target_seed_key": "cat-outline-ch13-6efae8caa026c8be",
+      "target_path_titles": [
+        "第13章 卤族元素",
+        "五、卤素含氧酸盐的氧化性",
+        "高氯酸盐的氧化性"
+      ],
+      "target_path": "第13章 卤族元素 / 五、卤素含氧酸盐的氧化性 / 高氯酸盐的氧化性",
+      "principle_mode": "text",
+      "principle_text": "ClO₄⁻ + 8I⁻ + 8H⁺ → 4I₂ + Cl⁻ + 4H₂O",
+      "phenomenon_explanation": "1.\tKClO₄ + KI-淀粉（中性）：无明显现象（ClO₄⁻氧化性更弱）。\n2.\t酸化后：KClO₄能使KI-淀粉变蓝（酸性条件氧化性增强）。\n3.\t结论：氧化性顺序：ClO⁻（中性）> ClO₃⁻（酸性）> ClO₄⁻（酸性），酸性能显著增强ClO₃⁻和ClO₄⁻的氧化性。",
+      "safety_note": "1.\t防腐蚀：H₂SO₄具有腐蚀性，避免皮肤接触",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 339,
+      "source_line_end": 349
+    },
+    {
+      "example_number": 28,
+      "example_title": "卤化银的感光性",
+      "example_title_from_source": "卤化银的感光性",
+      "target_seed_key": "cat-outline-ch13-743b5609fe0ba5ed",
+      "target_path_titles": [
+        "第13章 卤族元素",
+        "七、金属卤化物的性质",
+        "卤化银的感光性"
+      ],
+      "target_path": "第13章 卤族元素 / 七、金属卤化物的性质 / 卤化银的感光性",
+      "principle_mode": "text",
+      "principle_text": "AgX → Ag + X₂（X = Cl、Br、I，光照分解）",
+      "phenomenon_explanation": "•\t在培养皿上制备AgCl、AgBr、AgI悬浊液，部分遮光，光照一段时间后阴影轮廓清晰可见（卤化银见光分解生成黑色Ag单质，未被光照部分保持原色，形成影像），分解速率：AgCl > AgBr > AgI。",
+      "safety_note": "1.\t废液处理：含Ag⁺的废液应回收处理，勿随意倾倒。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 350,
+      "source_line_end": 357
+    },
+    {
+      "example_number": 29,
+      "example_title": "过氧化氢的酸性",
+      "example_title_from_source": "过氧化氢的酸性",
+      "target_seed_key": "cat-outline-ch14-ea4cebb448452c01",
+      "target_path_titles": [
+        "第14章 氧族元素",
+        "三、过氧化氢的制备与性质",
+        "过氧化氢的性质",
+        "过氧化氢的酸性"
+      ],
+      "target_path": "第14章 氧族元素 / 三、过氧化氢的制备与性质 / 过氧化氢的性质 / 过氧化氢的酸性",
+      "principle_mode": "text",
+      "principle_text": "2H₂O₂ → O₂↑ + 2H₂O（碱性条件催化分解）",
+      "phenomenon_explanation": "•\t加入NaOH和乙醇后，剧烈产生大量无色气泡（O₂），溶液迅速冒泡，可能伴有轻微放热（H₂O₂在碱性介质中不稳定，发生歧化分解）。",
+      "safety_note": "1.\t防喷溅：高浓度H₂O₂与浓碱混合时分解剧烈，可能引起喷溅，使用较小量并在通风橱中操作。\n2.\t防腐蚀：40% NaOH具有强腐蚀性，避免皮肤接触。",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 358,
+      "source_line_end": 366
+    },
+    {
+      "example_number": 30,
+      "example_title": "H₂O₂ + KI | 酸性体系",
+      "example_title_from_source": "H₂O₂ + KI | 酸性体系",
+      "target_seed_key": "cat-outline-ch14-7edf0ff1576ff1ce",
+      "target_path_titles": [
+        "第14章 氧族元素",
+        "三、过氧化氢的制备与性质",
+        "过氧化氢的性质",
+        "过氧化氢的氧化性",
+        "H₂O₂ + KI | 酸性体系"
+      ],
+      "target_path": "第14章 氧族元素 / 三、过氧化氢的制备与性质 / 过氧化氢的性质 / 过氧化氢的氧化性 / H₂O₂ + KI | 酸性体系",
+      "principle_mode": "text",
+      "principle_text": "H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O",
+      "phenomenon_explanation": "•\t酸化后的H₂O₂溶液中滴加KI溶液，溶液由无色逐渐变为棕黄色（生成I₂），若加入淀粉则立即变蓝（I₂遇淀粉显蓝色）。酸性条件下H₂O₂氧化性增强（E°=1.776V），反应快速完全。",
+      "safety_note": "1.\t防腐蚀：H₂SO₄具有腐蚀性，避免皮肤接触。\n2.废液处理：含I₂的废液应回收处理",
+      "content_status": "published",
+      "source_doc": "docs/30点位例子.txt",
+      "source_line_start": 367,
+      "source_line_end": 374
+    }
+  ]
+}

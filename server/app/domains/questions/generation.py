@@ -180,6 +180,47 @@ def _question_source_chunk_ids(source_refs: list[dict[str, Any]], source_audit: 
 
 EvidencePackageLoader = Callable[..., dict[str, Any]]
 
+CATALOG_NODE_EVIDENCE_REQUIRED_DETAIL = (
+    "Fresh catalog-node evidence is required for AI question generation. "
+    "Legacy experiment_id/point_key evidence and generic canonical RAG refs are not valid after the catalog reset."
+)
+
+
+def _as_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item or "").strip()]
+
+
+def _catalog_node_evidence_ready(
+    evidence_package: dict[str, Any] | None,
+    *,
+    target_point_node_ids: list[str] | None = None,
+) -> bool:
+    if not isinstance(evidence_package, dict):
+        return False
+    mode = str(evidence_package.get("mode") or "").strip()
+    contract = str(evidence_package.get("evidence_contract") or "").strip()
+    diagnostics = evidence_package.get("diagnostics") if isinstance(evidence_package.get("diagnostics"), dict) else {}
+    strategy = str(diagnostics.get("source_strategy") or "").strip()
+    if "catalog_node_evidence" not in {mode, contract, strategy}:
+        return False
+
+    package_node_ids = {
+        *_as_string_list(evidence_package.get("target_point_node_ids")),
+        *_as_string_list(evidence_package.get("catalog_node_ids")),
+        *_as_string_list(evidence_package.get("point_node_ids")),
+        *_as_string_list(diagnostics.get("target_point_node_ids")),
+        *_as_string_list(diagnostics.get("catalog_node_ids")),
+    }
+    requested_node_ids = set(_as_string_list(target_point_node_ids or []))
+    if requested_node_ids and not requested_node_ids.issubset(package_node_ids):
+        return False
+    if not package_node_ids:
+        return False
+    source_refs = evidence_package.get("source_refs")
+    return isinstance(source_refs, list) and bool(source_refs)
+
 
 def generate_question_drafts(
     *,
@@ -206,6 +247,11 @@ def generate_question_drafts(
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="No usable evidence was found for this experiment context; AI question generation is blocked.",
+            )
+        if not _catalog_node_evidence_ready(evidence_package):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=CATALOG_NODE_EVIDENCE_REQUIRED_DETAIL,
             )
         warning = "" if source_refs else "当前实验资料尚未充分入库，已使用实验目录与理论章节信息生成草稿，发布前必须人工核验。"
         ai_settings = effective_ai_settings(get_settings())

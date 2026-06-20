@@ -40,7 +40,11 @@ from server.app.domains.questions.bank import (
     _insert_question,
     _validate_question_payload,
 )
-from server.app.domains.questions.generation import _load_generation_sources
+from server.app.domains.questions.generation import (
+    CATALOG_NODE_EVIDENCE_REQUIRED_DETAIL,
+    _catalog_node_evidence_ready,
+    _load_generation_sources,
+)
 from server.app.domains.assistant.rag_sources import _source_evidence_payload, _source_from_chunk
 from server.app.schemas import AgentAskRequest
 
@@ -229,7 +233,7 @@ def _workbench_context(
         "teacher_point_content": teacher_point_content or {},
         "source_boundaries": {
             "teacher_point_content": "student_page_context_only",
-            "fixed_manual_reviewed_evidence": "experiment_video_point_evidence",
+            "catalog_node_evidence": "required_fresh_catalog_node_evidence",
             "supplemental_rag_evidence": package.get("mode") or "canonical_evidence",
         },
         "coverage": coverage or {},
@@ -560,6 +564,8 @@ def _load_workbench_evidence_package(
             "rag_trace": trace,
             "source_strategy": strategy,
             "fallback_reason": fallback_reason,
+            "requires_catalog_node_evidence": True,
+            "catalog_node_evidence_ready": False,
             "chapter_ids": chapter_ids,
             "knowledge_point_ids": knowledge_point_ids,
             "target_point_keys": [point.get("point_key") for point in (target_points or []) if point.get("point_key")],
@@ -595,6 +601,12 @@ def _create_or_reopen_workbench_session(
     selected_point = selected_points[0] if selected_points else None
     point_key = selected_point.get("point_key") if selected_point else request.point_key
     point_node_id = _point_node_id(selected_point) or str(request.point_node_id or "").strip()
+    target_point_node_ids = _unique_point_node_ids(selected_points, point_node_id)
+    if not target_point_node_ids:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Select a catalog point node before opening the AI question workbench.",
+        )
     params = {
         "mode": request.mode,
         "experiment_id": request.experiment_id,
@@ -661,6 +673,11 @@ def _create_or_reopen_workbench_session(
             status_code=status.HTTP_409_CONFLICT,
             detail="No usable evidence was found for this experiment and point context; AI question workbench is blocked.",
         )
+    if not _catalog_node_evidence_ready(evidence_package, target_point_node_ids=target_point_node_ids):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=CATALOG_NODE_EVIDENCE_REQUIRED_DETAIL,
+        )
     coverage = _question_coverage_for_context(session, request.experiment_id, point_key, point_node_id)
     teacher_point_content = _teacher_point_content_context(session, request.experiment_id, point_key, point_node_id)
     context = _workbench_context(
@@ -694,7 +711,7 @@ def _create_or_reopen_workbench_session(
             {
                 **params,
                 "point_key": point_key,
-                "point_node_ids": _json_array(_unique_point_node_ids(selected_points, point_node_id)),
+                "point_node_ids": _json_array(target_point_node_ids),
                 "original_question_snapshot": _json(_question_snapshot(target_question)),
                 "context_snapshot": _json(context),
             },
@@ -931,6 +948,39 @@ def send_question_workbench_message(*, payload: WorkbenchMessageRequest, session
                 "point_node_ids": target_point_node_ids,
             },
         )
+        if not target_point_node_ids:
+            message = "未选择新版目录点位，AI 出题或修题意见已阻止。"
+            _insert_workbench_turn(
+                session,
+                session_id=session_id,
+                role="assistant",
+                content=message,
+                error_state={"type": "CATALOG_POINT_MISSING", "message": message},
+                metadata={"user_turn_id": str(user_turn["id"])},
+            )
+            session.execute(
+                text(
+                    """
+                    UPDATE experiment_question_workbench_sessions
+                    SET context_snapshot = CAST(:context_snapshot AS jsonb), updated_at = now()
+                    WHERE id = CAST(:id AS uuid)
+                    """
+                ),
+                {
+                    "id": session_id,
+                    "context_snapshot": _json(
+                        {
+                            **context_snapshot,
+                            "target_points": target_points,
+                            "target_point_keys": target_point_keys,
+                            "target_point_node_ids": [],
+                            "last_prompt": payload.prompt,
+                        }
+                    ),
+                },
+            )
+            return _workbench_session_response(session, session_id)
+
         rag_gate = _question_workbench_rag_gate()
         if not rag_gate.get("healthy"):
             _insert_workbench_turn(
@@ -969,26 +1019,14 @@ def send_question_workbench_message(*, payload: WorkbenchMessageRequest, session
             rag_gate=rag_gate,
         )
         source_refs = list(evidence_package.get("source_refs") or [])
-        if not source_refs:
-            source_refs = list(context_snapshot.get("source_refs") or [])
-            if source_refs:
-                evidence_package = {
-                    **evidence_package,
-                    "source_refs": source_refs,
-                    "source_count": len(source_refs),
-                    "diagnostics": {
-                        **(evidence_package.get("diagnostics") if isinstance(evidence_package.get("diagnostics"), dict) else {}),
-                        "fallback_reason": "previous_context_source_refs",
-                    },
-                }
-        if not source_refs:
-            message = "未找到可用的 RAG/来源证据，AI 出题或修题意见已阻止。"
+        if not source_refs or not _catalog_node_evidence_ready(evidence_package, target_point_node_ids=target_point_node_ids):
+            message = "缺少重新生成的目录点位证据，AI 出题或修题意见已阻止。"
             _insert_workbench_turn(
                 session,
                 session_id=session_id,
                 role="assistant",
                 content=message,
-                error_state={"type": "EVIDENCE_MISSING", "message": message},
+                error_state={"type": "CATALOG_NODE_EVIDENCE_MISSING", "message": message},
                 metadata={"user_turn_id": str(user_turn["id"]), "rag_gate": rag_gate},
             )
             session.execute(
@@ -1010,8 +1048,8 @@ def send_question_workbench_message(*, payload: WorkbenchMessageRequest, session
                             "rag_gate": rag_gate,
                             "evidence_package": {
                                 "mode": evidence_package.get("mode") or "hybrid_bge_rag",
-                                "source_refs": [],
-                                "source_count": 0,
+                                "source_refs": source_refs,
+                                "source_count": len(source_refs),
                                 "diagnostics": evidence_package.get("diagnostics") or {"rag_gate": rag_gate},
                             },
                             "last_prompt": payload.prompt,
@@ -1038,7 +1076,7 @@ def send_question_workbench_message(*, payload: WorkbenchMessageRequest, session
             ),
             "source_boundaries": {
                 "teacher_point_content": "student_page_context_only",
-                "fixed_manual_reviewed_evidence": "experiment_video_point_evidence",
+                "catalog_node_evidence": "required_fresh_catalog_node_evidence",
                 "supplemental_rag_evidence": evidence_package.get("mode") or "hybrid_bge_rag",
             },
             "last_prompt": payload.prompt,

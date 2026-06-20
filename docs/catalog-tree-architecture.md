@@ -32,7 +32,7 @@ Student video-library search is an Elasticsearch projection from published catal
 AI-generated chunks/evidence and student search documents remain separate consumers:
 
 - Teacher-authored point content may be passed into question workbench as `student_page_context_only`.
-- Accepted question evidence remains `experiment_video_point_evidence` plus canonical/RAG source refs.
+- Accepted question evidence must be freshly generated against catalog node ids or deterministic catalog seed keys; old `experiment_video_point_evidence` point bindings are retired.
 - This change migrates point identity to stable catalog node ids; it does not make point content a RAG chunk source.
 
 ## Deployment Requirements

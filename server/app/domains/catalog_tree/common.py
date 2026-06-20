@@ -146,7 +146,7 @@ def node_card(
         "node_kind": kind,
         "title": node.get("title") or "",
         "summary": node.get("summary") or "",
-        "student_description": node.get("student_description") or node.get("summary") or "",
+        "student_description": node.get("student_description") or "",
         "card_image_asset_id": node.get("card_image_asset_id"),
         "card_icon_key": node.get("card_icon_key"),
         "card_accent": node.get("card_accent"),

@@ -19,16 +19,18 @@ EXPECTED_DATABASE_COUNTS = {
     "chapters": 11,
     "knowledge_units": 133,
     "knowledge_points": 385,
-    "experiment_points": 300,
-    "experiment_question_banks": 77,
-    "experiment_questions": 2310,
+    "experiment_catalog_nodes": 569,
+    "experiment_catalog_directory_nodes": 176,
+    "experiment_catalog_point_nodes": 393,
+    "experiment_catalog_point_content_examples": 30,
+    "experiment_question_banks": 0,
+    "experiment_questions": 0,
     "source_documents": 2,
     "source_chunks": 3637,
     "chunk_embeddings": 3637,
-    "experiment_catalog_point_nodes": 300,
-    "published_catalog_point_content_min": 0,
+    "published_catalog_point_content_min": 30,
     "catalog_point_related_links_min": 0,
-    "point_evidence_bindings_with_node": 300,
+    "point_evidence_bindings_with_node": 0,
 }
 
 
@@ -79,6 +81,42 @@ def _point_inventory_count(path: Path) -> dict[str, int]:
     return {
         "experiments": int(summary.get("experiment_count") or len(data.get("experiments") or [])),
         "points": int(summary.get("total_video_points") or 0),
+    }
+
+
+def _catalog_tree_count(path: Path) -> dict[str, int]:
+    data = _json(path)
+    nodes = data.get("nodes") or []
+    if not isinstance(nodes, list):
+        raise ValueError(f"{path} nodes is not a JSON list")
+    return {
+        "total_nodes": len(nodes),
+        "directory_nodes": sum(1 for node in nodes if isinstance(node, dict) and node.get("node_kind") == "directory"),
+        "point_nodes": sum(1 for node in nodes if isinstance(node, dict) and node.get("node_kind") == "point"),
+        "chapter_21_nodes": sum(1 for node in nodes if isinstance(node, dict) and int(node.get("chapter_number") or 0) == 21),
+    }
+
+
+def _catalog_examples_count(path: Path) -> dict[str, int]:
+    data = _json(path)
+    examples = data.get("examples") or []
+    if not isinstance(examples, list):
+        raise ValueError(f"{path} examples is not a JSON list")
+    return {
+        "examples": len(examples),
+        "unique_target_seed_keys": len({str(item.get("target_seed_key") or "") for item in examples if isinstance(item, dict)}),
+    }
+
+
+def _catalog_validation_report_count(path: Path) -> dict[str, int | bool]:
+    data = _json(path)
+    counts = data.get("counts") or {}
+    return {
+        "ok": bool(data.get("ok")),
+        "total_nodes": int(counts.get("total_nodes") or 0),
+        "directory_nodes": int(counts.get("directory_nodes") or 0),
+        "point_nodes": int(counts.get("point_nodes") or 0),
+        "point_content_examples": int(counts.get("point_content_examples") or 0),
     }
 
 
@@ -299,13 +337,22 @@ RESOURCE_SPECS: list[dict[str, Any]] = [
         "source_path": "data/processed/reviewed_curriculum.json",
     },
     {
-        "id": "experiment_point_inventory",
-        "role": "Current stable formal experiment video point inventory",
-        "path": "data/seed/experiment_points/formal_experiment_point_inventory.json",
+        "id": "experiment_catalog_tree",
+        "role": "Canonical outline-backed experiment catalog tree seed",
+        "path": "data/seed/experiment_catalog/catalog_tree.json",
         "kind": "json",
-        "count": _point_inventory_count,
-        "expected_counts": {"experiments": 77, "points": 300},
-        "source_path": "artifacts/point-aware-question-bank/formal_experiment_point_inventory.json",
+        "count": _catalog_tree_count,
+        "expected_counts": {"total_nodes": 569, "directory_nodes": 176, "point_nodes": 393, "chapter_21_nodes": 0},
+        "source_path": "docs/实验目录_整理版.md",
+    },
+    {
+        "id": "experiment_catalog_point_content_examples",
+        "role": "Thirty mapped catalog point-content examples for ES/search smoke tests",
+        "path": "data/seed/experiment_catalog/point_content_examples.json",
+        "kind": "json",
+        "count": _catalog_examples_count,
+        "expected_counts": {"examples": 30, "unique_target_seed_keys": 30},
+        "source_path": "docs/30点位例子.txt",
     },
     {
         "id": "chemical_search_aliases",
@@ -383,38 +430,6 @@ RESOURCE_SPECS: list[dict[str, Any]] = [
         "source_path": "data/seed/search/es_ik/analysis/chemistry_synonyms.txt",
     },
     {
-        "id": "point_aware_question_bank",
-        "role": "Current imported point-aware default question bank",
-        "path": "data/seed/question_bank/rebuilt_question_bank_merged_v1.json",
-        "kind": "json",
-        "count": _question_bank_count,
-        "expected_counts": {"experiments": 77, "questions": 2310},
-        "source_path": "artifacts/point-aware-question-bank/reviewed_old_bank_chunks/slim_release_work_v1/rebuilt_question_bank_merged_v1.json",
-    },
-    {
-        "id": "point_aware_question_bank_schema",
-        "role": "Schema used to validate the point-aware question bank",
-        "path": "data/seed/question_bank/point_aware_question_bank_schema.json",
-        "kind": "json",
-        "source_path": "artifacts/point-aware-question-bank/point_aware_question_bank_schema.json",
-    },
-    {
-        "id": "manual_reviewed_point_evidence",
-        "role": "Assistant-only manually reviewed experiment point to canonical chunk evidence bindings",
-        "path": "data/seed/point_evidence/manual_reviewed_point_evidence.jsonl",
-        "kind": "jsonl",
-        "count": _jsonl_count,
-        "expected_count": 300,
-        "source_path": "artifacts/video-point-default-evidence/gpu-rerank-direct-v2-20260616T1140Z/manual-reviewed-from-start-20260616T2135Z/manual_reviewed_point_evidence.jsonl",
-    },
-    {
-        "id": "manual_review_point_evidence_manifest",
-        "role": "Manifest for the manually reviewed point evidence source run",
-        "path": "data/seed/point_evidence/manual_review_manifest.json",
-        "kind": "json",
-        "source_path": "artifacts/video-point-default-evidence/gpu-rerank-direct-v2-20260616T1140Z/manual-reviewed-from-start-20260616T2135Z/manifest.json",
-    },
-    {
         "id": "student_learning_profiles",
         "role": "Student H5 display-facing family and element learning profiles",
         "path": "data/seed/student_learning/element_profiles.json",
@@ -489,11 +504,19 @@ RESOURCE_SPECS: list[dict[str, Any]] = [
         "source_path": "artifacts/experiment_knowledge_framework_import_report.json",
     },
     {
-        "id": "point_aware_question_bank_import_report",
-        "role": "Current point-aware question bank import report",
-        "path": "data/seed/import_reports/rebuilt_question_bank_merged_v1_import_report.json",
+        "id": "catalog_outline_seed_validation_report",
+        "role": "Current catalog outline seed validation report",
+        "path": "data/seed/import_reports/catalog_outline_seed_validation_report.json",
         "kind": "json",
-        "source_path": "artifacts/point-aware-question-bank/reviewed_old_bank_chunks/slim_release_work_v1/rebuilt_question_bank_merged_v1_import_report.json",
+        "count": _catalog_validation_report_count,
+        "expected_counts": {
+            "ok": True,
+            "total_nodes": 569,
+            "directory_nodes": 176,
+            "point_nodes": 393,
+            "point_content_examples": 30,
+        },
+        "source_path": "data/seed/experiment_catalog/catalog_tree.json",
     },
 ]
 

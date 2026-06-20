@@ -18,7 +18,12 @@ from server.app.domains.catalog.experiments import (
     _list_experiment_video_resources,
 )
 from server.app.domains.questions.bank import _json, _json_array, _validate_question_payload
-from server.app.domains.questions.generation import OBJECTIVE_TYPES, _question_source_chunk_ids
+from server.app.domains.questions.generation import (
+    CATALOG_NODE_EVIDENCE_REQUIRED_DETAIL,
+    OBJECTIVE_TYPES,
+    _catalog_node_evidence_ready,
+    _question_source_chunk_ids,
+)
 
 EvidencePackageLoader = Callable[..., dict[str, Any]]
 
@@ -557,6 +562,11 @@ def create_point_aware_suggestions(
         selected_point = selected_points[0] if selected_points else None
         target_point_keys = _unique_point_keys([point.get("point_key") for point in selected_points], payload.point_key)
         target_point_node_ids = _unique_point_node_ids(selected_points, payload.point_node_ids, payload.point_node_id)
+        if not target_point_node_ids:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Select a catalog point node before generating point-aware question suggestions.",
+            )
         evidence_package = evidence_loader(
             session,
             experiment=experiment,
@@ -570,6 +580,11 @@ def create_point_aware_suggestions(
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="No usable evidence was found for this experiment and point context; AI question suggestions are blocked.",
+            )
+        if not _catalog_node_evidence_ready(evidence_package, target_point_node_ids=target_point_node_ids):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=CATALOG_NODE_EVIDENCE_REQUIRED_DETAIL,
             )
         ai_settings = effective_ai_settings(get_settings())
         generated = _try_openai_point_aware_suggestions(

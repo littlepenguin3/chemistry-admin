@@ -11,13 +11,15 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+WEB_ADMIN_DIR = ROOT / "apps" / "web-admin"
+WEB_TEACHER_DIR = ROOT / "apps" / "web-teacher"
+WEB_STUDENT_DIR = ROOT / "apps" / "web-student"
 FRONTENDS = [
-    ("admin frontend", ROOT / "apps" / "admin-web", True),
-    ("student H5 frontend", ROOT / "apps" / "student-web", True),
+    ("web-admin frontend", WEB_ADMIN_DIR, False),
+    ("web-teacher frontend", WEB_TEACHER_DIR, True),
+    ("web-student frontend", WEB_STUDENT_DIR, True),
 ]
-ADMIN_FRONTEND_DIR = ROOT / "apps" / "admin-web"
-STUDENT_FRONTEND_DIR = ROOT / "apps" / "student-web"
-DEFAULT_CHANGE = "experiment-catalog-tree-point-architecture"
+DEFAULT_CHANGE = "split-web-admin-teacher-student-consoles"
 
 
 @dataclass
@@ -142,6 +144,12 @@ def _stages(args: argparse.Namespace) -> list[Stage]:
     if not args.skip_resource_validation:
         stages.append(
             Stage(
+                "catalog outline seed validation",
+                [sys.executable, "scripts/validate_experiment_catalog_seed.py", "--write-report"],
+            )
+        )
+        stages.append(
+            Stage(
                 "protected resource manifest",
                 [sys.executable, "scripts/validate_production_resources.py"],
             )
@@ -184,24 +192,22 @@ def _stages(args: argparse.Namespace) -> list[Stage]:
 
     stages.extend(_frontend_dependencies_stage(args))
     if not args.skip_frontend:
-        stages.append(
-            Stage("admin frontend import boundaries", [_npm(), "run", "validate:boundaries"], cwd=ADMIN_FRONTEND_DIR)
-        )
+        stages.append(Stage("web-teacher import boundaries", [_npm(), "run", "validate:boundaries"], cwd=WEB_TEACHER_DIR))
         for name, frontend_dir, has_tests in FRONTENDS:
             stages.append(Stage(f"{name} typecheck", [_npm(), "run", "typecheck"], cwd=frontend_dir))
             if has_tests:
                 stages.append(Stage(f"{name} tests", [_npm(), "test"], cwd=frontend_dir))
             stages.append(Stage(f"{name} build", [_npm(), "run", "build"], cwd=frontend_dir))
         stages.append(
-            Stage("admin frontend build chunk report", [_npm(), "run", "build:report"], cwd=ADMIN_FRONTEND_DIR)
+            Stage("web-teacher build chunk report", [_npm(), "run", "build:report"], cwd=WEB_TEACHER_DIR)
         )
     if args.run_e2e:
-        stages.append(Stage("admin frontend e2e smoke", [_npm(), "run", "e2e:smoke"], cwd=ADMIN_FRONTEND_DIR))
+        stages.append(Stage("web-teacher e2e smoke", [_npm(), "run", "e2e:smoke"], cwd=WEB_TEACHER_DIR))
         stages.append(
             Stage(
-                "student H5 mobile route-stack QA",
+                "web-student mobile route-stack QA",
                 [_npm(), "run", "qa:mobile"],
-                cwd=STUDENT_FRONTEND_DIR,
+                cwd=WEB_STUDENT_DIR,
                 env=_student_mobile_qa_env(),
             )
         )

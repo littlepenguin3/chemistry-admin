@@ -45,7 +45,7 @@ def create_node_params(data: dict[str, Any], *, kind: str) -> dict[str, Any]:
     return {
         "summary": clean(data.get("summary")),
         "teacher_note": clean(data.get("teacher_note")),
-        "student_description": clean(data.get("student_description") or data.get("summary")),
+        "student_description": clean(data.get("student_description")),
         "card_image_asset_id": _clean_optional(data.get("card_image_asset_id")),
         "card_icon_key": _clean_optional(data.get("card_icon_key")),
         "card_accent": _clean_optional(data.get("card_accent")),
@@ -60,9 +60,7 @@ def update_node_params(data: dict[str, Any], current: dict[str, Any], *, kind: s
         return data[name] if name in data else current.get(name, default)
 
     summary = clean(value("summary", current.get("summary", "")))
-    student_description = clean(value("student_description", current.get("student_description") or summary))
-    if not student_description:
-        student_description = summary
+    student_description = clean(value("student_description", current.get("student_description", "")))
     return {
         "summary": summary,
         "teacher_note": clean(value("teacher_note", current.get("teacher_note", ""))),
