@@ -38,6 +38,12 @@ const mockCatalogDirectoryNode = {
   chapter_id: "CH17",
   parent_id: null,
   node_kind: "directory",
+  student_description: "directory card for mobile QA",
+  card_icon_key: "flask",
+  card_accent: "green",
+  card_layout: "compact",
+  card_presentation: { badge: "category" },
+  point_card_presentation: {},
   title: "卤素置换目录",
   summary: "按观察对象进入本章点位。",
   status: "published",
@@ -54,6 +60,12 @@ const mockCatalogPointNode = {
   chapter_id: "CH17",
   parent_id: "cat-dir-halogen",
   node_kind: "point",
+  student_description: "point card for mobile QA",
+  card_icon_key: "play",
+  card_accent: "blue",
+  card_layout: "default",
+  card_presentation: {},
+  point_card_presentation: { short_description: "point card for mobile QA", accent: "blue", emphasis: true },
   title: "卤素置换观察",
   summary: "氯水把 Br- 氧化为溴单质，CCl4 层出现橙红色。",
   status: "published",
@@ -527,6 +539,49 @@ async function assertElementFocusCard(page, label) {
   }
 }
 
+async function assertCatalogCardsDistinctAndTouchable(page, label, expected) {
+  const metrics = await page.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll(".catalog-node-card"));
+    return cards.map((card) => {
+      const button = card.querySelector(".catalog-node-card-main");
+      const icon = card.querySelector(".catalog-node-card-icon");
+      const copy = card.querySelector(".catalog-node-card-copy");
+      const rect = card.getBoundingClientRect();
+      const buttonRect = button?.getBoundingClientRect();
+      return {
+        className: card.className,
+        styleAccent: card instanceof HTMLElement ? card.style.getPropertyValue("--catalog-card-accent") : "",
+        width: rect.width,
+        height: rect.height,
+        buttonWidth: buttonRect?.width || 0,
+        buttonHeight: buttonRect?.height || 0,
+        hasIcon: Boolean(icon),
+        hasCopy: Boolean(copy?.textContent?.trim()),
+      };
+    });
+  });
+
+  const directory = metrics.find((card) => String(card.className).includes("kind-directory"));
+  const point = metrics.find((card) => String(card.className).includes("kind-point"));
+  if (expected.directory && !directory) {
+    throw new Error(label + ": directory card was not rendered");
+  }
+  if (expected.point && !point) {
+    throw new Error(label + ": point card was not rendered");
+  }
+  for (const card of [directory, point].filter(Boolean)) {
+    if (card.width < 280 || card.height < 56 || card.buttonHeight < 44 || card.buttonWidth < 240) {
+      throw new Error(label + ": catalog card touch target is too small " + JSON.stringify(card));
+    }
+    if (!card.hasIcon || !card.hasCopy) {
+      throw new Error(label + ": catalog card is missing icon or copy " + JSON.stringify(card));
+    }
+  }
+  if (directory && point && directory.styleAccent === point.styleAccent) {
+    throw new Error(label + ": directory and point cards should not use identical accents");
+  }
+}
+
 async function assertAtomModelRenderable(page, label) {
   await page.locator(".atom-model-card").first().waitFor({ state: "visible", timeout: 10000 });
   await page.locator(".atom-canvas").first().waitFor({ state: "visible", timeout: 10000 });
@@ -866,6 +921,7 @@ async function checkAuthenticatedFlows(page, viewportName) {
   await page.locator('.chapter-element-summary').first().waitFor({ state: 'visible', timeout: 10000 });
   await page.locator('.catalog-node-card').first().waitFor({ state: 'visible', timeout: 10000 });
   await assertElementFocusCard(page, viewportName + ': chapter element focus card');
+  await assertCatalogCardsDistinctAndTouchable(page, viewportName + ': chapter directory cards', { directory: true, point: false });
   const chapterAtomCount = await page.locator('.atom-model-card').count();
   if (chapterAtomCount > 0) {
     throw new Error(viewportName + ': chapter detail should not render the full atom model');
@@ -898,6 +954,7 @@ async function checkAuthenticatedFlows(page, viewportName) {
   await page.locator('.catalog-node-card-main').first().click();
   await page.waitForURL(/\/catalog\/cat-dir-halogen/, { timeout: 10000 });
   await page.locator('.catalog-directory-panel .catalog-node-card-main').first().waitFor({ state: 'visible', timeout: 10000 });
+  await assertCatalogCardsDistinctAndTouchable(page, viewportName + ': directory point cards', { directory: false, point: true });
   await page.locator('.catalog-directory-panel .catalog-node-card-main').first().click();
   await page.waitForURL(/\/point\/cat-point-halogen/, { timeout: 10000 });
   await expectBottomNavHidden(page, viewportName + ': point detail');

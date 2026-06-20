@@ -156,7 +156,7 @@ export type StudentLearningReferenceMedia = {
   property_keys: string[];
 };
 
-export type StudentCatalogNodeKind = "directory" | "point" | "hybrid" | "shortcut";
+export type StudentCatalogNodeKind = "directory" | "point";
 
 export type StudentCatalogBreadcrumb = {
   node_id: string;
@@ -174,7 +174,13 @@ export type StudentCatalogNodeCard = {
   summary: string;
   status: string;
   display_order: number;
-  shortcut_target_node_id?: string | null;
+  student_description: string;
+  card_image_asset_id?: string | null;
+  card_icon_key?: string | null;
+  card_accent?: string | null;
+  card_layout: string;
+  card_presentation: Record<string, unknown>;
+  point_card_presentation: Record<string, unknown>;
   actions: string[];
   has_children: boolean;
   has_point_content: boolean;
@@ -218,6 +224,7 @@ export type StudentPointDetailResponse = {
   chapter_id: string;
   title: string;
   summary: string;
+  point_card_presentation?: Record<string, unknown>;
   breadcrumbs: StudentCatalogBreadcrumb[];
   principle_mode: "equation" | "text" | string;
   principle_equation?: string | null;

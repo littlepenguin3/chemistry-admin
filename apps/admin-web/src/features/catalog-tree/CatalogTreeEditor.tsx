@@ -19,7 +19,6 @@ import {
 } from "antd";
 import {
   CheckCircleOutlined,
-  CloudUploadOutlined,
   DeleteOutlined,
   EyeOutlined,
   LinkOutlined,
@@ -76,8 +75,6 @@ export function CatalogTreeEditor({
   const [moveParentId, setMoveParentId] = useState<string>("");
   const [moveDisplayOrder, setMoveDisplayOrder] = useState<number | null>(null);
   const [mediaAssetIds, setMediaAssetIds] = useState<string[]>([]);
-  const [uploadTitle, setUploadTitle] = useState("");
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [relatedQuery, setRelatedQuery] = useState("");
   const node = detail?.node;
   const pointCapable = isPointCapable(node?.node_kind);
@@ -100,8 +97,6 @@ export function CatalogTreeEditor({
     setMoveParentId(detail?.node.parent_id || "");
     setMoveDisplayOrder(detail?.node.display_order ?? null);
     setMediaAssetIds([]);
-    setUploadTitle(detail?.node.title || "");
-    setUploadFile(null);
   }, [detail, linksForm, nodeForm, pointForm]);
 
   if (!detail && !loading && !error) {
@@ -167,8 +162,6 @@ export function CatalogTreeEditor({
                   <Radio.Group optionType="button" buttonStyle="solid">
                     <Radio.Button value="directory">目录</Radio.Button>
                     <Radio.Button value="point">点位</Radio.Button>
-                    <Radio.Button value="hybrid">混合</Radio.Button>
-                    <Radio.Button value="shortcut">快捷</Radio.Button>
                   </Radio.Group>
                 </Form.Item>
               </div>
@@ -177,11 +170,60 @@ export function CatalogTreeEditor({
               </Form.Item>
               <Form.Item noStyle shouldUpdate={(prev, next) => prev.node_kind !== next.node_kind}>
                 {({ getFieldValue }) =>
-                  getFieldValue("node_kind") === "shortcut" ? (
-                    <Form.Item name="shortcut_target_node_id" label="快捷入口目标点位 Node ID" rules={[{ required: true, message: "请输入目标 Node ID" }]}>
-                      <Input />
-                    </Form.Item>
-                  ) : null
+                  getFieldValue("node_kind") === "directory" ? (
+                    <>
+                      <Form.Item name="teacher_note" label="老师备注">
+                        <Input.TextArea className="catalog-teacher-note" autoSize={{ minRows: 2, maxRows: 5 }} placeholder="仅教师可见" />
+                      </Form.Item>
+                      <Form.Item name="student_description" label="学生端卡片描述">
+                        <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} />
+                      </Form.Item>
+                      <div className="catalog-form-grid">
+                        <Form.Item name="card_image_asset_id" label="卡片图片素材 ID">
+                          <Input placeholder="可留空" />
+                        </Form.Item>
+                        <Form.Item name="card_icon_key" label="图标键">
+                          <Input placeholder="flask / lightning / shield" />
+                        </Form.Item>
+                        <Form.Item name="card_accent" label="强调色">
+                          <Input placeholder="blue / green / violet" />
+                        </Form.Item>
+                        <Form.Item name="card_layout" label="卡片样式">
+                          <Select
+                            options={[
+                              { value: "default", label: "默认" },
+                              { value: "compact", label: "紧凑" },
+                              { value: "image", label: "图片" },
+                              { value: "hero", label: "重点" },
+                            ]}
+                          />
+                        </Form.Item>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <Form.Item name="point_card_short_description" label="点位卡片短描述">
+                        <Input.TextArea autoSize={{ minRows: 2, maxRows: 3 }} />
+                      </Form.Item>
+                      <div className="catalog-form-grid">
+                        <Form.Item name="point_card_cover_image_asset_id" label="点位封面素材 ID">
+                          <Input placeholder="可留空" />
+                        </Form.Item>
+                        <Form.Item name="point_card_icon_key" label="点位图标键">
+                          <Input placeholder="play / flask / reaction" />
+                        </Form.Item>
+                        <Form.Item name="point_card_accent" label="点位强调色">
+                          <Input placeholder="blue / green / violet" />
+                        </Form.Item>
+                        <Form.Item name="point_card_emphasis" label="重点卡片">
+                          <Radio.Group optionType="button" buttonStyle="solid">
+                            <Radio.Button value={false}>普通</Radio.Button>
+                            <Radio.Button value={true}>重点</Radio.Button>
+                          </Radio.Group>
+                        </Form.Item>
+                      </div>
+                    </>
+                  )
                 }
               </Form.Item>
               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={mutations.updateNode.isPending}>
@@ -342,18 +384,7 @@ export function CatalogTreeEditor({
                     绑定素材
                   </Button>
                 </div>
-                <div className="catalog-upload-row">
-                  <Input value={uploadTitle} onChange={(event) => setUploadTitle(event.target.value)} placeholder="上传标题" />
-                  <input type="file" accept="video/*" onChange={(event) => setUploadFile(event.target.files?.[0] || null)} />
-                  <Button
-                    icon={<CloudUploadOutlined />}
-                    disabled={!uploadFile}
-                    loading={mutations.uploadMedia.isPending}
-                    onClick={() => uploadFile && mutations.uploadMedia.mutate({ nodeId: node.node_id, title: uploadTitle || node.title, file: uploadFile })}
-                  >
-                    上传并绑定
-                  </Button>
-                </div>
+                <Alert type="info" showIcon message="需要新视频素材时，请先在视频素材库上传，再回到这里绑定。" />
                 <div className="catalog-media-list">
                   {detail.media_bindings.length ? (
                     detail.media_bindings.map((binding) => (

@@ -88,12 +88,6 @@
     },
     {
       "method": "POST",
-      "path": "/api/admin/catalog/nodes/{node_id}/media/upload",
-      "name": "admin_catalog_upload_and_bind_media",
-      "owner": "admin-api"
-    },
-    {
-      "method": "POST",
       "path": "/api/admin/catalog/nodes/{node_id}/move",
       "name": "admin_catalog_move_node",
       "owner": "admin-api"

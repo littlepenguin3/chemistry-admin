@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile
+from fastapi import APIRouter, Depends, Path, Query
 
 from server.app.auth import AuthUser, require_roles
 from server.app.catalog_tree_schemas import (
@@ -31,7 +31,6 @@ from server.app.domains.catalog_tree.tree import (
     set_node_status,
     set_point_content_publication,
     update_node,
-    upload_and_bind_media,
     validate_selected_node,
 )
 from server.app.infrastructure.database import db_session
@@ -134,24 +133,6 @@ async def admin_catalog_bind_media(
     user: AuthUser = Depends(require_roles("admin", "teacher")),
 ) -> dict[str, Any]:
     return bind_existing_media(node_id=node_id, payload=payload, user=user)
-
-
-@router.post("/nodes/{node_id}/media/upload")
-async def admin_catalog_upload_and_bind_media(
-    node_id: str = Path(min_length=1),
-    title: str = Form(...),
-    file: UploadFile = File(...),
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
-) -> dict[str, Any]:
-    content = await file.read()
-    return upload_and_bind_media(
-        node_id=node_id,
-        title=title,
-        filename=file.filename or "upload.mp4",
-        content=content,
-        content_type=file.content_type,
-        user=user,
-    )
 
 
 @router.post("/media-bindings/{binding_id}/{action}")

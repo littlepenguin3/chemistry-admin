@@ -2,7 +2,7 @@ import type { ApiList } from "./common";
 import { api, postJson, putJson, patchJson } from "./http";
 import type { MediaAsset } from "./media";
 
-export type CatalogNodeKind = "directory" | "point" | "hybrid" | "shortcut";
+export type CatalogNodeKind = "directory" | "point";
 export type CatalogNodeStatus = "draft" | "published" | "archived";
 export type CatalogPrincipleMode = "equation" | "text";
 
@@ -29,7 +29,14 @@ export type CatalogNodeCard = {
   summary: string;
   status: CatalogNodeStatus;
   display_order: number;
-  shortcut_target_node_id?: string | null;
+  teacher_note?: string | null;
+  student_description: string;
+  card_image_asset_id?: string | null;
+  card_icon_key?: string | null;
+  card_accent?: string | null;
+  card_layout: "default" | "compact" | "image" | "hero" | string;
+  card_presentation: Record<string, unknown>;
+  point_card_presentation: Record<string, unknown>;
   actions: string[];
   has_children: boolean;
   has_point_content: boolean;
@@ -146,7 +153,14 @@ export type CatalogNodeCreatePayload = {
   node_kind: CatalogNodeKind;
   title: string;
   summary?: string | null;
-  shortcut_target_node_id?: string | null;
+  teacher_note?: string | null;
+  student_description?: string | null;
+  card_image_asset_id?: string | null;
+  card_icon_key?: string | null;
+  card_accent?: string | null;
+  card_layout?: string | null;
+  card_presentation?: Record<string, unknown>;
+  point_card_presentation?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 };
 
@@ -154,7 +168,14 @@ export type CatalogNodeUpdatePayload = {
   title?: string;
   summary?: string | null;
   node_kind?: CatalogNodeKind;
-  shortcut_target_node_id?: string | null;
+  teacher_note?: string | null;
+  student_description?: string | null;
+  card_image_asset_id?: string | null;
+  card_icon_key?: string | null;
+  card_accent?: string | null;
+  card_layout?: string | null;
+  card_presentation?: Record<string, unknown>;
+  point_card_presentation?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 };
 
@@ -238,13 +259,6 @@ export function bindCatalogPointMedia(
   payload: { media_asset_id: string; title?: string | null; status: "draft" | "published"; metadata?: Record<string, unknown> },
 ): Promise<{ binding_id: string; detail: CatalogNodeDetail }> {
   return postJson(`/api/admin/catalog/nodes/${encodeURIComponent(nodeId)}/media-bindings`, payload);
-}
-
-export function uploadCatalogPointMedia(nodeId: string, title: string, file: File): Promise<{ asset: MediaAsset; detail: CatalogNodeDetail }> {
-  const body = new FormData();
-  body.append("title", title);
-  body.append("file", file);
-  return api(`/api/admin/catalog/nodes/${encodeURIComponent(nodeId)}/media/upload`, { method: "POST", body });
 }
 
 export function changeCatalogMediaBindingStatus(bindingId: string, action: "publish" | "unpublish" | "delete"): Promise<CatalogNodeDetail> {

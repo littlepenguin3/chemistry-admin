@@ -47,11 +47,10 @@ export function ChapterStudyPage() {
 
   const openPoint = useCallback(
     (node: StudentCatalogNodeCard) => {
-      navigateToPoint(navigate, node.shortcut_target_node_id || node.node_id, {
+      navigateToPoint(navigate, node.node_id, {
         from: "chapter",
         profileId,
         chapterId: node.chapter_id,
-        sourceNodeId: node.node_kind === "shortcut" ? node.node_id : "",
         catalogPath: catalogPathLabel([{ node_id: node.node_id, title: node.title, node_kind: node.node_kind, chapter_id: node.chapter_id }]),
         pointTitle: node.title,
       });

@@ -102,13 +102,15 @@ Frontend host bindings default to `127.0.0.1:5173` for `student-web` and `127.0.
 
 Student video-library search is a PostgreSQL-to-Elasticsearch projection. PostgreSQL catalog point tables are the fact source:
 
-- `experiment_catalog_nodes`: stable chapter catalog hierarchy and point-capable `node_id` identities
+- `experiment_catalog_nodes`: stable chapter catalog hierarchy, directory category/card metadata, and point-only `node_id` identities
 - `experiment_catalog_point_content`: teacher-authored point title, teacher-only note, principle, phenomenon explanation, safety note, and publication audit
 - `experiment_catalog_point_related_links`: manual related point links and hidden default overrides keyed by `source_node_id` and `target_node_id`
 - `experiment_catalog_point_media_bindings`: point-node video bindings
 - `experiment_catalog_point_search_index_state`: retryable desired search actions and sync status
 
-Elasticsearch stores derived point documents only. Do not edit ES documents by hand and do not treat ES hit sources as student page content.
+Elasticsearch stores derived published point documents only. Directory nodes contribute ancestor category text to descendant point documents but never become standalone results. Teacher-only notes, raw media-library uploads that are not bound to published points, `source_chunks`, and `experiment_video_point_evidence` must stay out of the student video-library index. Do not edit ES documents by hand and do not treat ES hit sources as student page content.
+
+Catalog authoring only binds existing media assets to point nodes. New uploads are owned by the media library workflow and then selected from the catalog editor after processing.
 
 Bootstrap or rebuild the search index from PostgreSQL:
 

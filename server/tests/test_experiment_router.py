@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from server.app.app_runtime.main import app
 from server.tests.route_helpers import assert_route
 
 
@@ -20,7 +21,7 @@ def test_catalog_tree_routes_are_registered_once() -> None:
     assert_route("/api/admin/catalog/nodes/{node_id}/point-content", "PUT")
     assert_route("/api/admin/catalog/nodes/{node_id}/point-content/publication", "POST")
     assert_route("/api/admin/catalog/nodes/{node_id}/media-bindings", "POST")
-    assert_route("/api/admin/catalog/nodes/{node_id}/media/upload", "POST")
+    assert "/api/admin/catalog/nodes/{node_id}/media/upload" not in app.openapi()["paths"]
     assert_route("/api/admin/catalog/media-bindings/{binding_id}/{action}", "POST")
     assert_route("/api/admin/catalog/nodes/{node_id}/related-links", "PUT")
     assert_route("/api/admin/catalog/nodes/{node_id}/validation", "GET")

@@ -14,7 +14,17 @@ export type CatalogNodeFormValues = {
   title: string;
   summary?: string;
   node_kind: CatalogNodeKind;
-  shortcut_target_node_id?: string;
+  teacher_note?: string;
+  student_description?: string;
+  card_image_asset_id?: string;
+  card_icon_key?: string;
+  card_accent?: string;
+  card_layout?: string;
+  point_card_cover_image_asset_id?: string;
+  point_card_short_description?: string;
+  point_card_icon_key?: string;
+  point_card_accent?: string;
+  point_card_emphasis?: boolean;
 };
 
 export type CatalogPointContentFormValues = {
@@ -40,7 +50,7 @@ export type CatalogRelatedLinksFormValues = {
 };
 
 export function isPointCapable(kind?: CatalogNodeKind | null): boolean {
-  return kind === "point" || kind === "hybrid";
+  return kind === "point";
 }
 
 export function hydrateCatalogNodeForm(detail: CatalogNodeDetail | null | undefined): CatalogNodeFormValues {
@@ -49,27 +59,65 @@ export function hydrateCatalogNodeForm(detail: CatalogNodeDetail | null | undefi
     title: node?.title || "",
     summary: node?.summary || "",
     node_kind: node?.node_kind || "directory",
-    shortcut_target_node_id: node?.shortcut_target_node_id || "",
+    teacher_note: node?.teacher_note || "",
+    student_description: node?.student_description || "",
+    card_image_asset_id: node?.card_image_asset_id || "",
+    card_icon_key: node?.card_icon_key || "",
+    card_accent: node?.card_accent || "",
+    card_layout: node?.card_layout || "default",
+    point_card_cover_image_asset_id: String(node?.point_card_presentation?.cover_image_asset_id || ""),
+    point_card_short_description: String(node?.point_card_presentation?.short_description || ""),
+    point_card_icon_key: String(node?.point_card_presentation?.icon_key || ""),
+    point_card_accent: String(node?.point_card_presentation?.accent || ""),
+    point_card_emphasis: Boolean(node?.point_card_presentation?.emphasis),
   };
 }
 
 export function buildCatalogNodeCreatePayload(values: CatalogNodeFormValues, chapterId: string, parentId?: string | null): CatalogNodeCreatePayload {
+  const pointCard = {
+    cover_image_asset_id: values.point_card_cover_image_asset_id?.trim() || "",
+    short_description: values.point_card_short_description?.trim() || "",
+    icon_key: values.point_card_icon_key?.trim() || "",
+    accent: values.point_card_accent?.trim() || "",
+    emphasis: Boolean(values.point_card_emphasis),
+  };
   return {
     chapter_id: chapterId,
     parent_id: parentId || null,
     node_kind: values.node_kind,
     title: values.title.trim(),
     summary: values.summary?.trim() || "",
-    shortcut_target_node_id: values.node_kind === "shortcut" ? values.shortcut_target_node_id?.trim() || null : null,
+    teacher_note: values.node_kind === "directory" ? values.teacher_note?.trim() || "" : "",
+    student_description: values.student_description?.trim() || values.summary?.trim() || "",
+    card_image_asset_id: values.card_image_asset_id?.trim() || null,
+    card_icon_key: values.card_icon_key?.trim() || null,
+    card_accent: values.card_accent?.trim() || null,
+    card_layout: values.card_layout || "default",
+    card_presentation: values.node_kind === "directory" ? {} : {},
+    point_card_presentation: values.node_kind === "point" ? pointCard : {},
   };
 }
 
 export function buildCatalogNodeUpdatePayload(values: CatalogNodeFormValues): CatalogNodeUpdatePayload {
+  const pointCard = {
+    cover_image_asset_id: values.point_card_cover_image_asset_id?.trim() || "",
+    short_description: values.point_card_short_description?.trim() || "",
+    icon_key: values.point_card_icon_key?.trim() || "",
+    accent: values.point_card_accent?.trim() || "",
+    emphasis: Boolean(values.point_card_emphasis),
+  };
   return {
     title: values.title.trim(),
     summary: values.summary?.trim() || "",
     node_kind: values.node_kind,
-    shortcut_target_node_id: values.node_kind === "shortcut" ? values.shortcut_target_node_id?.trim() || null : null,
+    teacher_note: values.node_kind === "directory" ? values.teacher_note?.trim() || "" : "",
+    student_description: values.student_description?.trim() || values.summary?.trim() || "",
+    card_image_asset_id: values.card_image_asset_id?.trim() || null,
+    card_icon_key: values.card_icon_key?.trim() || null,
+    card_accent: values.card_accent?.trim() || null,
+    card_layout: values.card_layout || "default",
+    card_presentation: values.node_kind === "directory" ? {} : {},
+    point_card_presentation: values.node_kind === "point" ? pointCard : {},
   };
 }
 
@@ -150,8 +198,6 @@ export function catalogNodeKindLabel(kind: CatalogNodeKind): string {
   const labels: Record<CatalogNodeKind, string> = {
     directory: "目录",
     point: "点位",
-    hybrid: "混合",
-    shortcut: "快捷",
   };
   return labels[kind];
 }

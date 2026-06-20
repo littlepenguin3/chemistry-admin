@@ -24,22 +24,22 @@ def main() -> None:
                 text(
                     """
                     SELECT
-                      COUNT(*) FILTER (WHERE n.node_kind IN ('point', 'hybrid')) AS point_node_count,
+                      COUNT(*) FILTER (WHERE n.node_kind = 'point') AS point_node_count,
                       COUNT(*) FILTER (
-                        WHERE n.node_kind IN ('point', 'hybrid')
+                        WHERE n.node_kind = 'point'
                           AND pc.node_id IS NOT NULL
                       ) AS point_content_count,
                       COUNT(*) FILTER (
-                        WHERE n.node_kind IN ('point', 'hybrid')
+                        WHERE n.node_kind = 'point'
                           AND pc.content_status = 'published'
                       ) AS published_content_count,
                       COUNT(*) FILTER (
-                        WHERE n.node_kind IN ('point', 'hybrid')
+                        WHERE n.node_kind = 'point'
                           AND pc.teacher_note IS NOT NULL
                           AND btrim(pc.teacher_note) <> ''
                       ) AS teacher_note_count,
                       COUNT(*) FILTER (
-                        WHERE n.node_kind IN ('point', 'hybrid')
+                        WHERE n.node_kind = 'point'
                           AND si.node_id IS NOT NULL
                       ) AS search_state_count
                     FROM experiment_catalog_nodes n

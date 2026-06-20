@@ -252,6 +252,10 @@ const catalogChapter: StudentCatalogChapterResponse = {
       node_kind: "directory",
       title: "Halogen displacement catalog",
       summary: "Open catalog entries for halogen experiments.",
+      student_description: "Open catalog entries for halogen experiments.",
+      card_layout: "default",
+      card_presentation: {},
+      point_card_presentation: {},
       status: "published",
       display_order: 1,
       actions: ["open_directory"],
@@ -261,6 +265,46 @@ const catalogChapter: StudentCatalogChapterResponse = {
       published_media_count: 0,
     },
   ],
+};
+
+const catalogNestedDirectoryNode: StudentCatalogNodeResponse["children"][number] = {
+  node_id: "cat-dir-oxidation",
+  chapter_id: "CH17",
+  parent_id: "cat-dir-halogen",
+  node_kind: "directory",
+  title: "Oxidation experiments",
+  summary: "Choose a concrete displacement point.",
+  student_description: "Choose a concrete displacement point.",
+  card_layout: "compact",
+  card_presentation: { badge: "Experiment list" },
+  point_card_presentation: {},
+  status: "published",
+  display_order: 1,
+  actions: ["open_directory"],
+  has_children: true,
+  has_point_content: false,
+  media_count: 0,
+  published_media_count: 0,
+};
+
+const catalogPointNode: StudentCatalogNodeResponse["children"][number] = {
+  node_id: "cat-point-halogen",
+  chapter_id: "CH17",
+  parent_id: "cat-dir-oxidation",
+  node_kind: "point",
+  title: "Orange layer observation",
+  summary: "Chlorine water displaces bromide and produces bromine in CCl4.",
+  student_description: "Chlorine water displaces bromide and produces bromine in CCl4.",
+  card_layout: "default",
+  card_presentation: {},
+  point_card_presentation: { short_description: "Watch bromine appear in the organic layer.", accent: "blue", emphasis: true },
+  status: "published",
+  display_order: 1,
+  actions: ["open_point"],
+  has_children: false,
+  has_point_content: true,
+  media_count: 0,
+  published_media_count: 0,
 };
 
 const catalogDirectory: StudentCatalogNodeResponse = {
@@ -273,23 +317,26 @@ const catalogDirectory: StudentCatalogNodeResponse = {
       chapter_id: "CH17",
     },
   ],
-  children: [
+  children: [catalogNestedDirectoryNode],
+};
+
+const catalogNestedDirectory: StudentCatalogNodeResponse = {
+  node: catalogNestedDirectoryNode,
+  breadcrumbs: [
     {
-      node_id: "cat-point-halogen",
+      node_id: "cat-dir-halogen",
+      title: "Halogen displacement catalog",
+      node_kind: "directory",
       chapter_id: "CH17",
-      parent_id: "cat-dir-halogen",
-      node_kind: "point",
-      title: "Orange layer observation",
-      summary: "Chlorine water displaces bromide and produces bromine in CCl4.",
-      status: "published",
-      display_order: 1,
-      actions: ["open_point"],
-      has_children: false,
-      has_point_content: true,
-      media_count: 0,
-      published_media_count: 0,
+    },
+    {
+      node_id: "cat-dir-oxidation",
+      chapter_id: "CH17",
+      title: "Oxidation experiments",
+      node_kind: "directory",
     },
   ],
+  children: [catalogPointNode],
 };
 
 const catalogPointDetail: StudentPointDetailResponse = {
@@ -554,7 +601,9 @@ describe("student app route stack", () => {
     apiMocks.getStudentLearningHome.mockResolvedValue(learningHome);
     apiMocks.getStudentLearningPage.mockResolvedValue(learningPage);
     apiMocks.getStudentChapterCatalog.mockResolvedValue(catalogChapter);
-    apiMocks.getStudentCatalogNode.mockResolvedValue(catalogDirectory);
+    apiMocks.getStudentCatalogNode.mockImplementation((nodeId: string) =>
+      Promise.resolve(nodeId === "cat-dir-oxidation" ? catalogNestedDirectory : catalogDirectory),
+    );
     apiMocks.getStudentCatalogPointDetail.mockResolvedValue(catalogPointDetail);
     apiMocks.searchStudentVideoLibrary.mockResolvedValue(videoLibraryResponse);
     apiMocks.startStudentPosttest.mockResolvedValue(posttestResponse);
@@ -631,7 +680,10 @@ describe("student app route stack", () => {
     await waitFor(() => expect(document.querySelector(".catalog-node-card-main")).not.toBeNull());
     fireEvent.click(document.querySelector<HTMLButtonElement>(".catalog-node-card-main")!);
     await waitFor(() => expect(window.location.pathname).toBe("/catalog/cat-dir-halogen"));
-    await waitFor(() => expect(document.querySelector(".catalog-node-card")).not.toBeNull());
+    await waitFor(() => expect(document.querySelector(".catalog-node-card.kind-directory")).not.toBeNull());
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".catalog-node-card-main")!);
+    await waitFor(() => expect(window.location.pathname).toBe("/catalog/cat-dir-oxidation"));
+    await waitFor(() => expect(document.querySelector(".catalog-node-card.kind-point")).not.toBeNull());
     fireEvent.click(document.querySelector<HTMLButtonElement>(".catalog-node-card-main")!);
     await waitFor(() => expect(window.location.pathname).toBe("/point/cat-point-halogen"));
     expectBottomNavHidden();
@@ -726,10 +778,35 @@ describe("student app route stack", () => {
     await waitFor(() => expect(document.querySelector(".atom-model-card")).not.toBeNull());
     cleanup();
 
+    await renderAuthenticatedApp("/catalog/cat-dir-halogen");
+    await waitFor(() => expect(apiMocks.getStudentCatalogNode).toHaveBeenLastCalledWith("cat-dir-halogen"));
+    await waitFor(() => expect(document.querySelector(".catalog-node-card.kind-directory")).not.toBeNull());
+    expectBottomNavHidden();
+    cleanup();
+
+    await renderAuthenticatedApp("/point/cat-point-halogen");
+    await waitFor(() => expect(apiMocks.getStudentCatalogPointDetail).toHaveBeenLastCalledWith("cat-point-halogen"));
+    await waitFor(() => expect(document.querySelector(".catalog-point-detail")).not.toBeNull());
+    expectBottomNavHidden();
+    cleanup();
+
     await renderAuthenticatedApp("/feedback/new");
     await waitFor(() => expect(window.location.pathname).toBe("/feedback/new"));
     expectBottomNavHidden();
     expect(screen.getByRole("form", { name: "学生端反馈" })).toBeInTheDocument();
+  });
+
+  it("surfaces wrong durable route type failures from directory and point APIs", async () => {
+    apiMocks.getStudentCatalogNode.mockRejectedValueOnce(new Error("Catalog node is not a directory"));
+    await renderAuthenticatedApp("/catalog/cat-point-halogen");
+    await waitFor(() => expect(apiMocks.getStudentCatalogNode).toHaveBeenCalledWith("cat-point-halogen"));
+    expect(await screen.findByText("Catalog node is not a directory")).toBeInTheDocument();
+    cleanup();
+
+    apiMocks.getStudentCatalogPointDetail.mockRejectedValueOnce(new Error("Catalog node is not a point"));
+    await renderAuthenticatedApp("/point/cat-dir-halogen");
+    await waitFor(() => expect(apiMocks.getStudentCatalogPointDetail).toHaveBeenCalledWith("cat-dir-halogen"));
+    expect(await screen.findByText("Catalog node is not a point")).toBeInTheDocument();
   });
 
   it("keeps five root routes while feature-disabled pages render disabled centers", async () => {

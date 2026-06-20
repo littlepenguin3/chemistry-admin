@@ -83,6 +83,13 @@ Removed aliases:
 - Student learning shared read model: `server/app/domains/student_learning/read_models.py`
 - Student video-library search: `server/app/domains/video_library/search.py`
 - Student video-library ES index client/sync state: `server/app/domains/video_library/index_client.py`
+- Experiment catalog tree structure: `server/app/domains/catalog_tree/nodes.py`
+- Experiment catalog directory/card semantics: `server/app/domains/catalog_tree/directories.py`
+- Experiment catalog point content: `server/app/domains/catalog_tree/points.py`
+- Experiment catalog media bindings: `server/app/domains/catalog_tree/media_bindings.py`
+- Experiment catalog related links: `server/app/domains/catalog_tree/related_links.py`
+- Experiment catalog search documents: `server/app/domains/catalog_tree/search_documents.py`
+- Experiment catalog student read models and files: `server/app/domains/catalog_tree/student_read_models.py`, `server/app/domains/catalog_tree/files.py`
 - Assistant/RAG: `server/app/domains/assistant/`
 - Questions: `server/app/domains/questions/`
 - Assessments: `server/app/domains/assessments/`

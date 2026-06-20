@@ -9,18 +9,32 @@ class CatalogNodeCreateRequest(BaseModel):
     chapter_id: str = Field(min_length=1)
     parent_id: str | None = None
     after_node_id: str | None = None
-    node_kind: str = Field(default="directory", pattern="^(directory|point|hybrid|shortcut)$")
+    node_kind: str = Field(default="directory", pattern="^(directory|point)$")
     title: str = Field(min_length=1, max_length=200)
     summary: str | None = None
-    shortcut_target_node_id: str | None = None
+    teacher_note: str | None = None
+    student_description: str | None = None
+    card_image_asset_id: str | None = None
+    card_icon_key: str | None = Field(default=None, max_length=80)
+    card_accent: str | None = Field(default=None, max_length=80)
+    card_layout: str | None = Field(default="default", max_length=40)
+    card_presentation: dict[str, Any] = Field(default_factory=dict)
+    point_card_presentation: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class CatalogNodeUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     summary: str | None = None
-    node_kind: str | None = Field(default=None, pattern="^(directory|point|hybrid|shortcut)$")
-    shortcut_target_node_id: str | None = None
+    node_kind: str | None = Field(default=None, pattern="^(directory|point)$")
+    teacher_note: str | None = None
+    student_description: str | None = None
+    card_image_asset_id: str | None = None
+    card_icon_key: str | None = Field(default=None, max_length=80)
+    card_accent: str | None = Field(default=None, max_length=80)
+    card_layout: str | None = Field(default=None, max_length=40)
+    card_presentation: dict[str, Any] | None = None
+    point_card_presentation: dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
 
 
@@ -94,7 +108,14 @@ class CatalogNodeCard(BaseModel):
     summary: str = ""
     status: str
     display_order: int = 0
-    shortcut_target_node_id: str | None = None
+    teacher_note: str | None = Field(default=None, exclude=True)
+    student_description: str = ""
+    card_image_asset_id: str | None = None
+    card_icon_key: str | None = None
+    card_accent: str | None = None
+    card_layout: str = "default"
+    card_presentation: dict[str, Any] = Field(default_factory=dict)
+    point_card_presentation: dict[str, Any] = Field(default_factory=dict)
     actions: list[str] = Field(default_factory=list)
     has_children: bool = False
     has_point_content: bool = False
@@ -145,6 +166,7 @@ class StudentPointDetailResponse(BaseModel):
     chapter_id: str
     title: str
     summary: str = ""
+    point_card_presentation: dict[str, Any] = Field(default_factory=dict)
     breadcrumbs: list[CatalogBreadcrumb] = Field(default_factory=list)
     principle_mode: str = "text"
     principle_equation: str | None = None

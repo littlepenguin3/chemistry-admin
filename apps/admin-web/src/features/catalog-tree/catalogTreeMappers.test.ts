@@ -5,26 +5,68 @@ import {
   buildCatalogNodeCreatePayload,
   buildCatalogPointContentPayload,
   buildCatalogRelatedLinksPayload,
+  hydrateCatalogNodeForm,
   hydrateCatalogPointContentForm,
   hydrateCatalogRelatedLinksForm,
   siblingReorderItems,
 } from "./catalogTreeMappers";
 
 describe("catalog tree mappers", () => {
-  it("builds node create payloads with catalog parent ids", () => {
+  it("builds directory create payloads with card fields", () => {
     expect(
       buildCatalogNodeCreatePayload(
-        { title: "  Observation branch  ", summary: "  nested  ", node_kind: "hybrid", shortcut_target_node_id: "ignored" },
+        {
+          title: "  Observation branch  ",
+          summary: "  nested  ",
+          node_kind: "directory",
+          teacher_note: " private ",
+          student_description: " student card ",
+          card_icon_key: " flask ",
+          card_accent: " green ",
+          card_layout: "compact",
+        },
         "CH1",
         "cat-parent",
       ),
     ).toEqual({
       chapter_id: "CH1",
       parent_id: "cat-parent",
-      node_kind: "hybrid",
+      node_kind: "directory",
       title: "Observation branch",
       summary: "nested",
-      shortcut_target_node_id: null,
+      teacher_note: "private",
+      student_description: "student card",
+      card_image_asset_id: null,
+      card_icon_key: "flask",
+      card_accent: "green",
+      card_layout: "compact",
+      card_presentation: {},
+      point_card_presentation: {},
+    });
+  });
+
+  it("hydrates and serializes constrained point card overrides", () => {
+    const detail = {
+      node: {
+        title: "Video point",
+        summary: "summary",
+        node_kind: "point",
+        point_card_presentation: {
+          cover_image_asset_id: "asset-1",
+          short_description: "Watch the color change",
+          icon_key: "play",
+          accent: "blue",
+          emphasis: true,
+        },
+      },
+    } as unknown as CatalogNodeDetail;
+
+    expect(hydrateCatalogNodeForm(detail)).toMatchObject({
+      point_card_cover_image_asset_id: "asset-1",
+      point_card_short_description: "Watch the color change",
+      point_card_icon_key: "play",
+      point_card_accent: "blue",
+      point_card_emphasis: true,
     });
   });
 

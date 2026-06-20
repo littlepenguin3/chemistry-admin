@@ -19,6 +19,15 @@ def _token_list(payload: object) -> list[str]:
     return [str(item.get("token", "")) for item in payload.get("tokens", []) if isinstance(item, dict)]
 
 
+def _first_query_token(value: object) -> str:
+    text = str(value or "").strip()
+    for token in text.replace("/", " ").replace(",", " ").split():
+        candidate = token.strip()
+        if len(candidate) >= 2:
+            return candidate
+    return text[:32]
+
+
 def main() -> None:
     settings = get_settings()
     errors: list[str] = []
@@ -99,6 +108,53 @@ def main() -> None:
                 if required:
                     errors.append(f"chemistry_ik_search analyzer smoke failed: {exc}")
                 details["analyzer_smoke_error"] = str(exc)
+            try:
+                category_seed = client.request(
+                    "POST",
+                    f"/{client.index}/_search",
+                    {
+                        "size": 1,
+                        "_source": ["id", "result_type", "node_id", "category_text"],
+                        "query": {"bool": {"filter": [{"exists": {"field": "category_text"}}]}},
+                    },
+                )
+                seed_hits = category_seed.get("hits", {}).get("hits", []) if isinstance(category_seed, dict) else []
+                seed_source = seed_hits[0].get("_source", {}) if seed_hits and isinstance(seed_hits[0], dict) else {}
+                directory_query = _first_query_token(seed_source.get("category_text"))
+                if directory_query:
+                    directory_query_payload = client.request(
+                        "POST",
+                        f"/{client.index}/_search",
+                        {
+                            "size": 5,
+                            "_source": ["id", "result_type", "node_id", "category_text"],
+                            "query": {
+                                "multi_match": {
+                                    "query": directory_query,
+                                    "fields": ["category_text^3", "search_text"],
+                                }
+                            },
+                        },
+                    )
+                    directory_hits = directory_query_payload.get("hits", {}).get("hits", []) if isinstance(directory_query_payload, dict) else []
+                    details["directory_query_smoke"] = {
+                        "query": directory_query,
+                        "hit_count": len(directory_hits),
+                        "hits": [hit.get("_source", {}) for hit in directory_hits[:3] if isinstance(hit, dict)],
+                    }
+                    if required and not directory_hits:
+                        errors.append("Directory category text query did not return descendant point results")
+                    for hit in directory_hits:
+                        source = hit.get("_source", {}) if isinstance(hit, dict) else {}
+                        if source.get("result_type") != "video_point" or not source.get("node_id"):
+                            errors.append("Directory category text query returned a non-point video-library document")
+                            break
+                else:
+                    details["directory_query_smoke"] = "skipped_no_category_text_documents"
+            except Exception as exc:  # noqa: BLE001 - readiness should keep reporting other ES checks.
+                if required:
+                    errors.append(f"Directory category text query smoke failed: {exc}")
+                details["directory_query_smoke_error"] = str(exc)
         except urllib.error.HTTPError as exc:
             if required:
                 errors.append(f"Video-library index {client.index!r} is missing or unhealthy: HTTP {exc.code}")

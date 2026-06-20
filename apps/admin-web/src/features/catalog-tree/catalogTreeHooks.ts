@@ -16,7 +16,6 @@ import {
   saveCatalogRelatedLinks,
   searchCatalogNodes,
   updateCatalogNode,
-  uploadCatalogPointMedia,
   validateCatalogNode,
 } from "../../api/catalogTree";
 import type {
@@ -223,15 +222,6 @@ export function useCatalogMutations(message: MessageApi) {
     onError: (error) => message.error(errorMessage(error)),
   });
 
-  const uploadMedia = useMutation({
-    mutationFn: ({ nodeId, title, file }: { nodeId: string; title: string; file: File }) => uploadCatalogPointMedia(nodeId, title, file),
-    onSuccess: (result) => {
-      message.success("视频已上传并绑定");
-      invalidateCatalog(result.detail);
-    },
-    onError: (error) => message.error(errorMessage(error)),
-  });
-
   const changeMediaStatus = useMutation({
     mutationFn: ({ bindingId, action }: { bindingId: string; action: "publish" | "unpublish" | "delete" }) =>
       changeCatalogMediaBindingStatus(bindingId, action),
@@ -252,7 +242,6 @@ export function useCatalogMutations(message: MessageApi) {
     changePointPublication,
     saveRelatedLinks,
     bindMedia,
-    uploadMedia,
     changeMediaStatus,
   };
 }

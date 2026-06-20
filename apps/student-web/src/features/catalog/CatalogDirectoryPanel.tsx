@@ -5,7 +5,7 @@ import type { StudentCatalogNodeCard, StudentCatalogNodeResponse } from "../../a
 import { errorMessage, getStudentCatalogNode } from "../../api";
 import { MobileEmptyState } from "../../mobile/primitives";
 import { LearningState } from "../../shared/mobile/LearningState";
-import { CatalogNodeCards, catalogPathLabel, isPointNode } from "./CatalogNodeCards";
+import { CatalogNodeCards, catalogPathLabel } from "./CatalogNodeCards";
 
 export function CatalogDirectoryPanel({
   nodeId,
@@ -48,7 +48,6 @@ export function CatalogDirectoryPanel({
   if (!detail) return null;
 
   const pathText = catalogPathLabel(detail.breadcrumbs);
-  const pointCapable = isPointNode(detail.node);
 
   return (
     <section className="learning-panel catalog-directory-panel" aria-label="目录详情">
@@ -57,12 +56,6 @@ export function CatalogDirectoryPanel({
         <h2>{detail.node.title}</h2>
         {detail.node.summary ? <span>{detail.node.summary}</span> : null}
       </div>
-      {pointCapable ? (
-        <button className="catalog-featured-point" type="button" onClick={() => onOpenPoint(detail.node)}>
-          <span>点位视频</span>
-          <strong>{detail.node.title}</strong>
-        </button>
-      ) : null}
       {detail.children.length ? (
         <CatalogNodeCards nodes={detail.children} breadcrumbs={detail.breadcrumbs} onOpenDirectory={onOpenDirectory} onOpenPoint={onOpenPoint} />
       ) : (

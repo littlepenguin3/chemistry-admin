@@ -310,11 +310,16 @@
 .catalog-node-card {
   display: grid;
   gap: 8px;
-  border: 1px solid rgba(0, 88, 38, 0.16);
+  border: 1px solid color-mix(in srgb, var(--catalog-card-accent, #0f8a5f) 24%, transparent);
   border-radius: 8px;
   padding: 10px;
-  background: rgba(255, 253, 246, 0.94);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 252, 249, 0.96));
   box-shadow: 0 13px 34px rgba(21, 49, 34, 0.08);
+}
+
+.catalog-node-card.layout-hero {
+  border-color: color-mix(in srgb, var(--catalog-card-accent, #0f8a5f) 48%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--catalog-card-accent, #0f8a5f) 10%, #fff), #fff);
 }
 
 .catalog-node-card-main {
@@ -338,16 +343,11 @@
   display: grid;
   place-items: center;
   color: #fff;
-  background: var(--green);
+  background: var(--catalog-card-accent, var(--green));
 }
 
-.catalog-node-card.kind-point .catalog-node-card-icon,
-.catalog-node-card.kind-hybrid .catalog-node-card-icon {
+.catalog-node-card.kind-point .catalog-node-card-icon {
   background: #356f9c;
-}
-
-.catalog-node-card.kind-shortcut .catalog-node-card-icon {
-  background: #7c73ad;
 }
 
 .catalog-node-card-copy {
@@ -375,7 +375,7 @@
 
 .catalog-node-card-copy em,
 .catalog-node-card-path {
-  color: var(--green);
+  color: var(--catalog-card-accent, var(--green));
   font-size: 12px;
   font-style: normal;
   font-weight: 800;
@@ -384,32 +384,6 @@
 .catalog-node-card-path {
   display: block;
   color: var(--muted);
-}
-
-.catalog-node-point-action,
-.catalog-featured-point {
-  min-height: 40px;
-  border: 1px solid rgba(0, 88, 38, 0.16);
-  border-radius: 8px;
-  color: var(--green);
-  background: rgba(0, 88, 38, 0.06);
-  font-weight: 850;
-}
-
-.catalog-featured-point {
-  display: grid;
-  gap: 3px;
-  padding: 12px;
-  text-align: left;
-}
-
-.catalog-featured-point span {
-  font-size: 12px;
-}
-
-.catalog-featured-point strong {
-  color: var(--ink);
-  overflow-wrap: anywhere;
 }
 
 .catalog-point-summary p {

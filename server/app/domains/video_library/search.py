@@ -172,6 +172,29 @@ def _load_published_point_rows(session: Any) -> list[dict[str, Any]]:
                     SELECT jsonb_agg(title ORDER BY depth DESC)
                     FROM path
                   ), '[]'::jsonb) AS catalog_path,
+                  COALESCE((
+                    WITH RECURSIVE path AS (
+                      SELECT id, parent_id, node_kind, title, student_description, card_icon_key, card_accent, 0 AS depth
+                      FROM experiment_catalog_nodes
+                      WHERE id = n.id
+                      UNION ALL
+                      SELECT parent.id, parent.parent_id, parent.node_kind, parent.title,
+                             parent.student_description, parent.card_icon_key, parent.card_accent, path.depth + 1
+                      FROM experiment_catalog_nodes parent
+                      JOIN path ON path.parent_id = parent.id
+                    )
+                    SELECT jsonb_agg(
+                      jsonb_build_object(
+                        'title', title,
+                        'student_description', student_description,
+                        'card_icon_key', card_icon_key,
+                        'card_accent', card_accent
+                      )
+                      ORDER BY depth DESC
+                    )
+                    FROM path
+                    WHERE node_kind = 'directory'
+                  ), '[]'::jsonb) AS directory_context,
                   jsonb_build_array(
                     jsonb_build_object(
                       'chapter_id', n.chapter_id,
@@ -211,13 +234,27 @@ def _load_published_point_rows(session: Any) -> list[dict[str, Any]]:
                     WHERE l.source_node_id = n.id
                       AND l.hidden = false
                       AND target.status = 'published'
+                      AND target.node_kind = 'point'
                   ), '[]'::jsonb) AS related_links
                 FROM experiment_catalog_nodes n
                 JOIN chapters c ON c.id = n.chapter_id
                 JOIN experiment_catalog_point_content pc ON pc.node_id = n.id
-                WHERE n.node_kind IN ('point', 'hybrid')
+                WHERE n.node_kind = 'point'
                   AND n.status = 'published'
                   AND pc.content_status = 'published'
+                  AND (
+                    WITH RECURSIVE path AS (
+                      SELECT id, parent_id, status
+                      FROM experiment_catalog_nodes
+                      WHERE id = n.id
+                      UNION ALL
+                      SELECT parent.id, parent.parent_id, parent.status
+                      FROM experiment_catalog_nodes parent
+                      JOIN path ON path.parent_id = parent.id
+                    )
+                    SELECT COALESCE(bool_and(status = 'published'), false)
+                    FROM path
+                  )
                 ORDER BY c.chapter_number NULLS LAST, n.display_order, n.id
                 """
             )
@@ -238,7 +275,21 @@ def _point_document(row: dict[str, Any], profiles: list[dict[str, Any]]) -> Vide
     safety = _clean_text(row.get("safety_note"))
     videos = row.get("videos") if isinstance(row.get("videos"), list) else []
     related_links = row.get("related_links") if isinstance(row.get("related_links"), list) else []
+    directory_context = row.get("directory_context") if isinstance(row.get("directory_context"), list) else []
     catalog_path = [str(item) for item in row.get("catalog_path") or [] if str(item).strip()]
+    category_text = _document_search_text(
+        [
+            value
+            for directory in directory_context
+            if isinstance(directory, dict)
+            for value in (
+                directory.get("title"),
+                directory.get("student_description"),
+                directory.get("card_icon_key"),
+                directory.get("card_accent"),
+            )
+        ]
+    )
     chapter_title = _clean_text(row.get("chapter_title"))
     chemistry = chemistry_terms_for_document(point_title, principle, phenomenon, safety)
     if not node_id:
@@ -257,6 +308,7 @@ def _point_document(row: dict[str, Any], profiles: list[dict[str, Any]]) -> Vide
     search_text = _document_search_text(
         row.get("chapter_title"),
         catalog_path,
+        category_text,
         point_title,
         principle,
         phenomenon,
@@ -278,6 +330,7 @@ def _point_document(row: dict[str, Any], profiles: list[dict[str, Any]]) -> Vide
         "chapter_id": row.get("chapter_id"),
         "chapter_ids": [row.get("chapter_id")],
         "catalog_path": catalog_path,
+        "category_text": category_text,
         "title": point_title,
         "subtitle": " / ".join(catalog_path),
         "snippet": phenomenon or principle,

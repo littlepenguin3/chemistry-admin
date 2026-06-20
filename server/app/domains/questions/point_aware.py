@@ -185,7 +185,7 @@ def _attach_catalog_point_nodes(session: Any, *, experiment_id: str, points: lis
                     SELECT id AS catalog_node_id, title, chapter_id
                     FROM experiment_catalog_nodes
                     WHERE id = ANY(:node_ids)
-                      AND node_kind IN ('point', 'hybrid')
+                      AND node_kind = 'point'
                     """
                 ),
                 {"node_ids": requested_node_ids},

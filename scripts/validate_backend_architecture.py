@@ -51,6 +51,20 @@ WORKER_FORBIDDEN_IMPORTS = (
 )
 
 API_FORBIDDEN_IMPORTS = ("server.app.workers",)
+CATALOG_LIVE_PATHS = [
+    APP_ROOT / "catalog_tree_schemas.py",
+    APP_ROOT / "api" / "admin" / "admin_catalog_tree.py",
+    APP_ROOT / "api" / "student" / "student_catalog.py",
+    APP_ROOT / "domains" / "catalog_tree",
+    APP_ROOT / "domains" / "video_library",
+]
+CATALOG_FORBIDDEN_SNIPPETS = (
+    "shortcut_target_node_id",
+    "upload_and_bind_media",
+    "/media/upload",
+    "node_kind IN ('point', 'hybrid')",
+    'node_kind IN ("point", "hybrid")',
+)
 
 
 @dataclass(frozen=True)
@@ -157,11 +171,33 @@ def validate_route_inventory() -> list[Violation]:
     return violations
 
 
+def validate_catalog_tree_boundaries() -> list[Violation]:
+    violations: list[Violation] = []
+    tree_facade = APP_ROOT / "domains" / "catalog_tree" / "tree.py"
+    if tree_facade.exists():
+        line_count = len(tree_facade.read_text(encoding="utf-8").splitlines())
+        if line_count > 120:
+            violations.append(Violation(tree_facade, f"catalog tree facade is too large ({line_count} lines); split responsibilities into domain modules"))
+    for path in CATALOG_LIVE_PATHS:
+        files = [path] if path.is_file() else _python_files(path)
+        for file in files:
+            text_value = file.read_text(encoding="utf-8")
+            for snippet in CATALOG_FORBIDDEN_SNIPPETS:
+                if snippet in text_value:
+                    violations.append(Violation(file, f"retired catalog tree live path snippet is present: {snippet}"))
+            if "hybrid" in text_value and "hybrid_bge" not in text_value and "retrieve_hybrid_context" not in text_value:
+                violations.append(Violation(file, "retired catalog hybrid node semantics appear in a live catalog path"))
+            if "shortcut" in text_value:
+                violations.append(Violation(file, "retired catalog shortcut semantics appear in a live catalog path"))
+    return violations
+
+
 def validate() -> list[Violation]:
     return [
         *validate_import_boundaries(),
         *validate_legacy_paths_removed(),
         *validate_route_inventory(),
+        *validate_catalog_tree_boundaries(),
     ]
 
 

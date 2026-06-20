@@ -124,6 +124,7 @@ def video_library_index_mapping(
                 "chapter_id": {"type": "keyword"},
                 "chapter_ids": {"type": "keyword"},
                 "catalog_path": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},
+                "category_text": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},
                 "title": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},
                 "subtitle": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},
                 "snippet": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},

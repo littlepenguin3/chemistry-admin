@@ -72,6 +72,7 @@ def queue_point_search_index_for_media_binding(session: Any, binding: dict[str, 
                 WHERE lm.legacy_kind = 'point'
                   AND lm.legacy_experiment_id = :experiment_id
                   AND lm.legacy_point_key = :point_key
+                  AND n.node_kind = 'point'
                 """
             ),
             {"experiment_id": experiment_id, "point_key": point_key},

@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+from pydantic import ValidationError
+
+from server.app.catalog_tree_schemas import CatalogNodeCreateRequest, CatalogNodeUpdateRequest
 from server.app.domains.catalog_tree.tree import _content_publication_errors, _queue_index_state, validate_node_payload
 
 
@@ -26,6 +30,44 @@ def test_catalog_point_validation_requires_title_and_saved_content() -> None:
     assert invalid["ok"] is False
     assert "Title is required" in invalid["errors"]
     assert "Point content has not been saved" in invalid["warnings"]
+
+
+def test_catalog_directory_validation_rejects_point_resources() -> None:
+    invalid = validate_node_payload(
+        {
+            "node_id": "cat-dir-1",
+            "node_kind": "directory",
+            "title": "Directory",
+            "has_children": True,
+            "has_point_content": True,
+            "media_count": 1,
+        }
+    )
+
+    assert invalid["ok"] is False
+    assert "Directory nodes cannot own point content or videos" in invalid["errors"]
+
+
+def test_catalog_point_validation_rejects_children() -> None:
+    invalid = validate_node_payload(
+        {
+            "node_id": "cat-point-1",
+            "node_kind": "point",
+            "title": "Point",
+            "has_children": True,
+        }
+    )
+
+    assert invalid["ok"] is False
+    assert "Point nodes cannot have children" in invalid["errors"]
+
+
+def test_catalog_node_schema_rejects_retired_hybrid_and_shortcut_kinds() -> None:
+    with pytest.raises(ValidationError):
+        CatalogNodeCreateRequest(chapter_id="CH1", title="Hybrid", node_kind="hybrid")
+
+    with pytest.raises(ValidationError):
+        CatalogNodeUpdateRequest(node_kind="shortcut")
 
 
 def test_catalog_point_publication_requires_exact_primary_principle_and_safety() -> None:

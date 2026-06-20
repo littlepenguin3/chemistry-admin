@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { App as AntApp, Button, Flex, Form, Input, Modal, Radio, Select, Space, Tag, Typography } from "antd";
-import { BranchesOutlined, FileTextOutlined, FolderOpenOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { FileTextOutlined, FolderOpenOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 
 import type { CatalogNodeCard, CatalogNodeKind } from "../../api/catalogTree";
 import { PageTitle } from "../../components/PageTitle";
@@ -23,8 +23,6 @@ type CreateIntent = {
 
 function kindIcon(kind: CatalogNodeKind) {
   if (kind === "point") return <FileTextOutlined />;
-  if (kind === "hybrid") return <BranchesOutlined />;
-  if (kind === "shortcut") return <LinkOutlined />;
   return <FolderOpenOutlined />;
 }
 
@@ -55,7 +53,15 @@ export function CatalogTreeWorkspacePage() {
 
   useEffect(() => {
     if (createIntent) {
-      createForm.setFieldsValue({ title: "", summary: "", node_kind: createIntent.kind, shortcut_target_node_id: "" });
+      createForm.setFieldsValue({
+        title: "",
+        summary: "",
+        node_kind: createIntent.kind,
+        student_description: "",
+        teacher_note: "",
+        card_layout: "default",
+        point_card_emphasis: false,
+      });
     }
   }, [createForm, createIntent]);
 
@@ -161,7 +167,6 @@ export function CatalogTreeWorkspacePage() {
             <Space.Compact>
               <Button icon={<FolderOpenOutlined />} onClick={() => openCreate("directory")}>目录</Button>
               <Button icon={<FileTextOutlined />} onClick={() => openCreate("point")}>点位</Button>
-              <Button icon={<BranchesOutlined />} onClick={() => openCreate("hybrid")}>混合</Button>
             </Space.Compact>
           </Flex>
           <CatalogTreeNodeList
@@ -172,7 +177,9 @@ export function CatalogTreeWorkspacePage() {
             onSelect={selectNode}
             onAddRoot={() => openCreate("directory")}
             onAddChild={(node, kind = "directory") => openCreate(kind, node.node_id)}
+            onMove={(nodeId, payload) => mutations.moveNode.mutate({ nodeId, payload })}
             onReorder={(items) => mutations.reorderNodes.mutate(items)}
+            onChangeStatus={(node, action) => mutations.changeNodeStatus.mutate({ nodeId: node.node_id, action })}
           />
         </aside>
 
@@ -204,21 +211,13 @@ export function CatalogTreeWorkspacePage() {
             <Radio.Group optionType="button" buttonStyle="solid">
               <Radio.Button value="directory">目录</Radio.Button>
               <Radio.Button value="point">点位</Radio.Button>
-              <Radio.Button value="hybrid">混合</Radio.Button>
-              <Radio.Button value="shortcut">快捷</Radio.Button>
             </Radio.Group>
           </Form.Item>
           <Form.Item name="summary" label="摘要">
             <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} />
           </Form.Item>
-          <Form.Item noStyle shouldUpdate={(prev, next) => prev.node_kind !== next.node_kind}>
-            {({ getFieldValue }) =>
-              getFieldValue("node_kind") === "shortcut" ? (
-                <Form.Item name="shortcut_target_node_id" label="快捷入口目标点位 Node ID" rules={[{ required: true, message: "请输入目标 Node ID" }]}>
-                  <Input />
-                </Form.Item>
-              ) : null
-            }
+          <Form.Item name="student_description" label="学生端卡片描述">
+            <Input.TextArea autoSize={{ minRows: 2, maxRows: 3 }} />
           </Form.Item>
         </Form>
       </Modal>
