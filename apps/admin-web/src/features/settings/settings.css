@@ -23,8 +23,17 @@
   min-height: 0;
 }
 
+.custom-assessment-section {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+
 .smart-settings-grid {
   margin-top: 16px;
+}
+
+.custom-assessment-note {
+  margin-top: 8px;
 }
 
 .settings-section .ant-form-item {

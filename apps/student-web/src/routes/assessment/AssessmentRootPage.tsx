@@ -1,9 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
-import { ClipboardList, LoaderCircle } from "lucide-react";
-import { navigateToAssessmentSession } from "../../app/router/navigation";
+import { FlaskConical, LoaderCircle, Sparkles } from "lucide-react";
+import { navigateToAssessmentCustom, navigateToAssessmentSession } from "../../app/router/navigation";
 import { useStudentRuntime } from "../../app/shell/studentAppContext";
 import { AssessmentHomePanel } from "../../features/assessment/AssessmentHomePanel";
-import { MobileButton } from "../../mobile/primitives";
 
 export function AssessmentRootPage() {
   const navigate = useNavigate();
@@ -17,12 +16,20 @@ export function AssessmentRootPage() {
   return (
     <section className="assessment-root-page">
       <AssessmentHomePanel />
-      <section className="learning-panel assessment-center-actions" aria-label="测评入口">
+      <section className="learning-panel assessment-entry-list" aria-label="测评入口">
         {posttestError ? <div className="form-error">{posttestError}</div> : null}
-        <MobileButton className="primary-action full" type="button" loading={posttestLoading} onClick={startAssessment}>
-          {posttestLoading ? <LoaderCircle className="spin" size={18} /> : <ClipboardList size={18} />}
-          <span>{posttestLoading ? "正在智能组卷" : "开始智能测评"}</span>
-        </MobileButton>
+        <button type="button" className="assessment-entry-card primary" disabled={posttestLoading} onClick={startAssessment}>
+          <span>{posttestLoading ? <LoaderCircle className="spin" size={20} /> : <Sparkles size={20} />}</span>
+          <b>{posttestLoading ? "正在智能组卷" : "智能组卷"}</b>
+          <small>系统按未测与薄弱实验自动抽题</small>
+        </button>
+        <button type="button" className="assessment-entry-card" onClick={() => navigateToAssessmentCustom(navigate, "assessment")}>
+          <span>
+            <FlaskConical size={20} />
+          </span>
+          <b>自主测评</b>
+          <small>自己选择本轮要测的实验</small>
+        </button>
       </section>
     </section>
   );

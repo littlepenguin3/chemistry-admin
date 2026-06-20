@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from server.app.domains.assessments.posttest import PosttestQuestionCandidate
 from server.app.domains.assessments.smart_assessment import (
+    _compose_custom_questions,
     _compose_questions,
     _draw_tickets,
     _public_question,
     _validate_submitted_answers,
 )
 from server.app.domains.errors import DomainHTTPException
-from server.app.domains.platform.settings import SmartAssessmentSettings
+from server.app.domains.platform.settings import CustomAssessmentSettings, SmartAssessmentSettings
 from server.app.student_smart_assessment_schemas import StudentSmartAssessmentSubmitRequest
 from server.tests.route_helpers import assert_route
 
@@ -32,9 +33,14 @@ def _candidate(question_id: str, *, experiment_id: str) -> PosttestQuestionCandi
 def test_student_smart_assessment_routes_are_registered() -> None:
     assert_route("/api/student/smart-assessment/start", "POST")
     assert_route("/api/student/smart-assessment/submit", "POST")
+    assert_route("/api/student/custom-assessment/options", "GET")
+    assert_route("/api/student/custom-assessment/start", "POST")
     assert_route("/api/admin/classes/{class_id}/smart-assessment-strategy", "GET")
     assert_route("/api/admin/classes/{class_id}/smart-assessment-strategy", "PUT")
     assert_route("/api/admin/classes/{class_id}/smart-assessment-strategy", "DELETE")
+    assert_route("/api/admin/classes/{class_id}/custom-assessment-settings", "GET")
+    assert_route("/api/admin/classes/{class_id}/custom-assessment-settings", "PUT")
+    assert_route("/api/admin/classes/{class_id}/custom-assessment-settings", "DELETE")
 
 
 def test_public_smart_assessment_question_does_not_expose_answer_or_explanation() -> None:
@@ -79,6 +85,31 @@ def test_smart_assessment_composition_reserves_untested_ratio() -> None:
     assert composition.measured_question_count == 1
     assert any(meta["source"] == "untested" for meta in experiment_meta.values())
     assert any(meta["source"] == "measured" for meta in experiment_meta.values())
+
+
+def test_custom_assessment_composition_uses_selected_experiments() -> None:
+    settings = CustomAssessmentSettings(default_question_count=5, max_question_count=10, max_questions_per_experiment=2)
+    selected, composition, experiment_meta = _compose_custom_questions(
+        candidates=[
+            _candidate("q-a1", experiment_id="EXP_A"),
+            _candidate("q-a2", experiment_id="EXP_A"),
+            _candidate("q-a3", experiment_id="EXP_A"),
+            _candidate("q-b1", experiment_id="EXP_B"),
+            _candidate("q-b2", experiment_id="EXP_B"),
+            _candidate("q-c1", experiment_id="EXP_C"),
+        ],
+        selected_experiment_ids=["EXP_A", "EXP_B"],
+        settings=settings,
+        student_id="20240001",
+        requested_question_count=5,
+    )
+
+    assert len(selected) == 4
+    assert {question.experiment_id for question in selected} == {"EXP_A", "EXP_B"}
+    assert composition.custom_question_count == 4
+    assert composition.warnings["underfilled"] is True
+    assert all(meta["source"] == "custom" for meta in experiment_meta.values())
+    assert all(meta["question_count"] <= 2 for meta in experiment_meta.values())
 
 
 def test_smart_assessment_answers_must_match_session_questions() -> None:

@@ -12,6 +12,7 @@ export type StudentDetailSource =
   | "element"
   | "point"
   | "video-library"
+  | "assessment-custom"
   | "assessment-session"
   | "assessment-report"
   | "feedback";

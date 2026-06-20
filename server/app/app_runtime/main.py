@@ -29,6 +29,7 @@ from server.app.api.admin.admin_question_workbench import router as admin_questi
 from server.app.api.admin.admin_point_aware_questions import router as admin_point_aware_questions_router
 from server.app.api.student.student_experiment_questions import router as student_experiment_questions_router
 from server.app.api.student.student_assistant import router as student_assistant_router
+from server.app.api.student.student_custom_assessment import router as student_custom_assessment_router
 from server.app.api.student.student_learning import router as student_learning_router
 from server.app.api.student.student_posttest import router as student_posttest_router
 from server.app.api.student.student_pretest import router as student_pretest_router
@@ -77,6 +78,7 @@ app.include_router(admin_question_workbench_router)
 app.include_router(admin_point_aware_questions_router)
 app.include_router(student_experiment_questions_router)
 app.include_router(student_assistant_router)
+app.include_router(student_custom_assessment_router)
 app.include_router(student_learning_router)
 app.include_router(student_posttest_router)
 app.include_router(student_pretest_router)

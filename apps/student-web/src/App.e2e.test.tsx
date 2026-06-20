@@ -11,6 +11,7 @@ import type {
   StudentLearningHomeResponse,
   StudentLearningPageResponse,
   StudentPretestResponse,
+  StudentCustomAssessmentOptionsResponse,
   StudentSmartAssessmentReport,
   StudentSmartAssessmentResponse,
   StudentVideoLibrarySearchResponse,
@@ -33,6 +34,8 @@ const apiMocks = vi.hoisted(() => ({
   startStudentPosttest: vi.fn(),
   submitStudentPosttest: vi.fn(),
   startStudentSmartAssessment: vi.fn(),
+  getStudentCustomAssessmentOptions: vi.fn(),
+  startStudentCustomAssessment: vi.fn(),
   submitStudentSmartAssessment: vi.fn(),
   generatePosttestAiSummary: vi.fn(),
   explainPosttestMistakes: vi.fn(),
@@ -60,6 +63,8 @@ vi.mock("./api", () => ({
   startStudentPosttest: apiMocks.startStudentPosttest,
   submitStudentPosttest: apiMocks.submitStudentPosttest,
   startStudentSmartAssessment: apiMocks.startStudentSmartAssessment,
+  getStudentCustomAssessmentOptions: apiMocks.getStudentCustomAssessmentOptions,
+  startStudentCustomAssessment: apiMocks.startStudentCustomAssessment,
   submitStudentSmartAssessment: apiMocks.submitStudentSmartAssessment,
   generatePosttestAiSummary: apiMocks.generatePosttestAiSummary,
   explainPosttestMistakes: apiMocks.explainPosttestMistakes,
@@ -450,8 +455,10 @@ const smartAssessmentStrategy = {
 const smartAssessmentComposition = {
   total_questions: 1,
   target_question_count: 1,
+  requested_question_count: null,
   untested_question_count: 1,
   measured_question_count: 0,
+  custom_question_count: 0,
   untested_ratio_percent: 50,
   weak_tendency_percent: 80,
   max_questions_per_experiment: 2,
@@ -461,6 +468,7 @@ const smartAssessmentComposition = {
 const posttestResponse: StudentSmartAssessmentResponse = {
   status: "in_progress",
   session_id: "posttest-session-e2e",
+  assessment_mode: "smart",
   strategy: smartAssessmentStrategy,
   composition: smartAssessmentComposition,
   experiments: [
@@ -483,6 +491,7 @@ const posttestResponse: StudentSmartAssessmentResponse = {
 
 const report: StudentSmartAssessmentReport = {
   session_id: "posttest-session-e2e",
+  assessment_mode: "smart",
   strategy: smartAssessmentStrategy,
   composition: smartAssessmentComposition,
   experiments: posttestResponse.experiments,
@@ -508,6 +517,81 @@ const report: StudentSmartAssessmentReport = {
     },
   ],
   next_recommendation: "### Study summary\n\n- Review halogen displacement.",
+};
+
+const customAssessmentOptions: StudentCustomAssessmentOptionsResponse = {
+  settings: {
+    enabled: true,
+    question_count_options: [5, 10, 15, 20],
+    default_question_count: 5,
+    max_question_count: 20,
+    max_questions_per_experiment: 3,
+  },
+  experiments: [
+    {
+      id: "EXP_19_1_01",
+      code: "19-1-01",
+      title: "Halogen displacement",
+      parent_code: "19-1",
+      parent_title: "Experiment 19-1 Halogens",
+      question_count: 8,
+    },
+    {
+      id: "EXP_20_1_01",
+      code: "20-1-01",
+      title: "Oxygen preparation",
+      parent_code: "20-1",
+      parent_title: "Experiment 20-1 Oxygen",
+      question_count: 6,
+    },
+  ],
+};
+
+const customAssessmentComposition = {
+  total_questions: 1,
+  target_question_count: 5,
+  requested_question_count: 5,
+  untested_question_count: 0,
+  measured_question_count: 0,
+  custom_question_count: 1,
+  untested_ratio_percent: 0,
+  weak_tendency_percent: 0,
+  max_questions_per_experiment: 3,
+  warnings: {},
+};
+
+const customAssessmentResponse: StudentSmartAssessmentResponse = {
+  status: "in_progress",
+  session_id: "custom-assessment-session-e2e",
+  assessment_mode: "custom",
+  strategy: { ...smartAssessmentStrategy, question_count: 5, untested_ratio_percent: 0, weak_tendency_percent: 0, max_questions_per_experiment: 3 },
+  composition: customAssessmentComposition,
+  experiments: [
+    {
+      id: "EXP_19_1_01",
+      code: "19-1-01",
+      title: "Halogen displacement",
+      parent_code: "19-1",
+      parent_title: "Experiment 19-1 Halogens",
+      mastery_score: null,
+      evidence_count: 0,
+      source: "custom",
+      draw_tickets: null,
+      question_count: 1,
+      reason: "学生自主选择本轮要练习的实验",
+    },
+  ],
+  questions: posttestQuestions,
+};
+
+const customAssessmentReport: StudentSmartAssessmentReport = {
+  ...report,
+  session_id: "custom-assessment-session-e2e",
+  assessment_mode: "custom",
+  strategy: customAssessmentResponse.strategy,
+  composition: customAssessmentComposition,
+  experiments: customAssessmentResponse.experiments,
+  next_recommendation: "本轮自主测评已完成，可以根据错题回顾继续复习相关实验。",
 };
 
 function rootButton(root: string): HTMLButtonElement {
@@ -573,6 +657,8 @@ describe("student app route stack", () => {
     apiMocks.startStudentPosttest.mockResolvedValue(posttestResponse);
     apiMocks.submitStudentPosttest.mockResolvedValue({ status: "completed", report });
     apiMocks.startStudentSmartAssessment.mockResolvedValue(posttestResponse);
+    apiMocks.getStudentCustomAssessmentOptions.mockResolvedValue(customAssessmentOptions);
+    apiMocks.startStudentCustomAssessment.mockResolvedValue(customAssessmentResponse);
     apiMocks.submitStudentSmartAssessment.mockResolvedValue({ status: "completed", report });
     apiMocks.generatePosttestAiSummary.mockResolvedValue({ text: "### Study summary\n\n- Review **halogens**.", source: "ai", mode: "test", cached: true });
     apiMocks.explainPosttestMistakes.mockResolvedValue({ text: "### Mistake explanation\n\n- $\\ce{Br2}$ is orange.", source: "ai", mode: "test", cached: true });
@@ -694,9 +780,9 @@ describe("student app route stack", () => {
     await renderAuthenticatedApp("/assessment");
 
     await waitFor(() => expect(window.location.pathname).toBe("/assessment"));
-    expect(screen.getByText("随时开始智能测评")).toBeInTheDocument();
+    expect(screen.getByText("测评中心")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "开始智能测评" }));
+    fireEvent.click(screen.getByRole("button", { name: /智能组卷/ }));
     await waitFor(() => expect(apiMocks.startStudentSmartAssessment).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(window.location.pathname).toBe("/assessment/session/posttest-session-e2e"));
     expectBottomNavHidden();
@@ -715,6 +801,40 @@ describe("student app route stack", () => {
     expect(screen.getByText("智能测评报告")).toBeInTheDocument();
     expect(screen.getByText("目标占比 50%")).toBeInTheDocument();
     expect(screen.getByText("薄弱倾向 80%")).toBeInTheDocument();
+  });
+
+  it("lets students choose experiments for a custom assessment", async () => {
+    apiMocks.submitStudentSmartAssessment.mockResolvedValueOnce({ status: "completed", report: customAssessmentReport });
+    await renderAuthenticatedApp("/assessment");
+
+    fireEvent.click(screen.getByRole("button", { name: /自主测评/ }));
+    await waitFor(() => expect(window.location.pathname).toBe("/assessment/custom"));
+    expectBottomNavHidden();
+    await waitFor(() => expect(apiMocks.getStudentCustomAssessmentOptions).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(screen.getByLabelText("搜索实验"), { target: { value: "Halogen" } });
+    expect(screen.getByText("Halogen displacement")).toBeInTheDocument();
+    expect(screen.queryByText("Oxygen preparation")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Halogen displacement/ }));
+    expect(screen.getByText("1 个实验")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "开始自主测评" }));
+    await waitFor(() => expect(apiMocks.startStudentCustomAssessment).toHaveBeenCalledWith(["EXP_19_1_01"], 5));
+    await waitFor(() => expect(window.location.pathname).toBe("/assessment/session/custom-assessment-session-e2e"));
+    expect(screen.getAllByText("自主测评").length).toBeGreaterThan(0);
+    expect(screen.getByText("自选实验 1 个")).toBeInTheDocument();
+    expect(screen.getByText("实际 1/目标 5 题")).toBeInTheDocument();
+
+    await submitVisibleAssessment();
+    await waitFor(() =>
+      expect(apiMocks.submitStudentSmartAssessment).toHaveBeenCalledWith("custom-assessment-session-e2e", [
+        { question_id: "post-q-1", answer: "A" },
+      ]),
+    );
+    await waitFor(() => expect(window.location.pathname).toBe("/assessment/report/custom-assessment-session-e2e"));
+    expect(screen.getByText("自主测评报告")).toBeInTheDocument();
+    expect(screen.getAllByText("自选实验").length).toBeGreaterThan(0);
+    expect(screen.getByText("目标 5 题")).toBeInTheDocument();
   });
 
   it("renders structured point detail content, related links, and the fixed test handoff", async () => {

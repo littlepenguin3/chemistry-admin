@@ -9,6 +9,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Select,
   Slider,
   Space,
   Switch,
@@ -19,6 +20,7 @@ import {
 import type {
   AIConfiguration,
   AIConfigurationUpdate,
+  CustomAssessmentSettings,
   LearningBehaviorSettings,
   PlatformSettingsResponse,
   SmartAssessmentSettings,
@@ -40,9 +42,27 @@ const defaultSmartAssessment: SmartAssessmentSettings = {
   weak_max_bonus: 9,
 };
 
+const questionCountOptions = [5, 10, 15, 20].map((value) => ({ label: `${value} 题`, value }));
+
+const defaultCustomAssessment: CustomAssessmentSettings = {
+  enabled: true,
+  default_question_count: 10,
+  max_question_count: 20,
+  max_questions_per_experiment: 3,
+};
+
 function normalizeSmartAssessmentSettings(value: Partial<SmartAssessmentSettings> | undefined): SmartAssessmentSettings {
   const clean = Object.fromEntries(Object.entries(value || {}).filter(([, item]) => item !== undefined)) as Partial<SmartAssessmentSettings>;
   return { ...defaultSmartAssessment, ...clean };
+}
+
+function normalizeCustomAssessmentSettings(value: Partial<CustomAssessmentSettings> | undefined): CustomAssessmentSettings {
+  const clean = Object.fromEntries(Object.entries(value || {}).filter(([, item]) => item !== undefined)) as Partial<CustomAssessmentSettings>;
+  const merged = { ...defaultCustomAssessment, ...clean };
+  return {
+    ...merged,
+    default_question_count: Math.min(merged.default_question_count, merged.max_question_count),
+  };
 }
 
 function smartAssessmentTickets(settings: SmartAssessmentSettings, mastery: number) {
@@ -198,6 +218,13 @@ export function SettingsPage() {
     () => normalizeSmartAssessmentSettings(watchedSmartAssessment),
     [watchedSmartAssessment],
   );
+  const watchedCustomAssessment = Form.useWatch(["assessment", "custom_assessment"], form) as
+    | Partial<CustomAssessmentSettings>
+    | undefined;
+  const customAssessmentSettings = useMemo(
+    () => normalizeCustomAssessmentSettings(watchedCustomAssessment),
+    [watchedCustomAssessment],
+  );
 
   return (
     <Space orientation="vertical" size={18} className="full">
@@ -297,6 +324,46 @@ export function SettingsPage() {
                     <InputNumber />
                   </Form.Item>
                   <SmartAssessmentCurve settings={smartAssessmentSettings} />
+                </div>
+                <div className="settings-section custom-assessment-section">
+                  <Flex justify="space-between" align="center" gap={12}>
+                    <div>
+                      <Text strong>自主测评</Text>
+                      <Text type="secondary" className="block-text">
+                        学生自行选择实验后组卷，适合课前预习、专项复习和临时练习。
+                      </Text>
+                    </div>
+                    <Form.Item name={["assessment", "custom_assessment", "enabled"]} valuePropName="checked" noStyle>
+                      <Switch disabled={!canEdit} />
+                    </Form.Item>
+                  </Flex>
+                  <div className="settings-grid smart-settings-grid">
+                    <Form.Item
+                      name={["assessment", "custom_assessment", "default_question_count"]}
+                      label="默认题数"
+                      rules={[{ required: true, message: "请选择默认题数" }]}
+                    >
+                      <Select disabled={!canEdit} options={questionCountOptions} />
+                    </Form.Item>
+                    <Form.Item
+                      name={["assessment", "custom_assessment", "max_question_count"]}
+                      label="学生可选题量上限"
+                      rules={[{ required: true, message: "请选择题量上限" }]}
+                    >
+                      <Select disabled={!canEdit} options={questionCountOptions} />
+                    </Form.Item>
+                    <Form.Item
+                      name={["assessment", "custom_assessment", "max_questions_per_experiment"]}
+                      label="每个实验最多题数"
+                      rules={[{ required: true, message: "请输入每个实验最多题数" }]}
+                    >
+                      <InputNumber min={1} max={10} precision={0} disabled={!canEdit} className="full" />
+                    </Form.Item>
+                  </div>
+                  <Text type="secondary" className="block-text custom-assessment-note">
+                    学生端会显示不超过 {customAssessmentSettings.max_question_count} 题的选项；默认进入时选中{" "}
+                    {customAssessmentSettings.default_question_count} 题。
+                  </Text>
                 </div>
               </div>
             </Card>

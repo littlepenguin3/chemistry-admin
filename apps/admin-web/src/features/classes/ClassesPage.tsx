@@ -11,6 +11,7 @@ import {
   InputNumber,
   Modal,
   Popconfirm,
+  Select,
   Slider,
   Space,
   Statistic,
@@ -34,8 +35,15 @@ import {
   TeamOutlined,
 } from "@ant-design/icons";
 
-import type { ClassItem, RegistrationSettings, RosterImportResult, RosterStudent, SmartAssessmentStrategyResponse } from "../../api/classes";
-import type { SmartAssessmentSettings } from "../../api/settings";
+import type {
+  ClassItem,
+  CustomAssessmentSettingsResponse,
+  RegistrationSettings,
+  RosterImportResult,
+  RosterStudent,
+  SmartAssessmentStrategyResponse,
+} from "../../api/classes";
+import type { CustomAssessmentSettings, SmartAssessmentSettings } from "../../api/settings";
 import { api, patchJson, postJson, putJson } from "../../api/http";
 import { PageTitle } from "../../components/PageTitle";
 import { QueryState } from "../../components/QueryState";
@@ -55,9 +63,27 @@ const defaultSmartAssessment: SmartAssessmentSettings = {
   weak_max_bonus: 9,
 };
 
+const questionCountOptions = [5, 10, 15, 20].map((value) => ({ label: `${value} 题`, value }));
+
+const defaultCustomAssessment: CustomAssessmentSettings = {
+  enabled: true,
+  default_question_count: 10,
+  max_question_count: 20,
+  max_questions_per_experiment: 3,
+};
+
 function normalizeSmartAssessment(value: Partial<SmartAssessmentSettings> | undefined): SmartAssessmentSettings {
   const clean = Object.fromEntries(Object.entries(value || {}).filter(([, item]) => item !== undefined)) as Partial<SmartAssessmentSettings>;
   return { ...defaultSmartAssessment, ...clean };
+}
+
+function normalizeCustomAssessment(value: Partial<CustomAssessmentSettings> | undefined): CustomAssessmentSettings {
+  const clean = Object.fromEntries(Object.entries(value || {}).filter(([, item]) => item !== undefined)) as Partial<CustomAssessmentSettings>;
+  const merged = { ...defaultCustomAssessment, ...clean };
+  return {
+    ...merged,
+    default_question_count: Math.min(merged.default_question_count, merged.max_question_count),
+  };
 }
 
 function smartTickets(settings: SmartAssessmentSettings, mastery: number) {
@@ -102,6 +128,7 @@ export function ClassesPage() {
   const [classSettingsForm] = Form.useForm();
   const [registrationForm] = Form.useForm();
   const [smartAssessmentForm] = Form.useForm();
+  const [customAssessmentForm] = Form.useForm();
   const [studentForm] = Form.useForm();
   const classes = useQuery({ queryKey: ["classes"], queryFn: () => api<ClassItem[]>("/api/admin/classes") });
   const selectedClass = (classes.data || []).find((item) => item.id === selectedClassId) || null;
@@ -120,6 +147,11 @@ export function ClassesPage() {
     queryFn: () => api<SmartAssessmentStrategyResponse>(`/api/admin/classes/${selectedClassId}/smart-assessment-strategy`),
     enabled: Boolean(selectedClassId),
   });
+  const customAssessment = useQuery({
+    queryKey: ["class-custom-assessment-settings", selectedClassId],
+    queryFn: () => api<CustomAssessmentSettingsResponse>(`/api/admin/classes/${selectedClassId}/custom-assessment-settings`),
+    enabled: Boolean(selectedClassId),
+  });
   const defaultPasswordMode =
     Form.useWatch("default_password_mode", registrationForm) ||
     registration.data?.default_password_mode ||
@@ -130,6 +162,10 @@ export function ClassesPage() {
   const watchedSmartWeakTendency = Form.useWatch("weak_tendency_percent", smartAssessmentForm);
   const watchedSmartMaxPerExperiment = Form.useWatch("max_questions_per_experiment", smartAssessmentForm);
   const watchedSmartEnabled = Form.useWatch("enabled", smartAssessmentForm);
+  const watchedCustomDefaultCount = Form.useWatch("default_question_count", customAssessmentForm);
+  const watchedCustomMaxCount = Form.useWatch("max_question_count", customAssessmentForm);
+  const watchedCustomMaxPerExperiment = Form.useWatch("max_questions_per_experiment", customAssessmentForm);
+  const watchedCustomEnabled = Form.useWatch("enabled", customAssessmentForm);
   const smartPreview = normalizeSmartAssessment({
     ...(smartAssessment.data?.strategy || {}),
     enabled: watchedSmartEnabled,
@@ -137,6 +173,13 @@ export function ClassesPage() {
     untested_ratio_percent: watchedSmartUntestedRatio,
     weak_tendency_percent: watchedSmartWeakTendency,
     max_questions_per_experiment: watchedSmartMaxPerExperiment,
+  });
+  const customPreview = normalizeCustomAssessment({
+    ...(customAssessment.data?.settings || {}),
+    enabled: watchedCustomEnabled,
+    default_question_count: watchedCustomDefaultCount,
+    max_question_count: watchedCustomMaxCount,
+    max_questions_per_experiment: watchedCustomMaxPerExperiment,
   });
   const rosterRows = roster.data || [];
   const currentRoster = rosterRows.filter((row) => row.status !== "disabled");
@@ -181,6 +224,12 @@ export function ClassesPage() {
       smartAssessmentForm.setFieldsValue(smartAssessment.data.strategy);
     }
   }, [smartAssessment.data, smartAssessmentForm]);
+
+  useEffect(() => {
+    if (customAssessment.data) {
+      customAssessmentForm.setFieldsValue(customAssessment.data.settings);
+    }
+  }, [customAssessment.data, customAssessmentForm]);
 
   useEffect(() => {
     if (!studentOpen) return;
@@ -256,6 +305,30 @@ export function ClassesPage() {
     onError: (error) => message.error(errorMessage(error)),
   });
 
+  const updateCustomAssessment = useMutation({
+    mutationFn: (values: CustomAssessmentSettings) => {
+      if (!selectedClassId) throw new Error("请先选择班级");
+      return putJson<CustomAssessmentSettingsResponse>(`/api/admin/classes/${selectedClassId}/custom-assessment-settings`, values);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["class-custom-assessment-settings", selectedClassId] });
+    },
+    onError: (error) => message.error(errorMessage(error)),
+  });
+
+  const resetCustomAssessment = useMutation({
+    mutationFn: () => {
+      if (!selectedClassId) throw new Error("请先选择班级");
+      return api<CustomAssessmentSettingsResponse>(`/api/admin/classes/${selectedClassId}/custom-assessment-settings`, { method: "DELETE" });
+    },
+    onSuccess: (response) => {
+      message.success("已恢复为全局自主测评设置");
+      customAssessmentForm.setFieldsValue(response.settings);
+      void queryClient.invalidateQueries({ queryKey: ["class-custom-assessment-settings", selectedClassId] });
+    },
+    onError: (error) => message.error(errorMessage(error)),
+  });
+
   const saveStudent = useMutation({
     mutationFn: (values: Record<string, unknown>) => {
       if (!selectedClassId) throw new Error("请先选择班级");
@@ -314,14 +387,16 @@ export function ClassesPage() {
 
   const saveClassConfiguration = async () => {
     try {
-      const [classValues, registrationValues, smartValues] = await Promise.all([
+      const [classValues, registrationValues, smartValues, customValues] = await Promise.all([
         classSettingsForm.validateFields(),
         registrationForm.validateFields(),
         smartAssessmentForm.validateFields(),
+        customAssessmentForm.validateFields(),
       ]);
       await updateClass.mutateAsync(classValues);
       await updateRegistration.mutateAsync(registrationValues);
       await updateSmartAssessment.mutateAsync(normalizeSmartAssessment(smartValues as Partial<SmartAssessmentSettings>));
+      await updateCustomAssessment.mutateAsync(normalizeCustomAssessment(customValues as Partial<CustomAssessmentSettings>));
       message.success("班级设置已保存");
       setSettingsOpen(false);
     } catch (error) {
@@ -550,11 +625,14 @@ export function ClassesPage() {
         okText="保存设置"
         cancelText="取消"
         width={720}
-        confirmLoading={updateClass.isPending || updateRegistration.isPending || updateSmartAssessment.isPending}
+        confirmLoading={updateClass.isPending || updateRegistration.isPending || updateSmartAssessment.isPending || updateCustomAssessment.isPending}
         onCancel={() => setSettingsOpen(false)}
         onOk={() => void saveClassConfiguration()}
       >
-        <QueryState loading={registration.isLoading || smartAssessment.isLoading} error={registration.error || smartAssessment.error}>
+        <QueryState
+          loading={registration.isLoading || smartAssessment.isLoading || customAssessment.isLoading}
+          error={registration.error || smartAssessment.error || customAssessment.error}
+        >
           <Space orientation="vertical" size={18} className="full">
             <div className="modal-section">
               <Text strong>班级基本信息</Text>
@@ -704,6 +782,56 @@ export function ClassesPage() {
                   <InputNumber />
                 </Form.Item>
                 <ClassSmartCurve settings={smartPreview} />
+              </Form>
+            </div>
+            <div className="modal-section">
+              <Flex justify="space-between" align="flex-start" gap={12}>
+                <div>
+                  <Text strong>自主测评设置</Text>
+                  <Text type="secondary" className="block-text">
+                    默认继承系统设置；保存后本班学生可以按这里的题量规则自行选择实验练习。
+                  </Text>
+                </div>
+                <Space>
+                  <Tag color={customAssessment.data?.has_override ? "green" : "default"}>
+                    {customAssessment.data?.has_override ? "本班覆盖" : "全局默认"}
+                  </Tag>
+                  <Button size="small" loading={resetCustomAssessment.isPending} onClick={() => resetCustomAssessment.mutate()}>
+                    恢复默认
+                  </Button>
+                </Space>
+              </Flex>
+              <Form form={customAssessmentForm} layout="vertical" className="modal-form">
+                <Flex justify="space-between" align="center" gap={12} className="class-smart-switch">
+                  <div>
+                    <Text strong>允许学生自主测评</Text>
+                    <Text type="secondary" className="block-text">
+                      关闭后本班学生无法进入自选实验组卷。
+                    </Text>
+                  </div>
+                  <Form.Item name="enabled" valuePropName="checked" noStyle>
+                    <Switch />
+                  </Form.Item>
+                </Flex>
+                <div className="settings-grid class-smart-grid">
+                  <Form.Item name="default_question_count" label="默认题数" rules={[{ required: true, message: "请选择默认题数" }]}>
+                    <Select options={questionCountOptions} />
+                  </Form.Item>
+                  <Form.Item name="max_question_count" label="学生可选题量上限" rules={[{ required: true, message: "请选择题量上限" }]}>
+                    <Select options={questionCountOptions} />
+                  </Form.Item>
+                  <Form.Item
+                    name="max_questions_per_experiment"
+                    label="每个实验最多题数"
+                    rules={[{ required: true, message: "请输入每个实验最多题数" }]}
+                  >
+                    <InputNumber min={1} max={10} precision={0} className="full" />
+                  </Form.Item>
+                </div>
+                <Text type="secondary" className="block-text class-custom-note">
+                  学生端默认选中 {customPreview.default_question_count} 题，可选题量最高 {customPreview.max_question_count} 题；每个实验最多抽{" "}
+                  {customPreview.max_questions_per_experiment} 题。
+                </Text>
               </Form>
             </div>
           </Space>

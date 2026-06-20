@@ -417,7 +417,7 @@ export type PublicSmartAssessmentQuestion = PublicPosttestQuestion;
 export type SmartAssessmentExperimentSummary = PosttestExperimentSummary & {
   mastery_score?: number | null;
   evidence_count: number;
-  source: "measured" | "untested";
+  source: "measured" | "untested" | "custom";
   draw_tickets?: number | null;
   question_count: number;
   reason?: string | null;
@@ -426,8 +426,10 @@ export type SmartAssessmentExperimentSummary = PosttestExperimentSummary & {
 export type SmartAssessmentCompositionSummary = {
   total_questions: number;
   target_question_count: number;
+  requested_question_count?: number | null;
   untested_question_count: number;
   measured_question_count: number;
+  custom_question_count?: number;
   untested_ratio_percent: number;
   weak_tendency_percent: number;
   max_questions_per_experiment: number;
@@ -437,6 +439,7 @@ export type SmartAssessmentCompositionSummary = {
 export type StudentSmartAssessmentResponse = {
   status: "in_progress" | "completed";
   session_id: string;
+  assessment_mode?: "smart" | "custom";
   strategy: SmartAssessmentStrategy;
   composition: SmartAssessmentCompositionSummary;
   experiments: SmartAssessmentExperimentSummary[];
@@ -449,6 +452,7 @@ export type StudentSmartAssessmentMasteryChange = StudentPosttestMasteryChange;
 
 export type StudentSmartAssessmentReport = {
   session_id: string;
+  assessment_mode?: "smart" | "custom";
   strategy: SmartAssessmentStrategy;
   composition: SmartAssessmentCompositionSummary;
   experiments: SmartAssessmentExperimentSummary[];
@@ -467,6 +471,28 @@ export type StudentSmartAssessmentReport = {
 export type StudentSmartAssessmentSubmitResponse = {
   status: "completed";
   report: StudentSmartAssessmentReport;
+};
+
+export type CustomAssessmentOptionsSettings = {
+  enabled: boolean;
+  question_count_options: number[];
+  default_question_count: number;
+  max_question_count: number;
+  max_questions_per_experiment: number;
+};
+
+export type CustomAssessmentExperimentOption = {
+  id: string;
+  code: string;
+  title: string;
+  parent_code?: string | null;
+  parent_title?: string | null;
+  question_count: number;
+};
+
+export type StudentCustomAssessmentOptionsResponse = {
+  settings: CustomAssessmentOptionsSettings;
+  experiments: CustomAssessmentExperimentOption[];
 };
 
 export type AgentChatMessage = {
@@ -612,6 +638,9 @@ export function errorMessage(error: unknown): string {
       }
       if (typeof error.detail === "string" && error.detail.includes("Smart assessment question bank")) {
         return "智能组卷题库暂未配置，请联系教师";
+      }
+      if (typeof error.detail === "string" && error.detail.includes("Custom assessment")) {
+        return "自主测评暂不可用，请联系教师";
       }
       if (typeof error.detail === "string" && error.detail.includes("No learning experiments")) {
         return "请先进入至少一个实验详情页学习";
@@ -790,6 +819,20 @@ export function submitStudentPosttest(sessionId: string, answers: StudentPosttes
 
 export function startStudentSmartAssessment(): Promise<StudentSmartAssessmentResponse> {
   return postJson<StudentSmartAssessmentResponse>("/api/student/smart-assessment/start", {});
+}
+
+export function getStudentCustomAssessmentOptions(): Promise<StudentCustomAssessmentOptionsResponse> {
+  return api<StudentCustomAssessmentOptionsResponse>("/api/student/custom-assessment/options");
+}
+
+export function startStudentCustomAssessment(
+  experimentIds: string[],
+  questionCount: number,
+): Promise<StudentSmartAssessmentResponse> {
+  return postJson<StudentSmartAssessmentResponse>("/api/student/custom-assessment/start", {
+    experiment_ids: experimentIds,
+    question_count: questionCount,
+  });
 }
 
 export function submitStudentSmartAssessment(

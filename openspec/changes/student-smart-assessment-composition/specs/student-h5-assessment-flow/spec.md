@@ -21,6 +21,43 @@ The student H5 SHALL let authenticated students start, continue, submit, and rev
 - **AND** it MUST persist item attempts with a smart-assessment evidence kind
 - **AND** it MUST complete the session with a report.
 
+### Requirement: Student custom assessment selection
+The student H5 SHALL provide a separate custom assessment mode where students select experiments and question count before starting a paper.
+
+#### Scenario: Student opens custom assessment options
+- **WHEN** an authenticated student opens the custom assessment selection page
+- **THEN** the backend MUST return the effective custom assessment settings
+- **AND** it MUST return only selectable published experiments that have at least one eligible published question
+- **AND** it MUST NOT return hidden answer keys or question bodies in the options payload.
+
+#### Scenario: Student searches and selects experiments
+- **WHEN** custom assessment options are displayed
+- **THEN** the UI MUST let the student search experiments by visible experiment text
+- **AND** the UI MUST let the student select one or more experiments
+- **AND** it MUST NOT require the student to choose by knowledge point, wrong-answer set, weak threshold, or measured/untested status.
+
+#### Scenario: Student chooses custom assessment question count
+- **WHEN** the student configures a custom assessment
+- **THEN** the UI MUST offer fixed question-count options from `5`, `10`, `15`, and `20`
+- **AND** it MUST hide options greater than the effective maximum question count
+- **AND** it MUST preselect the effective default question count.
+
+#### Scenario: Student starts custom assessment
+- **WHEN** a student starts custom assessment with selected experiments and a valid question count
+- **THEN** the backend MUST create or return that student's current open assessment session
+- **AND** if no open session exists, it MUST compose questions only from the selected experiments
+- **AND** it MUST mark the session as custom assessment.
+
+#### Scenario: Custom assessment rejects invalid selection
+- **WHEN** a student starts custom assessment without selected experiments, with an unsupported question count, or with experiments outside the selectable options
+- **THEN** the backend MUST reject the request
+- **AND** it MUST NOT create a new assessment session.
+
+#### Scenario: Existing open assessment is reused across modes
+- **GIVEN** a student has any in-progress assessment session
+- **WHEN** the student starts smart assessment or custom assessment
+- **THEN** the backend MUST return the existing open session rather than creating a second session.
+
 ### Requirement: Smart assessment composes by experiment mastery
 Smart assessment composition SHALL select experiments before selecting questions, using experiment mastery evidence and teacher-configured strategy.
 
@@ -56,3 +93,27 @@ Smart assessment submissions SHALL update experiment-level mastery using the sam
 - **WHEN** a completed smart assessment report is returned
 - **THEN** it MUST include score, correct rate, selected experiment summaries, composition summary, mastery changes, and wrong-answer details where available
 - **AND** it MUST explain untested and low-mastery coverage in student-facing language without requiring the student to understand the internal ticket formula.
+
+### Requirement: Custom assessment composes balanced papers from selected experiments
+Custom assessment composition SHALL sample questions only from student-selected experiments and SHOULD cover selected experiments as evenly as question availability allows.
+
+#### Scenario: Custom assessment samples selected experiments evenly
+- **WHEN** the backend composes a custom assessment from multiple selected experiments
+- **THEN** it MUST stable-shuffle eligible questions within each selected experiment
+- **AND** it MUST select questions by round-robin across the selected experiments until the requested question count is reached or eligible questions are exhausted.
+
+#### Scenario: Custom assessment handles insufficient questions
+- **WHEN** selected experiments cannot fill the requested question count
+- **THEN** the backend MUST return the underfilled assessment if at least one question was selected
+- **AND** it MUST include warning metadata with requested and actual question counts
+- **AND** the UI MUST tell the student that the selected experiment question bank was insufficient.
+
+#### Scenario: Custom assessment has zero eligible questions
+- **WHEN** selected experiments produce zero eligible questions
+- **THEN** the backend MUST reject the start request
+- **AND** it MUST explain that no eligible questions are available.
+
+#### Scenario: Custom assessment report is simple
+- **WHEN** a custom assessment is completed
+- **THEN** the report MUST include at least correct rate, selected experiment summaries, and wrong-answer details where available
+- **AND** it MUST NOT require a finalized custom report design beyond the shared assessment report shell.

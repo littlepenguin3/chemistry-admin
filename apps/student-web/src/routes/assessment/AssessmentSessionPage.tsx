@@ -71,7 +71,7 @@ export function AssessmentSessionPage() {
       {loading ? (
         <section className="learning-panel">
           <MobileEmptyState className="empty-learning-card" icon={<LoaderCircle className="spin" size={20} />}>
-            <span>正在智能组卷</span>
+            <span>正在打开测评</span>
           </MobileEmptyState>
         </section>
       ) : posttest ? (

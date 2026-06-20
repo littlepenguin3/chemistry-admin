@@ -7,6 +7,7 @@ The platform already stores experiment-level mastery in `student_experiment_mast
 ## What Changes
 
 - Add a student smart assessment capability that starts directly from the student H5 `测评` page.
+- Add a separate student custom assessment capability where students choose experiments and question count themselves.
 - Create a dedicated smart-assessment session concept instead of overloading the existing posttest session.
 - Compose papers by first selecting experiments, then selecting questions inside those experiments.
 - Treat untested experiments as a separate pool, not as fake 50-point mastery.
@@ -15,6 +16,7 @@ The platform already stores experiment-level mastery in `student_experiment_mast
 - Show an admin strategy curve that explains how mastery score maps to relative draw tickets.
 - Show a class preview that estimates the paper source distribution under the current strategy.
 - Show students a concise composition explanation and post-submit mastery changes.
+- Keep custom assessment v1 intentionally simple: experiment search, experiment multi-select, fixed question-count options, and balanced question sampling across selected experiments.
 
 ## Capabilities
 
@@ -25,15 +27,18 @@ The platform already stores experiment-level mastery in `student_experiment_mast
 ### Modified Capabilities
 
 - `student-h5-assessment-flow`: add the smart assessment session lifecycle, composition strategy, report, and mastery update behavior.
+- `student-h5-assessment-flow`: add custom assessment options/start behavior as a separate student-selected assessment mode.
 - `class-roster-management`: add per-class smart assessment strategy overrides owned by admins and assigned teachers.
-- `react-ant-design-admin-console`: add explainable smart-assessment controls and preview visualizations to admin settings/class settings.
+- `class-roster-management`: add per-class custom assessment availability and question-count boundaries.
+- `react-ant-design-admin-console`: add explainable smart-assessment controls, custom-assessment controls, and preview visualizations to admin settings/class settings.
 
 ## Impact
 
 - `server/app/domains/assessments/*`: add a smart assessment domain service that composes by experiment mastery and persists session strategy snapshots.
 - `server/app/api/student/*`: add smart-assessment start/submit endpoints for students.
-- Database migrations: add smart-assessment sessions and class-level strategy override storage, while reusing `experiment_question_attempts` for graded attempts.
-- `apps/student-web/src/routes/assessment/*`: make the assessment page's first version focus on smart assessment rather than adding multiple assessment modes.
+- `server/app/api/student/*`: add custom-assessment options/start endpoints for students while reusing the shared submit/report path.
+- Database migrations: add assessment sessions and class-level strategy override storage, while reusing `experiment_question_attempts` for graded attempts.
+- `apps/student-web/src/routes/assessment/*`: make the assessment page present smart assessment and custom assessment as separate entry cards.
 - `apps/admin-web/src/features/settings/SettingsPage.tsx`: expose global smart assessment defaults.
 - `apps/admin-web/src/features/classes/ClassesPage.tsx`: expose per-class smart assessment overrides.
 - `apps/admin-web`: use existing `@ant-design/plots` charting for strategy curve and preview visualizations.
@@ -41,6 +46,7 @@ The platform already stores experiment-level mastery in `student_experiment_mast
 ## Non-Goals
 
 - Do not add a parallel "learning posttest" product surface in this first version.
-- Do not add专项练习,错题本, or knowledge-point-level smart composition.
+- Do not add专项练习,错题本, custom weak-experiment shortcuts, custom status filters, or knowledge-point-level smart composition.
+- Do not let custom assessment v1 select by knowledge point, wrong-answer set, or mastery threshold.
 - Do not use whether a student has opened or viewed an experiment as a composition criterion.
 - Do not expose internal formulas as required teacher knowledge; formulas exist to drive explainable previews.

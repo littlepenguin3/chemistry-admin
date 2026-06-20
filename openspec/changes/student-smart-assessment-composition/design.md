@@ -21,17 +21,30 @@ Existing data that should be reused:
 - `platform_settings`: existing global learning behavior settings.
 - class ownership and registration settings patterns in class management.
 
+New product shape:
+
+```text
+Student opens /assessment
+        │
+        ├─ Smart assessment
+        │  └─ System decides what to assess
+        │
+        └─ Custom assessment
+           └─ Student chooses experiments and question count
+```
+
 ## Decisions
 
 ### 1. Smart Assessment Is Separate From Posttest
 
-Create a dedicated smart-assessment session concept:
+Create a dedicated assessment session concept initially backed by the smart-assessment session table:
 
 ```text
 student_smart_assessment_sessions
 ├─ id
 ├─ student_id / class_id
 ├─ status
+├─ assessment_mode = "smart" | "custom"
 ├─ strategy_snapshot
 ├─ selected_experiment_ids
 ├─ question_ids
@@ -42,6 +55,8 @@ student_smart_assessment_sessions
 ```
 
 Rationale: existing posttest is scoped to recently learned experiments. Smart assessment has a different entry point, strategy, report explanation, and admin configuration. Keeping it separate prevents "posttest" from becoming a catch-all.
+
+Custom assessment should use separate student API routes but reuse this session lifecycle and completion/report mechanics. The table name can remain `student_smart_assessment_sessions` for the first implementation to avoid broad migration churn; `assessment_mode` distinguishes system-composed and student-selected papers.
 
 ### 2. Compose By Experiment First, Then Question
 
@@ -205,6 +220,8 @@ After submission, the report should include:
 
 If a student has an in-progress smart assessment session, starting smart assessment returns that same session. This avoids repeated clicks or refreshes changing the paper.
 
+The same first-version rule applies across assessment modes: a student may have only one in-progress assessment session at a time. Starting smart or custom assessment while any assessment session is open returns the existing session instead of creating a second paper. The first version does not add "abandon and start over".
+
 ### 10. Backfill Rules
 
 The paper should prioritize reaching the configured total question count:
@@ -220,6 +237,111 @@ Preserve no-answer exposure and record warnings in strategy_snapshot
 ```
 
 Backfill warnings should be visible in admin preview and stored in session metadata for diagnosis.
+
+### 11. Custom Assessment V1 Scope
+
+Custom assessment is a separate student-selected mode, not a filter on smart assessment.
+
+Student flow:
+
+```text
+/assessment
+  ├─ 智能测评: 系统自动组卷
+  └─ 自主测评: 学生选择实验
+
+/assessment/custom
+  ├─ search published experiments with questions
+  ├─ select one or more experiments
+  ├─ choose question count from 5 / 10 / 15 / 20
+  └─ start custom assessment
+```
+
+Custom assessment v1 intentionally does not include:
+
+- weak-experiment shortcut entry,
+- untested/measured/weak filters,
+- wrong-answer related experiment selection,
+- knowledge-point selection,
+- student-facing strategy controls.
+
+Rationale: custom assessment's first promise is simple student control: "I choose which experiments to test." The intelligent weighting model remains in smart assessment.
+
+### 12. Custom Assessment Options
+
+Add an options endpoint for the custom selection page:
+
+```text
+GET /api/student/custom-assessment/options
+```
+
+It returns:
+
+```text
+settings
+├─ enabled
+├─ question_count_options = [5, 10, 15, 20] filtered by max
+├─ default_question_count
+├─ max_question_count
+└─ max_questions_per_experiment
+
+experiments[]
+├─ id / code / title / parent metadata
+└─ question_count
+```
+
+Only published, student-visible experiments with at least one published question should be returned. Experiments with no eligible questions are excluded from v1 to avoid a selectable item that cannot generate a paper.
+
+### 13. Custom Assessment Composition
+
+Custom assessment start endpoint:
+
+```text
+POST /api/student/custom-assessment/start
+{
+  "experiment_ids": ["..."],
+  "question_count": 10
+}
+```
+
+Validation:
+
+- at least one experiment id,
+- all experiment ids must be present in the options result for that student,
+- question count must be one of `5 / 10 / 15 / 20` and not exceed the effective max question count.
+
+Sampling:
+
+```text
+1. Group candidates by selected experiment.
+2. Stable-shuffle questions inside each experiment.
+3. Round-robin across selected experiments until the target count is reached.
+4. Skip an experiment when its eligible questions are exhausted.
+5. Respect max_questions_per_experiment where enough selected experiments/questions exist.
+```
+
+If selected experiments cannot fill the requested question count, return the underfilled paper instead of failing:
+
+```text
+requested_question_count = 10
+actual_question_count = 3
+warnings.underfilled = true
+```
+
+Only an actual zero-question result should fail.
+
+### 14. Custom Assessment Settings
+
+Global and class settings should include custom assessment controls:
+
+```text
+CustomAssessmentSettings
+├─ enabled = true
+├─ default_question_count = 10
+├─ max_question_count = 20
+└─ max_questions_per_experiment = 3
+```
+
+Allowed student question count options are fixed to `5 / 10 / 15 / 20`; the UI hides options above `max_question_count`. The default question count must be one of the visible options.
 
 ## Risks / Trade-offs
 

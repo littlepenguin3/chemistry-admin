@@ -226,6 +226,10 @@
   margin-top: 14px;
 }
 
+.class-custom-note {
+  margin-top: 8px;
+}
+
 .class-smart-curve {
   display: grid;
   gap: 8px;

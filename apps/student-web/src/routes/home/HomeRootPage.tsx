@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { BookOpenCheck, ClipboardList, FlaskConical, LoaderCircle, MessageCircle, Search, Sparkles } from "lucide-react";
 import { errorMessage, getStudentLearningHome, getStudentLearningPage, type StudentLearningHomeResponse, type StudentLearningPageResponse } from "../../api";
-import { navigateToAiChat, navigateToAssessmentSession, navigateToChapter, navigateToRoot, navigateToVideoLibrary } from "../../app/router/navigation";
+import { navigateToAiChat, navigateToChapter, navigateToRoot, navigateToVideoLibrary } from "../../app/router/navigation";
 import { defaultAssistantContext } from "../../features/assistant/assistantContext";
 import { formatChapterEntryTitle } from "../../features/learning/learningFormat";
 import { MobileButton, MobileEmptyState } from "../../mobile/primitives";
@@ -11,7 +11,7 @@ import { useStudentRuntime } from "../../app/shell/studentAppContext";
 
 export function HomeRootPage() {
   const navigate = useNavigate();
-  const { canUseAssistant, startAssessmentSession, posttestLoading, posttestError } = useStudentRuntime();
+  const { canUseAssistant } = useStudentRuntime();
   const [learningPage, setLearningPage] = useState<StudentLearningPageResponse | null>(null);
   const [learningHome, setLearningHome] = useState<StudentLearningHomeResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,11 +44,6 @@ export function HomeRootPage() {
     return profiles.find((profile) => profile.profile_id === recommendedProfileId) || profiles[0] || null;
   }, [learningPage]);
   const recommendedGroup = learningHome?.groups.find((group) => group.recommended) || learningHome?.groups[0] || null;
-
-  const startAssessment = async () => {
-    const posttest = await startAssessmentSession();
-    if (posttest) navigateToAssessmentSession(navigate, posttest.session_id, "home");
-  };
 
   return (
     <section className="learning-panel home-root-page" aria-label="首页">
@@ -96,14 +91,13 @@ export function HomeRootPage() {
               <span>问 AI</span>
               <strong>{canUseAssistant ? "带着问题进入" : "暂未开放"}</strong>
             </button>
-            <button type="button" className="home-action-card" onClick={startAssessment} disabled={posttestLoading}>
+            <button type="button" className="home-action-card" onClick={() => navigateToRoot(navigate, "assessment")}>
               <ClipboardList size={20} />
               <span>学习测评</span>
-              <strong>{posttestLoading ? "正在创建" : "开始练习"}</strong>
+              <strong>选择练习方式</strong>
             </button>
           </div>
 
-          {posttestError ? <div className="form-error">{posttestError}</div> : null}
           {!recommendedProfile && !recommendedGroup ? (
             <MobileEmptyState className="empty-learning-card" icon={<BookOpenCheck size={20} />}>
               <span>暂无推荐内容，可以先从学习页选择章节。</span>

@@ -7,6 +7,8 @@ import { answerLabel, formatPercent, formatScore } from "./assessmentFormat";
 
 export function PosttestSummaryPanel({ report, onContinue }: { report: StudentSmartAssessmentReport; onContinue: () => void }) {
   const masteryChanges = report.mastery_changes.slice(0, 5);
+  const isCustom = report.assessment_mode === "custom";
+  const targetCount = report.composition.requested_question_count || report.composition.target_question_count;
 
   return (
     <section className="learning-panel" aria-label="学习总结">
@@ -16,7 +18,7 @@ export function PosttestSummaryPanel({ report, onContinue }: { report: StudentSm
         </span>
         <div>
           <p>学习总结</p>
-          <h2>智能测评报告</h2>
+          <h2>{isCustom ? "自主测评报告" : "智能测评报告"}</h2>
           <AiMarkdownBlock className="summary-ai-text" text={report.next_recommendation} />
           <em>
             <Sparkles size={13} />
@@ -43,16 +45,33 @@ export function PosttestSummaryPanel({ report, onContinue }: { report: StudentSm
       </section>
 
       <section className="summary-grid smart-composition-grid">
-        <div>
-          <span>未测实验</span>
-          <strong>{report.composition.untested_question_count}</strong>
-          <small>目标占比 {report.composition.untested_ratio_percent}%</small>
-        </div>
-        <div>
-          <span>薄弱实验</span>
-          <strong>{report.composition.measured_question_count}</strong>
-          <small>薄弱倾向 {report.composition.weak_tendency_percent}%</small>
-        </div>
+        {isCustom ? (
+          <>
+            <div>
+              <span>自选实验</span>
+              <strong>{report.experiments.length}</strong>
+              <small>本轮选择范围</small>
+            </div>
+            <div>
+              <span>组卷题量</span>
+              <strong>{report.total_count}</strong>
+              <small>目标 {targetCount} 题</small>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <span>未测实验</span>
+              <strong>{report.composition.untested_question_count}</strong>
+              <small>目标占比 {report.composition.untested_ratio_percent}%</small>
+            </div>
+            <div>
+              <span>薄弱实验</span>
+              <strong>{report.composition.measured_question_count}</strong>
+              <small>薄弱倾向 {report.composition.weak_tendency_percent}%</small>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="detail-section">
@@ -63,7 +82,7 @@ export function PosttestSummaryPanel({ report, onContinue }: { report: StudentSm
               <FlaskConical size={16} />
               <span>{stripExperimentPrefix(experiment.title)}</span>
               <small>
-                {experiment.source === "untested" ? "未测" : `掌握度 ${formatScore(experiment.mastery_score)}`}
+                {isCustom ? "自选实验" : experiment.source === "untested" ? "未测" : `掌握度 ${formatScore(experiment.mastery_score)}`}
               </small>
             </div>
           ))}

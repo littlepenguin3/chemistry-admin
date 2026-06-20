@@ -7,6 +7,7 @@ export type LearningBehaviorSettings = {
     posttest_enabled: boolean;
     posttest_question_count: number;
     smart_assessment: SmartAssessmentSettings;
+    custom_assessment: CustomAssessmentSettings;
   };
   learning_features: {
     ai_assistant_enabled: boolean;
@@ -23,6 +24,13 @@ export type SmartAssessmentSettings = {
   max_questions_per_experiment: number;
   weak_curve: number;
   weak_max_bonus: number;
+};
+
+export type CustomAssessmentSettings = {
+  enabled: boolean;
+  default_question_count: number;
+  max_question_count: number;
+  max_questions_per_experiment: number;
 };
 
 export type PlatformSettingsResponse = {

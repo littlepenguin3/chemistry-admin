@@ -4,10 +4,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from server.app.domains.platform.settings import SmartAssessmentSettings
+from server.app.domains.platform.settings import CustomAssessmentSettings, SmartAssessmentSettings
 
 
 SmartAssessmentStatus = Literal["in_progress", "completed"]
+AssessmentMode = Literal["smart", "custom"]
 
 
 class PublicSmartAssessmentQuestion(BaseModel):
@@ -29,7 +30,7 @@ class SmartAssessmentExperimentSummary(BaseModel):
     parent_title: str | None = None
     mastery_score: float | None = None
     evidence_count: int = 0
-    source: Literal["measured", "untested"] = "untested"
+    source: Literal["measured", "untested", "custom"] = "untested"
     draw_tickets: float | None = None
     question_count: int = 0
     reason: str | None = None
@@ -38,8 +39,10 @@ class SmartAssessmentExperimentSummary(BaseModel):
 class SmartAssessmentCompositionSummary(BaseModel):
     total_questions: int
     target_question_count: int
+    requested_question_count: int | None = None
     untested_question_count: int = 0
     measured_question_count: int = 0
+    custom_question_count: int = 0
     untested_ratio_percent: int = 0
     weak_tendency_percent: int = 0
     max_questions_per_experiment: int = 1
@@ -49,6 +52,7 @@ class SmartAssessmentCompositionSummary(BaseModel):
 class StudentSmartAssessmentResponse(BaseModel):
     status: SmartAssessmentStatus
     session_id: str
+    assessment_mode: AssessmentMode = "smart"
     strategy: SmartAssessmentSettings
     composition: SmartAssessmentCompositionSummary
     experiments: list[SmartAssessmentExperimentSummary] = Field(default_factory=list)
@@ -89,6 +93,7 @@ class StudentSmartAssessmentMasteryChange(BaseModel):
 
 class StudentSmartAssessmentReport(BaseModel):
     session_id: str
+    assessment_mode: AssessmentMode = "smart"
     strategy: SmartAssessmentSettings
     composition: SmartAssessmentCompositionSummary
     experiments: list[SmartAssessmentExperimentSummary] = Field(default_factory=list)
@@ -112,6 +117,41 @@ class StudentSmartAssessmentSubmitResponse(BaseModel):
 class SmartAssessmentStrategyResponse(BaseModel):
     strategy: SmartAssessmentSettings
     inherited_strategy: SmartAssessmentSettings
+    source: Literal["system_default", "class"] = "system_default"
+    has_override: bool = False
+    can_edit: bool = False
+
+
+class CustomAssessmentExperimentOption(BaseModel):
+    id: str
+    code: str
+    title: str
+    parent_code: str | None = None
+    parent_title: str | None = None
+    question_count: int = 0
+
+
+class CustomAssessmentOptionsSettings(BaseModel):
+    enabled: bool = True
+    question_count_options: list[int] = Field(default_factory=list)
+    default_question_count: int = 10
+    max_question_count: int = 20
+    max_questions_per_experiment: int = 3
+
+
+class StudentCustomAssessmentOptionsResponse(BaseModel):
+    settings: CustomAssessmentOptionsSettings
+    experiments: list[CustomAssessmentExperimentOption] = Field(default_factory=list)
+
+
+class StudentCustomAssessmentStartRequest(BaseModel):
+    experiment_ids: list[str] = Field(min_length=1)
+    question_count: int
+
+
+class CustomAssessmentSettingsResponse(BaseModel):
+    settings: CustomAssessmentSettings
+    inherited_settings: CustomAssessmentSettings
     source: Literal["system_default", "class"] = "system_default"
     has_override: bool = False
     can_edit: bool = False

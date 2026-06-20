@@ -28,12 +28,17 @@ from server.app.domains.assessments.posttest import (
 from server.app.domains.assessments.pretest import _ensure_student_row, _load_student_context
 from server.app.domains.assessments.student_experiment import _grade_answer
 from server.app.domains.errors import DomainHTTPException as HTTPException, domain_status as status
-from server.app.domains.platform.settings import SmartAssessmentSettings, get_learning_behavior_settings
+from server.app.domains.platform.settings import CustomAssessmentSettings, SmartAssessmentSettings, get_learning_behavior_settings
 from server.app.domains.roster.classes import require_class_access
 from server.app.infrastructure.database import db_session
 from server.app.mastery import update_mastery
 from server.app.student_smart_assessment_schemas import (
+    CustomAssessmentExperimentOption,
+    CustomAssessmentOptionsSettings,
+    CustomAssessmentSettingsResponse,
     PublicSmartAssessmentQuestion,
+    StudentCustomAssessmentOptionsResponse,
+    StudentCustomAssessmentStartRequest,
     SmartAssessmentCompositionSummary,
     SmartAssessmentExperimentSummary,
     SmartAssessmentStrategyResponse,
@@ -44,6 +49,7 @@ from server.app.student_smart_assessment_schemas import (
     StudentSmartAssessmentWrongAnswer,
 )
 
+CUSTOM_QUESTION_COUNT_OPTIONS = [5, 10, 15, 20]
 
 _CREATE_SMART_ASSESSMENT_SQL = """
 CREATE TABLE IF NOT EXISTS student_smart_assessment_sessions (
@@ -51,6 +57,7 @@ CREATE TABLE IF NOT EXISTS student_smart_assessment_sessions (
   student_id text NOT NULL,
   class_id text REFERENCES classes(id) ON DELETE SET NULL,
   status text NOT NULL DEFAULT 'in_progress' CHECK (status IN ('in_progress', 'completed', 'abandoned')),
+  assessment_mode text NOT NULL DEFAULT 'smart',
   strategy_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
   composition_summary jsonb NOT NULL DEFAULT '{}'::jsonb,
   experiment_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
@@ -77,7 +84,18 @@ ON student_smart_assessment_sessions(student_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_student_smart_assessment_sessions_class
 ON student_smart_assessment_sessions(class_id, status, created_at DESC);
 
+CREATE INDEX IF NOT EXISTS idx_student_smart_assessment_sessions_mode
+ON student_smart_assessment_sessions(assessment_mode, status, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS class_smart_assessment_settings (
+  class_id text PRIMARY KEY REFERENCES classes(id) ON DELETE CASCADE,
+  value jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_by uuid REFERENCES app_users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS class_custom_assessment_settings (
   class_id text PRIMARY KEY REFERENCES classes(id) ON DELETE CASCADE,
   value jsonb NOT NULL DEFAULT '{}'::jsonb,
   updated_by uuid REFERENCES app_users(id) ON DELETE SET NULL,
@@ -89,6 +107,7 @@ CREATE TABLE IF NOT EXISTS class_smart_assessment_settings (
 
 def _ensure_tables(session: Any) -> None:
     session.connection().exec_driver_sql(_CREATE_SMART_ASSESSMENT_SQL)
+    session.execute(text("ALTER TABLE student_smart_assessment_sessions ADD COLUMN IF NOT EXISTS assessment_mode text NOT NULL DEFAULT 'smart'"))
 
 
 def _model_dump(model: Any) -> dict[str, Any]:
@@ -102,6 +121,33 @@ def _strategy_from_value(value: Any, fallback: SmartAssessmentSettings | None = 
     if isinstance(value, dict):
         base.update(value)
     return SmartAssessmentSettings(**base)
+
+
+def _custom_settings_from_value(value: Any, fallback: CustomAssessmentSettings | None = None) -> CustomAssessmentSettings:
+    base = _model_dump(fallback or CustomAssessmentSettings())
+    if isinstance(value, dict):
+        base.update(value)
+    settings = CustomAssessmentSettings(**base)
+    max_count = max(option for option in CUSTOM_QUESTION_COUNT_OPTIONS if option <= settings.max_question_count)
+    default_count = settings.default_question_count
+    if default_count not in CUSTOM_QUESTION_COUNT_OPTIONS or default_count > max_count:
+        default_count = min((option for option in CUSTOM_QUESTION_COUNT_OPTIONS if option <= max_count), key=lambda option: abs(option - max_count))
+    return CustomAssessmentSettings(
+        enabled=settings.enabled,
+        default_question_count=default_count,
+        max_question_count=max_count,
+        max_questions_per_experiment=settings.max_questions_per_experiment,
+    )
+
+
+def _custom_options_settings(settings: CustomAssessmentSettings) -> CustomAssessmentOptionsSettings:
+    return CustomAssessmentOptionsSettings(
+        enabled=settings.enabled,
+        question_count_options=[option for option in CUSTOM_QUESTION_COUNT_OPTIONS if option <= settings.max_question_count],
+        default_question_count=settings.default_question_count,
+        max_question_count=settings.max_question_count,
+        max_questions_per_experiment=settings.max_questions_per_experiment,
+    )
 
 
 def _load_class_strategy_override(session: Any, class_id: str | None) -> dict[str, Any] | None:
@@ -127,6 +173,33 @@ def _effective_strategy(session: Any, class_id: str | None) -> tuple[SmartAssess
     if override is None:
         return inherited, inherited, False
     return _strategy_from_value(override, inherited), inherited, True
+
+
+def _load_class_custom_override(session: Any, class_id: str | None) -> dict[str, Any] | None:
+    if not class_id:
+        return None
+    _ensure_tables(session)
+    row = (
+        session.execute(
+            text("SELECT value FROM class_custom_assessment_settings WHERE class_id = :class_id"),
+            {"class_id": class_id},
+        )
+        .mappings()
+        .first()
+    )
+    if not row or not isinstance(row.get("value"), dict):
+        return None
+    return dict(row["value"])
+
+
+def _effective_custom_settings(session: Any, class_id: str | None) -> tuple[CustomAssessmentSettings, CustomAssessmentSettings, bool]:
+    inherited = get_learning_behavior_settings().assessment.custom_assessment
+    override = _load_class_custom_override(session, class_id)
+    if override is None:
+        inherited = _custom_settings_from_value(_model_dump(inherited))
+        return inherited, inherited, False
+    inherited = _custom_settings_from_value(_model_dump(inherited))
+    return _custom_settings_from_value(override, inherited), inherited, True
 
 
 def _ensure_class_exists(session: Any, class_id: str) -> None:
@@ -196,6 +269,73 @@ def clear_class_smart_assessment_strategy(class_id: str, user: Any) -> SmartAsse
     return SmartAssessmentStrategyResponse(
         strategy=inherited,
         inherited_strategy=inherited,
+        source="system_default",
+        has_override=False,
+        can_edit=True,
+    )
+
+
+def get_class_custom_assessment_settings(class_id: str, user: Any) -> CustomAssessmentSettingsResponse:
+    require_class_access(class_id, user)
+    with db_session() as session:
+        _ensure_tables(session)
+        _ensure_class_exists(session, class_id)
+        settings, inherited, has_override = _effective_custom_settings(session, class_id)
+    return CustomAssessmentSettingsResponse(
+        settings=settings,
+        inherited_settings=inherited,
+        source="class" if has_override else "system_default",
+        has_override=has_override,
+        can_edit=True,
+    )
+
+
+def update_class_custom_assessment_settings(
+    payload: CustomAssessmentSettings,
+    class_id: str,
+    user: Any,
+) -> CustomAssessmentSettingsResponse:
+    require_class_access(class_id, user)
+    with db_session() as session:
+        _ensure_tables(session)
+        _ensure_class_exists(session, class_id)
+        _current, inherited, _has_override = _effective_custom_settings(session, class_id)
+        settings = _custom_settings_from_value(_model_dump(payload), inherited)
+        session.execute(
+            text(
+                """
+                INSERT INTO class_custom_assessment_settings (class_id, value, updated_by, updated_at)
+                VALUES (:class_id, CAST(:value AS jsonb), CAST(:updated_by AS uuid), now())
+                ON CONFLICT (class_id) DO UPDATE SET
+                  value = EXCLUDED.value,
+                  updated_by = EXCLUDED.updated_by,
+                  updated_at = now()
+                """
+            ),
+            {"class_id": class_id, "value": _json(_model_dump(settings)), "updated_by": user.id},
+        )
+    return CustomAssessmentSettingsResponse(
+        settings=settings,
+        inherited_settings=inherited,
+        source="class",
+        has_override=True,
+        can_edit=True,
+    )
+
+
+def clear_class_custom_assessment_settings(class_id: str, user: Any) -> CustomAssessmentSettingsResponse:
+    require_class_access(class_id, user)
+    with db_session() as session:
+        _ensure_tables(session)
+        _ensure_class_exists(session, class_id)
+        session.execute(
+            text("DELETE FROM class_custom_assessment_settings WHERE class_id = :class_id"),
+            {"class_id": class_id},
+        )
+        inherited = _custom_settings_from_value(_model_dump(get_learning_behavior_settings().assessment.custom_assessment))
+    return CustomAssessmentSettingsResponse(
+        settings=inherited,
+        inherited_settings=inherited,
         source="system_default",
         has_override=False,
         can_edit=True,
@@ -278,6 +418,47 @@ def _load_all_published_candidates(session: Any) -> list[PosttestQuestionCandida
     return candidates
 
 
+def _custom_options_from_candidates(
+    session: Any,
+    candidates: list[PosttestQuestionCandidate],
+) -> list[CustomAssessmentExperimentOption]:
+    counts: dict[str, int] = {}
+    for question in candidates:
+        counts[question.experiment_id] = counts.get(question.experiment_id, 0) + 1
+    experiment_ids = sorted(counts)
+    if not experiment_ids:
+        return []
+    rows = session.execute(
+        text(
+            """
+            SELECT id, code, title, metadata, display_order
+            FROM formal_experiments
+            WHERE id = ANY(:experiment_ids)
+              AND status = 'published'
+            ORDER BY display_order, code
+            """
+        ),
+        {"experiment_ids": experiment_ids},
+    ).mappings()
+    options: list[CustomAssessmentExperimentOption] = []
+    for row in rows:
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        question_count = counts.get(str(row["id"]), 0)
+        if question_count <= 0:
+            continue
+        options.append(
+            CustomAssessmentExperimentOption(
+                id=str(row["id"]),
+                code=str(row.get("code") or ""),
+                title=str(row.get("title") or row["id"]),
+                parent_code=str(metadata.get("parent_code")) if metadata.get("parent_code") else None,
+                parent_title=str(metadata.get("parent_title")) if metadata.get("parent_title") else None,
+                question_count=question_count,
+            )
+        )
+    return options
+
+
 def _ordered_experiment_ids(candidates: list[PosttestQuestionCandidate]) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
@@ -341,6 +522,7 @@ def _ordered_question_pools(
     candidates: list[PosttestQuestionCandidate],
     *,
     student_id: str,
+    seed_namespace: str = "smart-assessment",
 ) -> dict[str, list[PosttestQuestionCandidate]]:
     pools: dict[str, list[PosttestQuestionCandidate]] = defaultdict(list)
     for question in candidates:
@@ -348,7 +530,7 @@ def _ordered_question_pools(
     return {
         experiment_id: sorted(
             pool,
-            key=lambda question: (_stable_hash(f"{student_id}:smart-assessment:{experiment_id}:{question.id}"), question.id),
+            key=lambda question: (_stable_hash(f"{student_id}:{seed_namespace}:{experiment_id}:{question.id}"), question.id),
         )
         for experiment_id, pool in pools.items()
     }
@@ -529,6 +711,62 @@ def _compose_questions(
     return selected, composition, experiment_meta
 
 
+def _compose_custom_questions(
+    *,
+    candidates: list[PosttestQuestionCandidate],
+    selected_experiment_ids: list[str],
+    settings: CustomAssessmentSettings,
+    student_id: str,
+    requested_question_count: int,
+) -> tuple[list[PosttestQuestionCandidate], SmartAssessmentCompositionSummary, dict[str, dict[str, Any]]]:
+    selected_set = set(selected_experiment_ids)
+    filtered = [question for question in candidates if question.experiment_id in selected_set]
+    pools = _ordered_question_pools(filtered, student_id=student_id, seed_namespace="custom-assessment")
+    order = [experiment_id for experiment_id in selected_experiment_ids if pools.get(experiment_id)]
+    used: set[str] = set()
+    counts: dict[str, int] = {}
+    selected: list[PosttestQuestionCandidate] = []
+    experiment_meta: dict[str, dict[str, Any]] = {
+        experiment_id: {
+            "source": "custom",
+            "draw_tickets": None,
+            "question_count": 0,
+            "reason": "学生自主选择本轮要练习的实验",
+        }
+        for experiment_id in order
+    }
+    target_count = min(requested_question_count, settings.max_question_count)
+    _take_questions(
+        order=order,
+        pools=pools,
+        quota=target_count,
+        max_per_experiment=settings.max_questions_per_experiment,
+        used=used,
+        counts=counts,
+        selected=selected,
+        source="custom",
+        experiment_meta=experiment_meta,
+    )
+    selected_experiments = {question.experiment_id for question in selected}
+    experiment_meta = {
+        experiment_id: {**meta, "question_count": int(meta.get("question_count") or 0)}
+        for experiment_id, meta in experiment_meta.items()
+        if experiment_id in selected_experiments
+    }
+    composition = SmartAssessmentCompositionSummary(
+        total_questions=len(selected),
+        target_question_count=target_count,
+        requested_question_count=requested_question_count,
+        custom_question_count=len(selected),
+        max_questions_per_experiment=settings.max_questions_per_experiment,
+        warnings={
+            "underfilled": len(selected) < target_count,
+            "selected_experiment_count": len(selected_experiment_ids),
+        },
+    )
+    return selected, composition, experiment_meta
+
+
 def _composition_from_row(row: dict[str, Any], strategy: SmartAssessmentSettings) -> SmartAssessmentCompositionSummary:
     value = row.get("composition_summary")
     if isinstance(value, dict) and value:
@@ -557,6 +795,8 @@ def _experiments_for_session(
         mastery = mastery_before.get(summary.id) if isinstance(mastery_before.get(summary.id), dict) else {}
         source_meta = meta.get(summary.id) if isinstance(meta.get(summary.id), dict) else {}
         source = str(source_meta.get("source") or ("measured" if int(mastery.get("evidence_count") or 0) > 0 else "untested"))
+        if source not in {"measured", "untested", "custom"}:
+            source = "untested"
         results.append(
             SmartAssessmentExperimentSummary(
                 id=summary.id,
@@ -566,7 +806,7 @@ def _experiments_for_session(
                 parent_title=summary.parent_title,
                 mastery_score=float(mastery.get("mastery_score")) if mastery.get("mastery_score") is not None else None,
                 evidence_count=int(mastery.get("evidence_count") or 0),
-                source="measured" if source == "measured" else "untested",
+                source=source,  # type: ignore[arg-type]
                 draw_tickets=float(source_meta.get("draw_tickets")) if source_meta.get("draw_tickets") is not None else None,
                 question_count=int(source_meta.get("question_count") or 0),
                 reason=str(source_meta.get("reason")) if source_meta.get("reason") else None,
@@ -585,6 +825,7 @@ def _response_for_session(session: Any, row: dict[str, Any]) -> StudentSmartAsse
     return StudentSmartAssessmentResponse(
         status="in_progress",
         session_id=str(row["id"]),
+        assessment_mode="custom" if row.get("assessment_mode") == "custom" else "smart",
         strategy=strategy,
         composition=_composition_from_row(row, strategy),
         experiments=_experiments_for_session(
@@ -594,6 +835,18 @@ def _response_for_session(session: Any, row: dict[str, Any]) -> StudentSmartAsse
             metadata=metadata,
         ),
         questions=[_public_question(question) for question in ordered_questions],
+    )
+
+
+def _custom_strategy_snapshot(settings: CustomAssessmentSettings, question_count: int) -> SmartAssessmentSettings:
+    return SmartAssessmentSettings(
+        enabled=settings.enabled,
+        question_count=question_count,
+        untested_ratio_percent=0,
+        weak_tendency_percent=0,
+        max_questions_per_experiment=settings.max_questions_per_experiment,
+        weak_curve=2.0,
+        weak_max_bonus=9.0,
     )
 
 
@@ -644,11 +897,11 @@ def start_student_smart_assessment(user: Any) -> StudentSmartAssessmentResponse:
                 text(
                     """
                     INSERT INTO student_smart_assessment_sessions (
-                      student_id, class_id, status, strategy_snapshot, composition_summary,
+                      student_id, class_id, status, assessment_mode, strategy_snapshot, composition_summary,
                       experiment_ids, question_ids, mastery_before, metadata
                     )
                     VALUES (
-                      :student_id, :class_id, 'in_progress',
+                      :student_id, :class_id, 'in_progress', 'smart',
                       CAST(:strategy_snapshot AS jsonb), CAST(:composition_summary AS jsonb),
                       CAST(:experiment_ids AS jsonb), CAST(:question_ids AS jsonb),
                       CAST(:mastery_before AS jsonb), CAST(:metadata AS jsonb)
@@ -692,6 +945,143 @@ def start_student_smart_assessment(user: Any) -> StudentSmartAssessmentResponse:
         return _response_for_session(session, dict(row))
 
 
+def get_student_custom_assessment_options(user: Any) -> StudentCustomAssessmentOptionsResponse:
+    with db_session() as session:
+        _ensure_tables(session)
+        context = _load_student_context(session, user)
+        settings, _inherited, _has_override = _effective_custom_settings(session, context.class_id)
+        candidates = _load_all_published_candidates(session) if settings.enabled else []
+        return StudentCustomAssessmentOptionsResponse(
+            settings=_custom_options_settings(settings),
+            experiments=_custom_options_from_candidates(session, candidates),
+        )
+
+
+def start_student_custom_assessment(
+    user: Any,
+    payload: StudentCustomAssessmentStartRequest,
+) -> StudentSmartAssessmentResponse:
+    requested_experiment_ids: list[str] = []
+    seen_requested: set[str] = set()
+    for experiment_id in payload.experiment_ids:
+        experiment_id = str(experiment_id).strip()
+        if experiment_id and experiment_id not in seen_requested:
+            requested_experiment_ids.append(experiment_id)
+            seen_requested.add(experiment_id)
+    if not requested_experiment_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Select at least one experiment")
+
+    with db_session() as session:
+        _ensure_tables(session)
+        context = _load_student_context(session, user)
+        _ensure_student_row(session, context)
+        settings, _inherited, _has_override = _effective_custom_settings(session, context.class_id)
+        if not settings.enabled:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Custom assessment is disabled")
+
+        existing = _load_open_session(session, context.student_id)
+        if existing:
+            return _response_for_session(session, existing)
+
+        options_settings = _custom_options_settings(settings)
+        if payload.question_count not in options_settings.question_count_options:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question count is not allowed")
+
+        candidates = _load_all_published_candidates(session)
+        options = _custom_options_from_candidates(session, candidates)
+        allowed_ids = {option.id for option in options}
+        invalid_ids = [experiment_id for experiment_id in requested_experiment_ids if experiment_id not in allowed_ids]
+        if invalid_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"message": "Selected experiments are not available for custom assessment", "experiment_ids": invalid_ids},
+            )
+        if not candidates or not options:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Custom assessment question bank is not configured")
+
+        selected, composition, experiment_meta = _compose_custom_questions(
+            candidates=candidates,
+            selected_experiment_ids=requested_experiment_ids,
+            settings=settings,
+            student_id=context.student_id,
+            requested_question_count=payload.question_count,
+        )
+        if not selected:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Selected experiments do not have available questions")
+
+        experiment_ids = []
+        seen: set[str] = set()
+        for question in selected:
+            if question.experiment_id in seen:
+                continue
+            seen.add(question.experiment_id)
+            experiment_ids.append(question.experiment_id)
+        experiments = _load_experiment_summaries(session, experiment_ids)
+        mastery_before = _experiment_mastery_snapshot(session, student_id=context.student_id, experiments=experiments)
+        strategy = _custom_strategy_snapshot(settings, composition.target_question_count)
+        metadata = {
+            "assessment_mode": "custom",
+            "experiment_sources": experiment_meta,
+            "candidate_experiment_count": len(options),
+            "requested_experiment_ids": requested_experiment_ids,
+            "selected_experiment_count": len(experiment_ids),
+            "custom_assessment_settings": _model_dump(settings),
+        }
+
+        row = (
+            session.execute(
+                text(
+                    """
+                    INSERT INTO student_smart_assessment_sessions (
+                      student_id, class_id, status, assessment_mode, strategy_snapshot, composition_summary,
+                      experiment_ids, question_ids, mastery_before, metadata
+                    )
+                    VALUES (
+                      :student_id, :class_id, 'in_progress', 'custom',
+                      CAST(:strategy_snapshot AS jsonb), CAST(:composition_summary AS jsonb),
+                      CAST(:experiment_ids AS jsonb), CAST(:question_ids AS jsonb),
+                      CAST(:mastery_before AS jsonb), CAST(:metadata AS jsonb)
+                    )
+                    RETURNING *
+                    """
+                ),
+                {
+                    "student_id": context.student_id,
+                    "class_id": context.class_id,
+                    "strategy_snapshot": _json(_model_dump(strategy)),
+                    "composition_summary": _json(_model_dump(composition)),
+                    "experiment_ids": _json_array(experiment_ids),
+                    "question_ids": _json_array(_question_ids(selected)),
+                    "mastery_before": _json(mastery_before),
+                    "metadata": _json(metadata),
+                },
+            )
+            .mappings()
+            .one()
+        )
+        session.execute(
+            text(
+                """
+                INSERT INTO student_events (student_id, event_type, difficulty, metadata, created_at)
+                VALUES (:student_id, 'custom_assessment_started', 'basic', CAST(:metadata AS jsonb), now())
+                """
+            ),
+            {
+                "student_id": context.student_id,
+                "metadata": _json(
+                    {
+                        "smart_assessment_session_id": str(row["id"]),
+                        "assessment_mode": "custom",
+                        "experiment_ids": experiment_ids,
+                        "question_count": len(selected),
+                        "requested_question_count": payload.question_count,
+                    }
+                ),
+            },
+        )
+        return _response_for_session(session, dict(row))
+
+
 def _validate_submitted_answers(question_ids: list[str], payload: StudentSmartAssessmentSubmitRequest) -> dict[str, Any]:
     expected = set(question_ids)
     submitted = {answer.question_id for answer in payload.answers}
@@ -700,7 +1090,7 @@ def _validate_submitted_answers(question_ids: list[str], payload: StudentSmartAs
         extra = sorted(submitted - expected)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"message": "Submitted answers must match the smart assessment questions", "missing": missing, "extra": extra},
+            detail={"message": "Submitted answers must match the assessment questions", "missing": missing, "extra": extra},
         )
     return {answer.question_id: answer.answer for answer in payload.answers}
 
@@ -711,10 +1101,12 @@ def _insert_attempts(
     student_id: str,
     class_id: str | None,
     smart_assessment_session_id: str,
+    assessment_mode: str,
     questions: list[PosttestQuestionCandidate],
     answers: dict[str, Any],
 ) -> list[dict[str, Any]]:
     graded: list[dict[str, Any]] = []
+    attempt_kind = "custom_assessment" if assessment_mode == "custom" else "smart_assessment"
     for question in questions:
         submitted = answers[question.id]
         correct = _grade_answer(question.question_type, question.answer, submitted)
@@ -728,7 +1120,7 @@ def _insert_attempts(
                 )
                 VALUES (
                   :student_id, :class_id, :experiment_id, CAST(:question_id AS uuid), :question_type,
-                  CAST(:submitted_answer AS jsonb), :correct, :score, 'smart_assessment', CAST(:metadata AS jsonb)
+                  CAST(:submitted_answer AS jsonb), :correct, :score, :attempt_kind, CAST(:metadata AS jsonb)
                 )
                 """
             ),
@@ -741,9 +1133,11 @@ def _insert_attempts(
                 "submitted_answer": _json({"value": submitted}),
                 "correct": correct,
                 "score": 1 if correct else 0,
+                "attempt_kind": attempt_kind,
                 "metadata": _json(
                     {
                         "smart_assessment_session_id": smart_assessment_session_id,
+                        "assessment_mode": assessment_mode,
                         "related_chapter_ids": question.related_chapter_ids,
                         "related_knowledge_point_ids": question.related_knowledge_point_ids,
                     }
@@ -773,12 +1167,19 @@ def _update_mastery_from_smart_assessment(session: Any, *, student_id: str, smar
         .mappings()
         .all()
     ]
+    assessment_mode = "smart"
+    mode_value = session.execute(
+        text("SELECT assessment_mode FROM student_smart_assessment_sessions WHERE id = CAST(:id AS uuid)"),
+        {"id": smart_assessment_session_id},
+    ).scalar_one_or_none()
+    if mode_value == "custom":
+        assessment_mode = "custom"
     update_experiment_mastery_from_attempt_rows(
         session,
         student_id=student_id,
         class_id=next((str(row.get("class_id")) for row in attempt_rows if row.get("class_id")), None),
         attempt_rows=attempt_rows,
-        evidence_kind="smart_assessment",
+        evidence_kind="custom_assessment" if assessment_mode == "custom" else "smart_assessment",
         evidence_id=smart_assessment_session_id,
     )
     kp_ids = sorted(
@@ -857,7 +1258,9 @@ def _update_experiment_progress(
     score: float,
     correct_count: int,
     total_count: int,
+    assessment_mode: str = "smart",
 ) -> None:
+    attempt_kind = "custom_assessment" if assessment_mode == "custom" else "smart_assessment"
     status_value = "completed" if total_count and score >= 60 else ("needs_attention" if total_count else "in_progress")
     for experiment_id in experiment_ids:
         session.execute(
@@ -891,7 +1294,8 @@ def _update_experiment_progress(
                 "score": score,
                 "metadata": _json(
                     {
-                        "attempt_kind": "smart_assessment",
+                        "attempt_kind": attempt_kind,
+                        "assessment_mode": assessment_mode,
                         "correct_count": correct_count,
                         "total_count": total_count,
                         "score": score,
@@ -935,11 +1339,17 @@ def _build_report(
         if not item["correct"]
     ]
     recommendation = "本轮智能测评已全部答对，可以继续挑战更薄弱的实验。"
+    assessment_mode = "custom" if row.get("assessment_mode") == "custom" else "smart"
+    if assessment_mode == "custom":
+        recommendation = "本轮自主测评已完成，可以根据错题回顾继续复习相关实验。"
     if wrong_answers:
         recommendation = "优先复习错题对应的实验现象和解释；系统会在下一轮继续提高薄弱实验的抽中权重。"
+        if assessment_mode == "custom":
+            recommendation = "优先复习本次自选实验中的错题，再按需要重新选择实验练习。"
     strategy = _strategy_from_value(row.get("strategy_snapshot") if isinstance(row.get("strategy_snapshot"), dict) else {})
     return StudentSmartAssessmentReport(
         session_id=session_id,
+        assessment_mode=assessment_mode,
         strategy=strategy,
         composition=_composition_from_row(row, strategy),
         experiments=experiments,
@@ -963,7 +1373,8 @@ def submit_student_smart_assessment(user: Any, payload: StudentSmartAssessmentSu
         _ensure_student_row(session, context)
         current = _load_open_session(session, context.student_id)
         if not current or str(current["id"]) != payload.session_id:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No active smart assessment session")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No active assessment session")
+        assessment_mode = "custom" if current.get("assessment_mode") == "custom" else "smart"
 
         question_ids = _session_question_ids(current)
         answers = _validate_submitted_answers(question_ids, payload)
@@ -978,6 +1389,7 @@ def submit_student_smart_assessment(user: Any, payload: StudentSmartAssessmentSu
             student_id=context.student_id,
             class_id=context.class_id,
             smart_assessment_session_id=session_id,
+            assessment_mode=assessment_mode,
             questions=ordered_questions,
             answers=answers,
         )
@@ -1003,6 +1415,7 @@ def submit_student_smart_assessment(user: Any, payload: StudentSmartAssessmentSu
             score=score,
             correct_count=correct_count,
             total_count=total_count,
+            assessment_mode=assessment_mode,
         )
         session.execute(
             text(
@@ -1011,16 +1424,18 @@ def submit_student_smart_assessment(user: Any, payload: StudentSmartAssessmentSu
                   student_id, event_type, difficulty, correct, metadata, created_at
                 )
                 VALUES (
-                  :student_id, 'smart_assessment_submit', 'basic', :correct, CAST(:metadata AS jsonb), now()
+                  :student_id, :event_type, 'basic', :correct, CAST(:metadata AS jsonb), now()
                 )
                 """
             ),
             {
                 "student_id": context.student_id,
+                "event_type": "custom_assessment_submit" if assessment_mode == "custom" else "smart_assessment_submit",
                 "correct": score >= 60 if total_count else None,
                 "metadata": _json(
                     {
                         "smart_assessment_session_id": session_id,
+                        "assessment_mode": assessment_mode,
                         "experiment_ids": experiment_ids,
                         "score": score,
                         "correct_count": correct_count,

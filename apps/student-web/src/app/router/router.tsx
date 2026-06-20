@@ -8,6 +8,7 @@ import { ExperimentPointPage } from "../../routes/learn/ExperimentPointPage";
 import { AiRootPage } from "../../routes/ai/AiRootPage";
 import { AiChatPage } from "../../routes/ai/AiChatPage";
 import { AssessmentRootPage } from "../../routes/assessment/AssessmentRootPage";
+import { AssessmentCustomPage } from "../../routes/assessment/AssessmentCustomPage";
 import { AssessmentSessionPage } from "../../routes/assessment/AssessmentSessionPage";
 import { AssessmentReportPage } from "../../routes/assessment/AssessmentReportPage";
 import { ProfileRootPage } from "../../routes/profile/ProfileRootPage";
@@ -93,6 +94,13 @@ const assessmentRootRoute = createRoute({
   component: AssessmentRootPage,
 });
 
+const assessmentCustomRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: "/assessment/custom",
+  validateSearch: parseStudentRouteSearch,
+  component: AssessmentCustomPage,
+});
+
 const assessmentSessionRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/assessment/session/$sessionId",
@@ -132,6 +140,7 @@ const routeTree = rootRoute.addChildren([
     aiRoute,
     aiChatRoute,
     assessmentRootRoute,
+    assessmentCustomRoute,
     assessmentSessionRoute,
     assessmentReportRoute,
     profileRoute,

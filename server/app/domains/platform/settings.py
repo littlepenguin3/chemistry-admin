@@ -26,12 +26,20 @@ class SmartAssessmentSettings(BaseModel):
     weak_max_bonus: float = Field(default=9.0, ge=1.0, le=20.0)
 
 
+class CustomAssessmentSettings(BaseModel):
+    enabled: bool = True
+    default_question_count: int = Field(default=10, ge=5, le=20)
+    max_question_count: int = Field(default=20, ge=5, le=20)
+    max_questions_per_experiment: int = Field(default=3, ge=1, le=10)
+
+
 class AssessmentSettings(BaseModel):
     pretest_enabled: bool = True
     pretest_question_count: int = Field(default=8, ge=1, le=50)
     posttest_enabled: bool = True
     posttest_question_count: int = Field(default=8, ge=1, le=50)
     smart_assessment: SmartAssessmentSettings = Field(default_factory=SmartAssessmentSettings)
+    custom_assessment: CustomAssessmentSettings = Field(default_factory=CustomAssessmentSettings)
 
 
 class LearningFeatureSettings(BaseModel):

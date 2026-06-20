@@ -6,11 +6,14 @@ from fastapi import APIRouter, Depends, File, Form, Path, UploadFile
 
 from server.app.auth import AuthUser, require_roles
 from server.app.domains.assessments.smart_assessment import (
+    clear_class_custom_assessment_settings,
     clear_class_smart_assessment_strategy,
+    get_class_custom_assessment_settings,
     get_class_smart_assessment_strategy,
+    update_class_custom_assessment_settings,
     update_class_smart_assessment_strategy,
 )
-from server.app.domains.platform.settings import SmartAssessmentSettings
+from server.app.domains.platform.settings import CustomAssessmentSettings, SmartAssessmentSettings
 from server.app.domains.roster.classes import (
     ClassCreateRequest,
     ClassResponse,
@@ -39,7 +42,7 @@ from server.app.domains.roster.classes import (
     update_registration_settings,
     update_roster_student,
 )
-from server.app.student_smart_assessment_schemas import SmartAssessmentStrategyResponse
+from server.app.student_smart_assessment_schemas import CustomAssessmentSettingsResponse, SmartAssessmentStrategyResponse
 
 
 router = APIRouter(prefix="/api/admin", tags=["admin-classes"])
@@ -105,6 +108,31 @@ async def admin_clear_class_smart_assessment_strategy(
     user: AuthUser = Depends(require_roles("admin", "teacher")),
 ) -> SmartAssessmentStrategyResponse:
     return clear_class_smart_assessment_strategy(class_id, user)
+
+
+@router.get("/classes/{class_id}/custom-assessment-settings", response_model=CustomAssessmentSettingsResponse)
+async def admin_get_class_custom_assessment_settings(
+    class_id: str = Path(min_length=1),
+    user: AuthUser = Depends(require_roles("admin", "teacher")),
+) -> CustomAssessmentSettingsResponse:
+    return get_class_custom_assessment_settings(class_id, user)
+
+
+@router.put("/classes/{class_id}/custom-assessment-settings", response_model=CustomAssessmentSettingsResponse)
+async def admin_update_class_custom_assessment_settings(
+    payload: CustomAssessmentSettings,
+    class_id: str = Path(min_length=1),
+    user: AuthUser = Depends(require_roles("admin", "teacher")),
+) -> CustomAssessmentSettingsResponse:
+    return update_class_custom_assessment_settings(payload, class_id, user)
+
+
+@router.delete("/classes/{class_id}/custom-assessment-settings", response_model=CustomAssessmentSettingsResponse)
+async def admin_clear_class_custom_assessment_settings(
+    class_id: str = Path(min_length=1),
+    user: AuthUser = Depends(require_roles("admin", "teacher")),
+) -> CustomAssessmentSettingsResponse:
+    return clear_class_custom_assessment_settings(class_id, user)
 
 
 @router.post("/classes", response_model=ClassResponse)
