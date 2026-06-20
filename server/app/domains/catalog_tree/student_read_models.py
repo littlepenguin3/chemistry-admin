@@ -103,6 +103,7 @@ def student_point_detail(*, node_id: str) -> dict[str, Any]:
             "principle_mode": content.get("principle_mode") or "text",
             "principle_equation": content.get("principle_equation"),
             "principle_text": content.get("principle_text"),
+            "reaction_equations": content.get("reaction_equations") if content.get("principle_mode") == "equation" else [],
             "phenomenon_explanation": content.get("phenomenon_explanation"),
             "safety_note": content.get("safety_note"),
             "videos": videos,

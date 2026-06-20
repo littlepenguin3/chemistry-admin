@@ -10,6 +10,7 @@ from typing import Any
 from server.app.domains.errors import DomainHTTPException as HTTPException, domain_status as status
 from sqlalchemy import text
 
+from server.app.domains.catalog_tree.equations import list_reaction_equations, reaction_principle_text
 from server.app.infrastructure.settings import get_settings
 from server.app.infrastructure.database import db_session
 from server.app.experiment_admin_schemas import (
@@ -266,13 +267,15 @@ def _teacher_point_content_context(
         if not row:
             return {"available": False, "content_status": "missing", "source_role": "student_page_context_only"}
         data = dict(row)
+        data["reaction_equations"] = list_reaction_equations(session, point_node_id) if data.get("principle_mode") == "equation" else []
         return {
             "available": data.get("content_status") == "published",
             "point_node_id": point_node_id,
             "point_title": data.get("point_title"),
             "content_status": data.get("content_status"),
             "principle_mode": data.get("principle_mode"),
-            "principle_preview": data.get("principle_equation") if data.get("principle_mode") == "equation" else data.get("principle_text"),
+            "principle_preview": reaction_principle_text(data) if data.get("principle_mode") == "equation" else data.get("principle_text"),
+            "normalized_equations": data["reaction_equations"] if data.get("principle_mode") == "equation" else [],
             "phenomenon_preview": data.get("phenomenon_explanation"),
             "safety_preview": data.get("safety_note"),
             "updated_at": data.get("updated_at"),

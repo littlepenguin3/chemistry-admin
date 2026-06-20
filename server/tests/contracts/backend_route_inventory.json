@@ -46,6 +46,12 @@
     },
     {
       "method": "POST",
+      "path": "/api/admin/catalog/equations/preview",
+      "name": "admin_catalog_preview_equations",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
       "path": "/api/admin/catalog/media-bindings/{binding_id}/{action}",
       "name": "admin_catalog_media_binding_status",
       "owner": "admin-api"

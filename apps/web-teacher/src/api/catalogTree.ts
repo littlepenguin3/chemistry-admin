@@ -57,6 +57,40 @@ export type CatalogIndexState = {
   updated_at?: string | null;
 };
 
+export type CatalogReactionEquationInput = {
+  raw_text: string;
+  row_order?: number | null;
+  label?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type CatalogReactionEquationNormalized = {
+  id?: string | null;
+  node_id?: string | null;
+  row_order: number;
+  raw_text: string;
+  canonical_display: string;
+  canonical_mhchem?: string | null;
+  plain_search_text: string;
+  formulae: string[];
+  aliases: string[];
+  reactants: string[];
+  products: string[];
+  participants: Record<string, unknown>;
+  reaction_features: string[];
+  validation_status: "valid" | "warning" | "invalid";
+  warnings: string[];
+  errors: string[];
+  parser_version: string;
+  migrated_from_principle_equation: boolean;
+  metadata?: Record<string, unknown>;
+};
+
+export type CatalogEquationPreviewResponse = {
+  ok: boolean;
+  equations: CatalogReactionEquationNormalized[];
+};
+
 export type CatalogPointContent = {
   node_id: string;
   point_title: string;
@@ -64,6 +98,7 @@ export type CatalogPointContent = {
   principle_mode: CatalogPrincipleMode;
   principle_equation?: string | null;
   principle_text?: string | null;
+  reaction_equations?: CatalogReactionEquationNormalized[];
   phenomenon_explanation?: string | null;
   safety_note?: string | null;
   content_status: "missing" | "draft" | "published" | "archived";
@@ -191,6 +226,7 @@ export type CatalogPointContentPayload = {
   principle_mode: CatalogPrincipleMode;
   principle_equation?: string | null;
   principle_text?: string | null;
+  reaction_equations?: CatalogReactionEquationInput[];
   phenomenon_explanation?: string | null;
   safety_note?: string | null;
   metadata?: Record<string, unknown>;
@@ -246,6 +282,10 @@ export function changeCatalogNodeStatus(
 
 export function saveCatalogPointContent(nodeId: string, payload: CatalogPointContentPayload): Promise<CatalogNodeDetail> {
   return putJson<CatalogNodeDetail>(`/api/admin/catalog/nodes/${encodeURIComponent(nodeId)}/point-content`, payload);
+}
+
+export function previewCatalogReactionEquations(equations: CatalogReactionEquationInput[]): Promise<CatalogEquationPreviewResponse> {
+  return postJson<CatalogEquationPreviewResponse>("/api/admin/catalog/equations/preview", { equations });
 }
 
 export function changeCatalogPointContentPublication(

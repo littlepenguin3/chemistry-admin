@@ -13,6 +13,7 @@ from server.app.domains.catalog_tree.common import (
     point_capable,
     published_path_available,
 )
+from server.app.domains.catalog_tree.equations import reaction_derived_terms, reaction_principle_text
 
 
 def queue_index_state(session: Any, *, node_id: str, action: str = "upsert", last_error: str | None = None) -> None:
@@ -131,14 +132,14 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
     )
     related = related_links(session, node["node_id"], include_hidden=False, include_defaults=True)
     videos = student_videos(session, node["node_id"])
-    principle = (
-        clean(content.get("principle_equation"))
-        if content.get("principle_mode") == "equation"
-        else clean(content.get("principle_text"))
-    )
+    principle = reaction_principle_text(content) if content.get("principle_mode") == "equation" else clean(content.get("principle_text"))
     phenomenon = clean(content.get("phenomenon_explanation"))
     safety = clean(content.get("safety_note"))
     chemistry = chemistry_terms_for_document(content.get("point_title"), principle, phenomenon, safety)
+    equation_terms = reaction_derived_terms(content)
+    formulae = sorted(set([*chemistry["formulae"], *equation_terms["formulae"]]))
+    aliases = sorted(set([*chemistry["aliases"], *equation_terms["aliases"]]))
+    reaction_features = sorted(set([*chemistry["reaction_features"], *equation_terms["reaction_features"]]))
     search_text = " ".join(
         item
         for item in [
@@ -150,9 +151,9 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
             safety,
             " ".join(clean(link.get("target_title")) for link in related),
             " ".join(clean(video.get("title")) for video in videos),
-            " ".join(chemistry["formulae"]),
-            " ".join(chemistry["aliases"]),
-            " ".join(chemistry["reaction_features"]),
+            " ".join(formulae),
+            " ".join(aliases),
+            " ".join(reaction_features),
         ]
         if item
     )
@@ -171,9 +172,10 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
         "principle": principle,
         "phenomenon_explanation": phenomenon,
         "safety_note": safety,
-        "formulae": chemistry["formulae"],
-        "aliases": chemistry["aliases"],
-        "reaction_features": chemistry["reaction_features"],
+        "reaction_equations": content.get("reaction_equations") if content.get("principle_mode") == "equation" else [],
+        "formulae": formulae,
+        "aliases": aliases,
+        "reaction_features": reaction_features,
         "related_text": [clean(link.get("target_title")) for link in related if clean(link.get("target_title"))],
         "has_video": bool(videos),
         "video_count": len(videos),

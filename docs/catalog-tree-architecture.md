@@ -8,7 +8,8 @@ The admin `/experiments` workspace loads the catalog tree editor:
 
 - Left pane: chapter selector, searchable draggable tree, create directory/point, move, reorder, archive, restore, publish, and validation actions.
 - Right pane: selected-node editor. Directory nodes own title, teacher-only note, student-visible description, and card presentation. Point nodes own title/summary plus constrained point-card overrides.
-- Point nodes expose point content fields: point title, teacher-only note, principle mode, principle equation or text, phenomenon explanation, safety note, related links, and bound videos.
+- Point nodes expose point content fields: point title, teacher-only note, principle mode, reaction equation rows or text, phenomenon explanation, safety note, related links, and bound videos.
+- Reaction equation rows preserve teacher-entered raw text and store backend-normalized display text, mhchem, formulae, aliases, participants, reaction features, and validation warnings. The legacy `principle_equation` field remains a compatibility summary of raw equation rows; AI, ES, and RAG consumers should prefer backend-normalized rows.
 - Directory nodes are navigation/category/card nodes only. They cannot own point content, video bindings, related links, assessment identity, or standalone search documents.
 - Teacher-only notes are admin-only state. They are excluded from student APIs, Elasticsearch documents, student search summaries, and question evidence payloads.
 - Related links default from nearby catalog points but remain manually editable through `target_node_id` links.

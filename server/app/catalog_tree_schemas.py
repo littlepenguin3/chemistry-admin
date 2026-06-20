@@ -57,12 +57,51 @@ class CatalogNodeStatusRequest(BaseModel):
     include_subtree: bool = False
 
 
+class CatalogReactionEquationInput(BaseModel):
+    raw_text: str = Field(default="", max_length=500)
+    row_order: int | None = None
+    label: str | None = Field(default=None, max_length=120)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CatalogReactionEquationNormalized(BaseModel):
+    id: str | None = None
+    node_id: str | None = None
+    row_order: int = 0
+    raw_text: str
+    canonical_display: str = ""
+    canonical_mhchem: str | None = None
+    plain_search_text: str = ""
+    formulae: list[str] = Field(default_factory=list)
+    aliases: list[str] = Field(default_factory=list)
+    reactants: list[str] = Field(default_factory=list)
+    products: list[str] = Field(default_factory=list)
+    participants: dict[str, Any] = Field(default_factory=dict)
+    reaction_features: list[str] = Field(default_factory=list)
+    validation_status: str = Field(default="warning", pattern="^(valid|warning|invalid)$")
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    parser_version: str = "basic-v1"
+    migrated_from_principle_equation: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CatalogEquationPreviewRequest(BaseModel):
+    equations: list[CatalogReactionEquationInput] = Field(default_factory=list)
+
+
+class CatalogEquationPreviewResponse(BaseModel):
+    ok: bool
+    equations: list[CatalogReactionEquationNormalized] = Field(default_factory=list)
+
+
 class CatalogPointContentRequest(BaseModel):
     point_title: str = Field(min_length=1, max_length=200)
     teacher_note: str | None = None
     principle_mode: str = Field(default="text", pattern="^(equation|text)$")
     principle_equation: str | None = None
     principle_text: str | None = None
+    reaction_equations: list[CatalogReactionEquationInput] = Field(default_factory=list)
     phenomenon_explanation: str | None = None
     safety_note: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -172,6 +211,7 @@ class StudentPointDetailResponse(BaseModel):
     principle_mode: str = "text"
     principle_equation: str | None = None
     principle_text: str | None = None
+    reaction_equations: list[CatalogReactionEquationNormalized] = Field(default_factory=list)
     phenomenon_explanation: str | None = None
     safety_note: str | None = None
     videos: list[StudentPointVideo] = Field(default_factory=list)

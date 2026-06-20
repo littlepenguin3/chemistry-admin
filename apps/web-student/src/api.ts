@@ -217,6 +217,14 @@ export type StudentRelatedPoint = {
   source_node_id?: string | null;
 };
 
+export type StudentReactionEquation = {
+  row_order: number;
+  raw_text: string;
+  canonical_display?: string | null;
+  canonical_mhchem?: string | null;
+  validation_status?: "valid" | "warning" | "invalid" | string;
+};
+
 export type StudentPointDetailResponse = {
   node_id: string;
   canonical_node_id: string;
@@ -229,6 +237,7 @@ export type StudentPointDetailResponse = {
   principle_mode: "equation" | "text" | string;
   principle_equation?: string | null;
   principle_text?: string | null;
+  reaction_equations?: StudentReactionEquation[];
   phenomenon_explanation?: string | null;
   safety_note?: string | null;
   videos: StudentPointVideo[];

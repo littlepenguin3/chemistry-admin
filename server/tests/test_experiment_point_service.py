@@ -83,7 +83,7 @@ def test_catalog_point_publication_requires_exact_primary_principle_and_safety()
         },
     )
 
-    assert "Equation-mode principle requires a chemical equation" in errors
+    assert "Equation-mode principle requires at least one valid reaction equation" in errors
     assert "Phenomenon explanation is required" in errors
     assert "Safety note is required" in errors
 

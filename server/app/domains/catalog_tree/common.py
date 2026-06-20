@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import text
 
 from server.app.domains.errors import DomainHTTPException as HTTPException, domain_status as status
+from server.app.domains.catalog_tree.equations import list_reaction_equations, reaction_principle_text
 
 
 NODE_KINDS = {"directory", "point"}
@@ -207,6 +208,7 @@ def get_content(session: Any, node_id: str) -> dict[str, Any] | None:
     item = dict(row)
     if not isinstance(item.get("metadata"), dict):
         item["metadata"] = {}
+    item["reaction_equations"] = list_reaction_equations(session, node_id) if item.get("principle_mode") == "equation" else []
     return item
 
 
@@ -225,8 +227,8 @@ def content_publication_errors(node: dict[str, Any], content: dict[str, Any] | N
     equation = clean(content.get("principle_equation"))
     principle_text = clean(content.get("principle_text"))
     if mode == "equation":
-        if not equation:
-            errors.append("Equation-mode principle requires a chemical equation")
+        if not reaction_principle_text(content):
+            errors.append("Equation-mode principle requires at least one valid reaction equation")
     elif mode == "text":
         if not principle_text:
             errors.append("Text-mode principle requires a principle description")

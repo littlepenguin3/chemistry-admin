@@ -99,7 +99,10 @@ describe("catalog tree mappers", () => {
         point_title: "Sodium thiosulfate and acid",
         teacher_note: "teacher-only note",
         principle_mode: "equation",
-        principle_equation: "Na2S2O3 + 2HCl = 2NaCl + S + SO2 + H2O",
+        reaction_equations: [
+          { raw_text: "Na2S2O3 + 2HCl = 2NaCl + S + SO2 + H2O" },
+          { raw_text: "SO2 + I2 + 2H2O = H2SO4 + 2HI" },
+        ],
         principle_text: "hidden by mode",
         phenomenon_explanation: "Sulfur precipitate appears.",
         safety_note: "Use ventilation.",
@@ -108,7 +111,19 @@ describe("catalog tree mappers", () => {
       point_title: "Sodium thiosulfate and acid",
       teacher_note: "teacher-only note",
       principle_mode: "equation",
-      principle_equation: "Na2S2O3 + 2HCl = 2NaCl + S + SO2 + H2O",
+      principle_equation: "Na2S2O3 + 2HCl = 2NaCl + S + SO2 + H2O\nSO2 + I2 + 2H2O = H2SO4 + 2HI",
+      reaction_equations: [
+        {
+          raw_text: "Na2S2O3 + 2HCl = 2NaCl + S + SO2 + H2O",
+          row_order: 1,
+          metadata: {},
+        },
+        {
+          raw_text: "SO2 + I2 + 2H2O = H2SO4 + 2HI",
+          row_order: 2,
+          metadata: {},
+        },
+      ],
       principle_text: "",
       phenomenon_explanation: "Sulfur precipitate appears.",
       safety_note: "Use ventilation.",
@@ -126,6 +141,22 @@ describe("catalog tree mappers", () => {
       teacher_note: "",
       principle_mode: "text",
     });
+  });
+
+  it("hydrates migrated single equations into editable rows", () => {
+    const detail = {
+      node: { title: "Legacy equation point", node_kind: "point" },
+      point_content: {
+        point_title: "Legacy equation point",
+        principle_mode: "equation",
+        principle_equation: "Cl2 + 2 KBr = 2 KCl + Br2",
+        reaction_equations: [],
+      },
+    } as unknown as CatalogNodeDetail;
+
+    expect(hydrateCatalogPointContentForm(detail).reaction_equations).toEqual([
+      { raw_text: "Cl2 + 2 KBr = 2 KCl + Br2", row_order: 1 },
+    ]);
   });
 
   it("uses one visible point title and detects divergent stored titles", () => {

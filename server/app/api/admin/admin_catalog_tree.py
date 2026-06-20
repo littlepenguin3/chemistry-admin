@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, Path, Query
 
 from server.app.auth import AuthUser, require_teacher_console_user
 from server.app.catalog_tree_schemas import (
+    CatalogEquationPreviewRequest,
+    CatalogEquationPreviewResponse,
     CatalogNodeCreateRequest,
     CatalogNodeMoveRequest,
     CatalogNodeReorderRequest,
@@ -16,6 +18,7 @@ from server.app.catalog_tree_schemas import (
     CatalogPointPublicationRequest,
     CatalogPointRelatedLinksRequest,
 )
+from server.app.domains.catalog_tree.equations import normalize_reaction_equations
 from server.app.domains.catalog_tree.tree import (
     bind_existing_media,
     create_node,
@@ -115,6 +118,18 @@ async def admin_catalog_save_point_content(
     user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return save_point_content(node_id=node_id, payload=payload, user=user)
+
+
+@router.post("/equations/preview", response_model=CatalogEquationPreviewResponse)
+async def admin_catalog_preview_equations(
+    payload: CatalogEquationPreviewRequest,
+    user: AuthUser = Depends(require_teacher_console_user),
+) -> CatalogEquationPreviewResponse:
+    equations = normalize_reaction_equations(payload.equations)
+    return CatalogEquationPreviewResponse(
+        ok=all(row["validation_status"] != "invalid" for row in equations),
+        equations=equations,
+    )
 
 
 @router.post("/nodes/{node_id}/point-content/publication")

@@ -7,6 +7,7 @@ import type {
   CatalogNodeUpdatePayload,
   CatalogPointContentPayload,
   CatalogPrincipleMode,
+  CatalogReactionEquationInput,
   CatalogRelatedLinksPayload,
 } from "../../api/catalogTree";
 
@@ -32,6 +33,7 @@ export type CatalogPointContentFormValues = {
   teacher_note?: string;
   principle_mode: CatalogPrincipleMode;
   principle_equation?: string;
+  reaction_equations?: CatalogReactionEquationInput[];
   principle_text?: string;
   phenomenon_explanation?: string;
   safety_note?: string;
@@ -123,11 +125,21 @@ export function buildCatalogNodeUpdatePayload(values: CatalogNodeFormValues): Ca
 
 export function hydrateCatalogPointContentForm(detail: CatalogNodeDetail | null | undefined): CatalogPointContentFormValues {
   const content = detail?.point_content;
+  const reactionEquations =
+    content?.reaction_equations?.length
+      ? content.reaction_equations.map((equation, index) => ({
+          raw_text: equation.raw_text || equation.canonical_display || "",
+          row_order: equation.row_order || index + 1,
+        }))
+      : content?.principle_equation
+        ? [{ raw_text: content.principle_equation, row_order: 1 }]
+        : [];
   return {
     point_title: content?.point_title || detail?.node.title || "",
     teacher_note: content?.teacher_note || "",
     principle_mode: content?.principle_mode || "text",
     principle_equation: content?.principle_equation || "",
+    reaction_equations: reactionEquations,
     principle_text: content?.principle_text || "",
     phenomenon_explanation: content?.phenomenon_explanation || "",
     safety_note: content?.safety_note || "",
@@ -146,11 +158,20 @@ export function hasDivergentPointTitle(detail: CatalogNodeDetail | null | undefi
 
 export function buildCatalogPointContentPayload(values: CatalogPointContentFormValues): CatalogPointContentPayload {
   const principleMode = values.principle_mode || "text";
+  const reactionEquations = (values.reaction_equations || [])
+    .map((equation, index) => ({
+      raw_text: equation.raw_text?.trim() || "",
+      row_order: index + 1,
+      metadata: equation.metadata || {},
+    }))
+    .filter((equation) => equation.raw_text);
+  const legacyEquationText = reactionEquations.map((equation) => equation.raw_text).join("\n");
   return {
     point_title: values.point_title.trim(),
     teacher_note: values.teacher_note?.trim() || "",
     principle_mode: principleMode,
-    principle_equation: principleMode === "equation" ? values.principle_equation?.trim() || "" : "",
+    principle_equation: principleMode === "equation" ? legacyEquationText || values.principle_equation?.trim() || "" : "",
+    reaction_equations: principleMode === "equation" ? reactionEquations : [],
     principle_text: principleMode === "text" ? values.principle_text?.trim() || "" : "",
     phenomenon_explanation: values.phenomenon_explanation?.trim() || "",
     safety_note: values.safety_note?.trim() || "",

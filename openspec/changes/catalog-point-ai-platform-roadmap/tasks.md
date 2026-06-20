@@ -43,19 +43,19 @@
 
 ## 4. Multi-Equation Point Authoring
 
-- [ ] 4.1 Design the database/API migration from single `principle_equation` to a multi-equation point content model.
-- [ ] 4.2 Preserve existing single-equation values by migrating each non-empty value into one reaction equation row.
-- [ ] 4.3 Add backend request/response schemas for raw equation rows, normalized records, validation warnings, and derived chemistry fields.
-- [ ] 4.4 Add a backend preview/normalize endpoint that can parse submitted raw equation rows before final save.
-- [ ] 4.5 Implement backend normalization for canonical display text, canonical mhchem when available, plain search text, formulae, aliases, participants, and reaction features.
-- [ ] 4.6 Add backend validation behavior for unsupported notation, parse uncertainty, invalid rows, and suspected imbalance.
-- [ ] 4.7 Ensure invalid equation rows do not produce misleading ES/RAG/AI derived fields.
-- [ ] 4.8 Build a teacher-friendly multi-equation editor in `web-teacher` with add, edit, reorder, delete, helper controls, and preview.
-- [ ] 4.9 Keep frontend preview assistive only; saved meaning must come from backend normalization responses.
-- [ ] 4.10 Update frontend mappers, form defaults, and tests for equation mode versus text mode.
-- [ ] 4.11 Update ES document construction to consume backend-derived normalized equation fields.
-- [ ] 4.12 Update AI/RAG point context construction to include normalized equation records and raw fallback text.
-- [ ] 4.13 Add regression tests for migrated single equations, multiple equations, invalid equations, text-principle mode, and mhchem rendering.
+- [x] 4.1 Design the database/API migration from single `principle_equation` to a multi-equation point content model.
+- [x] 4.2 Preserve existing single-equation values by migrating each non-empty value into one reaction equation row.
+- [x] 4.3 Add backend request/response schemas for raw equation rows, normalized records, validation warnings, and derived chemistry fields.
+- [x] 4.4 Add a backend preview/normalize endpoint that can parse submitted raw equation rows before final save.
+- [x] 4.5 Implement backend normalization for canonical display text, canonical mhchem when available, plain search text, formulae, aliases, participants, and reaction features.
+- [x] 4.6 Add backend validation behavior for unsupported notation, parse uncertainty, invalid rows, and suspected imbalance.
+- [x] 4.7 Ensure invalid equation rows do not produce misleading ES/RAG/AI derived fields.
+- [x] 4.8 Build a teacher-friendly multi-equation editor in `web-teacher` with add, edit, reorder, delete, helper controls, and preview.
+- [x] 4.9 Keep frontend preview assistive only; saved meaning must come from backend normalization responses.
+- [x] 4.10 Update frontend mappers, form defaults, and tests for equation mode versus text mode.
+- [x] 4.11 Update ES document construction to consume backend-derived normalized equation fields.
+- [x] 4.12 Update AI/RAG point context construction to include normalized equation records and raw fallback text.
+- [x] 4.13 Add regression tests for migrated single equations, multiple equations, invalid equations, text-principle mode, and mhchem rendering.
 
 ## 5. Catalog Point ES And RAG Evidence Jobs
 

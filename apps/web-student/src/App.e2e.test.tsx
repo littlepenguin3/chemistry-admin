@@ -363,6 +363,15 @@ const catalogPointDetail: StudentPointDetailResponse = {
   principle_mode: "equation",
   principle_equation: "Cl2 + 2 KBr = 2 KCl + Br2",
   principle_text: null,
+  reaction_equations: [
+    {
+      row_order: 1,
+      raw_text: "Cl2 + 2 KBr = 2 KCl + Br2",
+      canonical_display: "Cl2 + 2 KBr = 2 KCl + Br2",
+      canonical_mhchem: "\\ce{Cl2 + 2 KBr -> 2 KCl + Br2}",
+      validation_status: "valid",
+    },
+  ],
   phenomenon_explanation: "Chlorine displaces bromine ions, and bromine dissolves into the organic layer.",
   safety_note: "Handle chlorine water in a ventilated space and avoid direct inhalation.",
   videos: [],

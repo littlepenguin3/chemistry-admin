@@ -58,7 +58,14 @@ export function CatalogPointDetailPanel({
   }, [nodeId]);
 
   const video = detail?.videos[0] || null;
-  const principleText = detail?.principle_mode === "equation" ? detail.principle_equation : detail?.principle_text;
+  const principleText =
+    detail?.principle_mode === "equation"
+      ? (detail.reaction_equations || [])
+          .filter((equation) => equation.validation_status !== "invalid")
+          .map((equation) => equation.canonical_display || equation.raw_text)
+          .filter(Boolean)
+          .join("\n") || detail.principle_equation
+      : detail?.principle_text;
   const pathText = detail ? catalogPathLabel(detail.breadcrumbs) : search.catalogPath || "";
   const assistantContext = useMemo<AssistantContext | null>(() => {
     if (!detail) return null;

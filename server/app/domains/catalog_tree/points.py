@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from server.app.catalog_tree_schemas import CatalogPointContentRequest, CatalogPointPublicationRequest
 from server.app.domains.catalog_tree.common import clean, content_publication_errors, dump_model, get_content, get_node, json_dump, point_capable
+from server.app.domains.catalog_tree.equations import normalize_reaction_equations, replace_reaction_equations
 from server.app.domains.catalog_tree.search_documents import queue_index_state
 from server.app.domains.errors import DomainHTTPException as HTTPException, domain_status as status
 from server.app.infrastructure.database import db_session
@@ -22,7 +23,12 @@ def save_point_content(*, node_id: str, payload: CatalogPointContentRequest, use
         mode = clean(data.get("principle_mode") or "text")
         principle_equation = clean(data.get("principle_equation"))
         principle_text = clean(data.get("principle_text"))
+        reaction_inputs = data.get("reaction_equations") if isinstance(data.get("reaction_equations"), list) else []
+        if mode == "equation" and not reaction_inputs and principle_equation:
+            reaction_inputs = [{"raw_text": principle_equation, "row_order": 1}]
+        normalized_equations = normalize_reaction_equations(reaction_inputs)
         if mode == "equation":
+            principle_equation = "\n".join(row["raw_text"] for row in normalized_equations if clean(row.get("raw_text")))
             principle_text = ""
         elif mode == "text":
             principle_equation = ""
@@ -68,6 +74,8 @@ def save_point_content(*, node_id: str, payload: CatalogPointContentRequest, use
                 "user_id": user.id,
             },
         )
+        if mode == "equation":
+            replace_reaction_equations(session, node_id=node_id, equations=normalized_equations)
         session.execute(
             text(
                 """

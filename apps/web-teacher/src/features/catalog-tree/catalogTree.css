@@ -907,6 +907,37 @@
   gap: 12px;
 }
 
+.catalog-equation-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.catalog-equation-toolbar {
+  display: grid;
+  gap: 8px;
+}
+
+.catalog-equation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.catalog-equation-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.catalog-equation-row .ant-form-item {
+  margin-bottom: 0;
+}
+
+.catalog-equation-preview {
+  display: grid;
+  gap: 8px;
+}
+
 .catalog-related-search {
   max-width: 340px;
 }
