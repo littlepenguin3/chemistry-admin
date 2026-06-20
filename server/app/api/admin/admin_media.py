@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from server.app.auth import AuthUser, get_user_from_access_token, is_teacher_console_role, require_roles, require_teacher_console_user
+from server.app.auth import AuthUser, get_user_from_access_token, is_teacher_console_role, require_teacher_console_user
 from server.app.infrastructure.settings import get_settings
 from server.app.infrastructure.database import db_session
 from server.app.domains.media.assets import (
@@ -99,7 +99,7 @@ def _media_asset_file_response(asset_id: str) -> FileResponse:
 async def admin_list_media_assets(
     upload_status: str | None = None,
     limit: int = 200,
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return list_media_assets(upload_status=upload_status, limit=limit)
 
@@ -107,7 +107,7 @@ async def admin_list_media_assets(
 @router.post("/media/assets/precheck")
 async def admin_precheck_media_asset(
     payload: MediaDuplicatePrecheckRequest,
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return precheck_exact_duplicate(
         checksum_sha256_value=payload.checksum_sha256,
@@ -118,7 +118,7 @@ async def admin_precheck_media_asset(
 @router.get("/media/assets/processing")
 async def admin_media_processing_status(
     limit: int = Query(default=200, ge=1, le=1000),
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return active_media_processing_status(limit=limit)
 
@@ -126,7 +126,7 @@ async def admin_media_processing_status(
 @router.post("/media/assets/complete-upload")
 async def admin_complete_resumable_media_upload(
     payload: MediaUploadCompleteRequest,
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     try:
         return complete_resumable_upload(
@@ -146,7 +146,7 @@ async def admin_complete_resumable_media_upload(
 @router.get("/media/assets/{asset_id}/file", include_in_schema=False)
 async def admin_get_media_asset_file(
     asset_id: str = Path(min_length=1),
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> FileResponse:
     return _media_asset_file_response(asset_id)
 
@@ -165,7 +165,7 @@ async def admin_stream_media_asset_file(
 @router.get("/media/assets/{asset_id}/thumbnail", include_in_schema=False)
 async def admin_get_media_asset_thumbnail(
     asset_id: str = Path(min_length=1),
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> FileResponse:
     with db_session() as session:
         row = (
@@ -208,7 +208,7 @@ async def admin_retry_media_asset_processing(
 async def admin_decide_media_duplicate_candidate(
     payload: MediaDuplicateDecisionRequest,
     candidate_id: str = Path(min_length=1),
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     try:
         return decide_duplicate_candidate(candidate_id, decision=payload.status, actor_user_id=user.id)
@@ -220,7 +220,7 @@ async def admin_decide_media_duplicate_candidate(
 async def admin_upload_media_asset(
     title: str = Form(...),
     file: UploadFile = File(...),
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     content = await file.read()
     return create_media_asset(
@@ -237,7 +237,7 @@ async def admin_replace_media_asset(
     asset_id: str = Path(min_length=1),
     title: str = Form(...),
     file: UploadFile = File(...),
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     content = await file.read()
     return create_media_asset(
@@ -253,7 +253,7 @@ async def admin_replace_media_asset(
 @router.post("/media/bindings")
 async def admin_create_media_binding(
     payload: MediaBindingRequest,
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return create_media_binding(
         media_asset_id=payload.media_asset_id,
@@ -268,7 +268,7 @@ async def admin_create_media_binding(
 @router.post("/media/bindings/{binding_id}/publish")
 async def admin_publish_media_binding(
     binding_id: str = Path(min_length=1),
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     try:
         return publish_media_binding(binding_id, actor_user_id=user.id)
@@ -279,7 +279,7 @@ async def admin_publish_media_binding(
 @router.post("/media/bindings/{binding_id}/unpublish")
 async def admin_unpublish_media_binding(
     binding_id: str = Path(min_length=1),
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     try:
         return unpublish_media_binding(binding_id)
@@ -290,7 +290,7 @@ async def admin_unpublish_media_binding(
 @router.delete("/media/bindings/{binding_id}")
 async def admin_delete_media_binding(
     binding_id: str = Path(min_length=1),
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     try:
         return delete_media_binding(binding_id)

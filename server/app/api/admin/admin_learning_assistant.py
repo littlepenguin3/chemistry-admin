@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from server.app.domains.assistant.agent import run_agent, run_agent_stream
-from server.app.auth import AuthUser, is_teacher_console_role, require_roles, require_teacher_console_user
+from server.app.auth import AuthUser, is_teacher_console_role, require_teacher_console_user
 from server.app.infrastructure.settings import get_settings
 from server.app.domains.platform.settings import (
     effective_ai_settings,
@@ -93,7 +93,7 @@ def _dump_full_model(model: Any) -> dict[str, Any]:
 
 @router.get("/learning-assistant/runtime")
 async def admin_get_learning_assistant_runtime(
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     settings = get_settings()
     ai_config = get_ai_configuration_response(can_edit=is_teacher_console_role(user.role), auto_check=False)
@@ -130,7 +130,7 @@ async def admin_get_learning_assistant_runtime(
 @router.get("/rag-assets")
 async def admin_rag_asset(
     path: str = Query(..., min_length=1),
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> FileResponse:
     return FileResponse(_resolve_rag_asset(path))
 

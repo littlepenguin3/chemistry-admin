@@ -3,16 +3,17 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from fastapi import HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
+from server.app.domains.errors import DomainHTTPException as HTTPException, domain_status as status
 from server.app.infrastructure.database import db_session
 from server.app.security import hash_password
 
 MANAGED_TEACHER_ROLES = ("admin", "teacher")
 MANAGED_ACCOUNT_STATUSES = ("active", "disabled")
+TEACHER_ACCOUNT_DELETE_BLOCKED_DETAIL = "Teacher account has owned records; disable it instead"
 
 
 class TeacherAccountResponse(BaseModel):
@@ -63,6 +64,59 @@ def _teacher_account_response(row: dict[str, Any]) -> TeacherAccountResponse:
 
 def _not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teacher account not found")
+
+
+def _quote_identifier(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _teacher_account_dependencies(session: Any, account_id: str) -> list[str]:
+    dependency_rows = [
+        dict(row)
+        for row in session.execute(
+            text(
+                """
+                SELECT kcu.table_schema, kcu.table_name, kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                  ON tc.constraint_name = kcu.constraint_name
+                 AND tc.constraint_schema = kcu.constraint_schema
+                JOIN information_schema.constraint_column_usage ccu
+                  ON ccu.constraint_name = tc.constraint_name
+                 AND ccu.constraint_schema = tc.constraint_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                  AND ccu.table_name = 'app_users'
+                  AND ccu.column_name = 'id'
+                  AND kcu.table_name <> 'auth_sessions'
+                ORDER BY kcu.table_schema, kcu.table_name, kcu.column_name
+                """
+            )
+        )
+        .mappings()
+        .all()
+    ]
+    dependencies: list[str] = []
+    for dependency in dependency_rows:
+        schema = _quote_identifier(str(dependency["table_schema"]))
+        table = _quote_identifier(str(dependency["table_name"]))
+        column = _quote_identifier(str(dependency["column_name"]))
+        row = (
+            session.execute(
+                text(
+                    f"""
+                    SELECT COUNT(*) AS dependency_count
+                    FROM {schema}.{table}
+                    WHERE {column} = CAST(:account_id AS uuid)
+                    """
+                ),
+                {"account_id": account_id},
+            )
+            .mappings()
+            .first()
+        )
+        if int(row["dependency_count"] if row else 0) > 0:
+            dependencies.append(f"{dependency['table_name']}.{dependency['column_name']}")
+    return dependencies
 
 
 def list_teacher_accounts() -> list[TeacherAccountResponse]:
@@ -221,3 +275,60 @@ def reset_teacher_account_password(
 
 def disable_teacher_account(account_id: str) -> TeacherAccountResponse:
     return patch_teacher_account(account_id, TeacherAccountPatchRequest(status="disabled"))
+
+
+def enable_teacher_account(account_id: str) -> TeacherAccountResponse:
+    return patch_teacher_account(account_id, TeacherAccountPatchRequest(status="active"))
+
+
+def delete_teacher_account(account_id: str) -> TeacherAccountResponse:
+    try:
+        with db_session() as session:
+            row = (
+                session.execute(
+                    text(
+                        """
+                        SELECT id, username, role, display_name, status, must_change_password,
+                               password_version, created_at, updated_at, last_login_at
+                        FROM app_users
+                        WHERE id = CAST(:account_id AS uuid)
+                          AND role IN ('admin', 'teacher')
+                        """
+                    ),
+                    {"account_id": account_id},
+                )
+                .mappings()
+                .first()
+            )
+            if not row:
+                raise _not_found()
+            dependencies = _teacher_account_dependencies(session, account_id)
+            if dependencies:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=TEACHER_ACCOUNT_DELETE_BLOCKED_DETAIL,
+                )
+            deleted = (
+                session.execute(
+                    text(
+                        """
+                        DELETE FROM app_users
+                        WHERE id = CAST(:account_id AS uuid)
+                          AND role IN ('admin', 'teacher')
+                        RETURNING id, username, role, display_name, status, must_change_password,
+                                  password_version, created_at, updated_at, last_login_at
+                        """
+                    ),
+                    {"account_id": account_id},
+                )
+                .mappings()
+                .first()
+            )
+            if not deleted:
+                raise _not_found()
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=TEACHER_ACCOUNT_DELETE_BLOCKED_DETAIL,
+        ) from exc
+    return _teacher_account_response(dict(deleted))

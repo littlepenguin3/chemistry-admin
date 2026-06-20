@@ -9,7 +9,7 @@ from typing import Any
 from server.app.domains.errors import DomainHTTPException as HTTPException, domain_status as status
 from sqlalchemy import text
 
-from server.app.auth import is_teacher_console_role
+from server.app.domains.platform.roles import is_teacher_console_role
 from server.app.infrastructure.database import db_session
 from server.app.mastery import DEFAULT_EXPERIMENT_MASTERY_SCORE
 

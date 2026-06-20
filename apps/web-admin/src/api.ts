@@ -73,6 +73,7 @@ function translateDetail(detail: string): string {
     "Username already exists": "账号已存在",
     "Username and display name are required": "账号和显示名不能为空",
     "Display name is required": "显示名不能为空",
+    "Teacher account has owned records; disable it instead": "该账号已有业务归属记录，请改用停用",
   };
   return messages[detail] || detail;
 }
@@ -144,6 +145,18 @@ export function resetTeacherPassword(
 }
 
 export function disableTeacherAccount(accountId: string): Promise<TeacherAccount> {
+  return api<TeacherAccount>(`/api/web-admin/teacher-accounts/${encodeURIComponent(accountId)}/disable`, {
+    method: "POST",
+  });
+}
+
+export function enableTeacherAccount(accountId: string): Promise<TeacherAccount> {
+  return api<TeacherAccount>(`/api/web-admin/teacher-accounts/${encodeURIComponent(accountId)}/enable`, {
+    method: "POST",
+  });
+}
+
+export function deleteTeacherAccount(accountId: string): Promise<TeacherAccount> {
   return api<TeacherAccount>(`/api/web-admin/teacher-accounts/${encodeURIComponent(accountId)}`, {
     method: "DELETE",
   });

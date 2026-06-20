@@ -6,12 +6,12 @@ from datetime import datetime
 from typing import Any
 
 from server.app.domains.errors import DomainHTTPException as HTTPException, domain_status as status
+from server.app.domains.platform.roles import is_teacher_console_role
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from server.app.infrastructure.database import db_session
-from server.app.auth import is_teacher_console_role
 from server.app.roster import parse_roster, roster_preview
 from server.app.security import hash_password
 

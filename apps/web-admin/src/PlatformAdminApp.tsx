@@ -20,6 +20,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
+  CheckCircleOutlined,
   DeleteOutlined,
   EditOutlined,
   KeyOutlined,
@@ -28,6 +29,7 @@ import {
   ReloadOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
+  StopOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -35,7 +37,9 @@ import dayjs from "dayjs";
 
 import {
   createTeacherAccount,
+  deleteTeacherAccount,
   disableTeacherAccount,
+  enableTeacherAccount,
   errorMessage,
   getAuthToken,
   listTeacherAccounts,
@@ -197,6 +201,24 @@ function TeacherAccountWorkbench() {
     onError: (error) => message.error(errorMessage(error)),
   });
 
+  const enableMutation = useMutation({
+    mutationFn: enableTeacherAccount,
+    onSuccess: () => {
+      message.success("教师账号已启用");
+      invalidate();
+    },
+    onError: (error) => message.error(errorMessage(error)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteTeacherAccount,
+    onSuccess: () => {
+      message.success("教师账号已删除");
+      invalidate();
+    },
+    onError: (error) => message.error(errorMessage(error)),
+  });
+
   useEffect(() => {
     if (editingAccount) {
       editForm.setFieldsValue({
@@ -290,7 +312,7 @@ function TeacherAccountWorkbench() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 196,
+      width: 292,
       render: (_, account) => (
         <Space>
           <Button icon={<EditOutlined />} onClick={() => setEditingAccount(account)}>
@@ -299,23 +321,49 @@ function TeacherAccountWorkbench() {
           <Button icon={<KeyOutlined />} onClick={() => setResetAccount(account)}>
             重置
           </Button>
+          {account.status === "active" ? (
+            <Button
+              danger
+              icon={<StopOutlined />}
+              loading={disableMutation.isPending && disableMutation.variables === account.id}
+              onClick={() =>
+                modal.confirm({
+                  title: "停用教师后台账号",
+                  content: `确认停用 ${account.display_name}？该账号记录会保留，并将状态改为停用。`,
+                  okText: "停用",
+                  okButtonProps: { danger: true },
+                  cancelText: "取消",
+                  onOk: () => disableMutation.mutateAsync(account.id),
+                })
+              }
+            >
+              停用
+            </Button>
+          ) : (
+            <Button
+              icon={<CheckCircleOutlined />}
+              loading={enableMutation.isPending && enableMutation.variables === account.id}
+              onClick={() => enableMutation.mutate(account.id)}
+            >
+              启用
+            </Button>
+          )}
           <Button
             danger
             icon={<DeleteOutlined />}
-            disabled={account.status === "disabled"}
-            loading={disableMutation.isPending && disableMutation.variables === account.id}
+            loading={deleteMutation.isPending && deleteMutation.variables === account.id}
             onClick={() =>
               modal.confirm({
-                title: "停用教师后台账号",
-                content: `确认停用 ${account.display_name}？该账号记录会保留，并将状态改为停用。`,
-                okText: "停用",
+                title: "删除教师后台账号",
+                content: `确认删除 ${account.display_name}？仅没有业务归属记录的账号可以删除；已有内容或班级归属时请改用停用。`,
+                okText: "删除",
                 okButtonProps: { danger: true },
                 cancelText: "取消",
-                onOk: () => disableMutation.mutateAsync(account.id),
+                onOk: () => deleteMutation.mutateAsync(account.id),
               })
             }
           >
-            停用
+            删除
           </Button>
         </Space>
       ),

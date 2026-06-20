@@ -8,13 +8,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from server.app.domains.platform.roles import PLATFORM_ADMIN_ROLE, TEACHER_CONSOLE_ROLES, is_teacher_console_role
 from server.app.infrastructure.database import db_session
 from server.app.security import AuthError, create_access_token, hash_password, verify_password, decode_access_token
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 bearer = HTTPBearer(auto_error=False)
-PLATFORM_ADMIN_ROLE = "platform_admin"
-TEACHER_CONSOLE_ROLES = frozenset({"admin", "teacher"})
 
 
 class LoginRequest(BaseModel):
@@ -604,10 +603,6 @@ def require_roles(*roles: str) -> Callable[[AuthUser], AuthUser]:
         return user
 
     return dependency
-
-
-def is_teacher_console_role(role: str) -> bool:
-    return role in TEACHER_CONSOLE_ROLES
 
 
 async def require_platform_admin(user: AuthUser = Depends(get_current_user)) -> AuthUser:

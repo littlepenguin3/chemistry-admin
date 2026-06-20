@@ -10,6 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from server.app.api.web_admin.auth import require_web_admin_token
 from server.app.app_runtime.main import app
 from server.app.auth import AuthUser, require_teacher_console_user
+from server.app.domains.errors import DomainHTTPException
 from server.app.domains.platform import teacher_accounts
 from server.app.infrastructure.settings import get_settings
 
@@ -102,6 +103,8 @@ def test_web_admin_teacher_account_routes_are_registered() -> None:
     assert "post" in paths["/api/web-admin/teacher-accounts"]
     assert "patch" in paths["/api/web-admin/teacher-accounts/{account_id}"]
     assert "post" in paths["/api/web-admin/teacher-accounts/{account_id}/reset-password"]
+    assert "post" in paths["/api/web-admin/teacher-accounts/{account_id}/disable"]
+    assert "post" in paths["/api/web-admin/teacher-accounts/{account_id}/enable"]
     assert "delete" in paths["/api/web-admin/teacher-accounts/{account_id}"]
 
 
@@ -211,7 +214,7 @@ def test_patch_teacher_account_can_migrate_legacy_teacher_role(monkeypatch: pyte
     assert "password_hash" not in account.model_dump()
 
 
-def test_delete_teacher_account_soft_disables(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_disable_teacher_account_soft_disables(monkeypatch: pytest.MonkeyPatch) -> None:
     session = _FakeSession([_FakeResult([_teacher_row(status="disabled")]), _FakeResult()])
     monkeypatch.setattr(teacher_accounts, "db_session", lambda: _fake_db_session(session))
 
@@ -220,3 +223,59 @@ def test_delete_teacher_account_soft_disables(monkeypatch: pytest.MonkeyPatch) -
     assert "SET display_name = COALESCE" in session.calls[0][0]
     assert session.calls[0][1]["status"] == "disabled"
     assert account.status == "disabled"
+
+
+def test_enable_teacher_account_restores_active_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = _FakeSession([_FakeResult([_teacher_row(status="active")])])
+    monkeypatch.setattr(teacher_accounts, "db_session", lambda: _fake_db_session(session))
+
+    account = teacher_accounts.enable_teacher_account("00000000-0000-0000-0000-000000000010")
+
+    assert "SET display_name = COALESCE" in session.calls[0][0]
+    assert session.calls[0][1]["status"] == "active"
+    assert account.status == "active"
+
+
+def test_delete_teacher_account_removes_unused_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = _FakeSession(
+        [
+            _FakeResult([_teacher_row(status="disabled")]),
+            _FakeResult([]),
+            _FakeResult([_teacher_row(status="disabled")]),
+        ]
+    )
+    monkeypatch.setattr(teacher_accounts, "db_session", lambda: _fake_db_session(session))
+
+    account = teacher_accounts.delete_teacher_account("00000000-0000-0000-0000-000000000010")
+
+    assert "FROM app_users" in session.calls[0][0]
+    assert "information_schema.table_constraints" in session.calls[1][0]
+    assert "DELETE FROM app_users" in session.calls[2][0]
+    assert account.id == "00000000-0000-0000-0000-000000000010"
+    assert "password_hash" not in account.model_dump()
+
+
+def test_delete_teacher_account_blocks_owned_records(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = _FakeSession(
+        [
+            _FakeResult([_teacher_row(status="disabled")]),
+            _FakeResult(
+                [
+                    {
+                        "table_schema": "public",
+                        "table_name": "teacher_classes",
+                        "column_name": "teacher_user_id",
+                    }
+                ]
+            ),
+            _FakeResult([{"dependency_count": 1}]),
+        ]
+    )
+    monkeypatch.setattr(teacher_accounts, "db_session", lambda: _fake_db_session(session))
+
+    with pytest.raises(DomainHTTPException) as exc_info:
+        teacher_accounts.delete_teacher_account("00000000-0000-0000-0000-000000000010")
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == teacher_accounts.TEACHER_ACCOUNT_DELETE_BLOCKED_DETAIL
+    assert all("DELETE FROM app_users" not in call[0] for call in session.calls)

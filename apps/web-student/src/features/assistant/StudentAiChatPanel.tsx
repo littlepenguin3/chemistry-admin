@@ -36,15 +36,6 @@ function AssistantSourceSummary({ metadata }: { metadata?: StudentAssistantFinal
   return (
     <div className="ai-source-summary">
       <span>引用资料 {sourceCount || sources.length}</span>
-      {sources.length ? (
-        <div>
-          {sources.map((source, index) => (
-            <small key={`${source.chunk_id || source.title || "source"}-${index}`}>
-              {source.title || source.section || source.chunk_id || "课程资料"}
-            </small>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

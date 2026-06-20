@@ -9,7 +9,9 @@ from server.app.domains.platform.teacher_accounts import (
     TeacherAccountPatchRequest,
     TeacherAccountResponse,
     create_teacher_account,
+    delete_teacher_account,
     disable_teacher_account,
+    enable_teacher_account,
     list_teacher_accounts,
     patch_teacher_account,
     reset_teacher_account_password,
@@ -57,9 +59,25 @@ async def web_admin_reset_teacher_account_password(
     return reset_teacher_account_password(account_id, payload)
 
 
+@router.post("/teacher-accounts/{account_id}/disable", response_model=TeacherAccountResponse)
+async def web_admin_disable_teacher_account(
+    account_id: str = Path(min_length=1),
+    _auth: None = Depends(require_web_admin_token),
+) -> TeacherAccountResponse:
+    return disable_teacher_account(account_id)
+
+
+@router.post("/teacher-accounts/{account_id}/enable", response_model=TeacherAccountResponse)
+async def web_admin_enable_teacher_account(
+    account_id: str = Path(min_length=1),
+    _auth: None = Depends(require_web_admin_token),
+) -> TeacherAccountResponse:
+    return enable_teacher_account(account_id)
+
+
 @router.delete("/teacher-accounts/{account_id}", response_model=TeacherAccountResponse)
 async def web_admin_delete_teacher_account(
     account_id: str = Path(min_length=1),
     _auth: None = Depends(require_web_admin_token),
 ) -> TeacherAccountResponse:
-    return disable_teacher_account(account_id)
+    return delete_teacher_account(account_id)

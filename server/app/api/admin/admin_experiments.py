@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Path
 
-from server.app.auth import AuthUser, require_roles
+from server.app.auth import AuthUser, require_teacher_console_user
 from server.app.domains.video_library.index_client import video_library_index_diagnostics
 from server.app.domains.catalog.experiments import (
     get_experiment,
@@ -23,7 +23,7 @@ async def admin_list_experiments(
     include_archived: bool = False,
     video_status: str | None = None,
     question_status: str | None = None,
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return list_experiments_overview(
         chapter_id=chapter_id,
@@ -37,7 +37,7 @@ async def admin_list_experiments(
 @router.get("/experiments/{experiment_id}")
 async def admin_get_experiment(
     experiment_id: str = Path(min_length=1),
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return get_experiment(experiment_id=experiment_id)
 
@@ -45,13 +45,13 @@ async def admin_get_experiment(
 @router.get("/experiment-videos")
 async def admin_list_experiment_videos(
     experiment_id: str | None = None,
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return list_experiment_videos(experiment_id=experiment_id)
 
 
 @router.get("/video-library/index/diagnostics")
 async def admin_video_library_index_diagnostics(
-    user: AuthUser = Depends(require_roles("admin", "teacher")),
+    user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return video_library_index_diagnostics()

@@ -416,7 +416,6 @@ export type StudentAssistantFinalMetadata = {
   sources?: Array<{
     title?: string | null;
     section?: string | null;
-    chunk_id?: string | null;
     score?: number | null;
   }>;
   [key: string]: unknown;

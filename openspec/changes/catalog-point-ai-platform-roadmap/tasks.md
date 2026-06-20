@@ -30,16 +30,16 @@
 
 ## 3. Web Console Role Boundaries
 
-- [ ] 3.1 Audit current `web-admin`, `web-teacher`, and `web-student` routes, menus, API clients, and auth guards after the frontend split.
-- [ ] 3.2 Ensure `web-admin` exposes only operational teacher-account management workflows.
-- [ ] 3.3 Ensure `web-teacher` exposes all teacher workflows to every authenticated teacher account without per-feature permission hiding.
-- [ ] 3.4 Ensure `web-student` exposes no teacher diagnostics, account operations, raw RAG traces, or teacher-only notes.
-- [ ] 3.5 Restore any learning-assistant or AI access/test teacher page that was hidden or removed during route/permission refactors.
-- [ ] 3.6 Rebuild restored AI/learning-assistant pages through current `web-teacher` feature modules and typed API clients rather than deleted `admin-web` code.
-- [ ] 3.7 Implement or verify `web-admin` teacher-account create, disable, enable, rename, delete, and password reset flows.
-- [ ] 3.8 Update backend authorization so teacher-console APIs authorize all teacher accounts consistently.
-- [ ] 3.9 Add route/menu tests proving all teachers see teacher workflows and students/operators do not see the wrong console features.
-- [ ] 3.10 Verify Docker/frontend build targets and local ports for all three web consoles.
+- [x] 3.1 Audit current `web-admin`, `web-teacher`, and `web-student` routes, menus, API clients, and auth guards after the frontend split.
+- [x] 3.2 Ensure `web-admin` exposes only operational teacher-account management workflows.
+- [x] 3.3 Ensure `web-teacher` exposes all teacher workflows to every authenticated teacher account without per-feature permission hiding.
+- [x] 3.4 Ensure `web-student` exposes no teacher diagnostics, account operations, raw RAG traces, or teacher-only notes.
+- [x] 3.5 Restore any learning-assistant or AI access/test teacher page that was hidden or removed during route/permission refactors.
+- [x] 3.6 Rebuild restored AI/learning-assistant pages through current `web-teacher` feature modules and typed API clients rather than deleted `admin-web` code.
+- [x] 3.7 Implement or verify `web-admin` teacher-account create, disable, enable, rename, delete, and password reset flows.
+- [x] 3.8 Update backend authorization so teacher-console APIs authorize all teacher accounts consistently.
+- [x] 3.9 Add route/menu tests proving all teachers see teacher workflows and students/operators do not see the wrong console features.
+- [x] 3.10 Verify Docker/frontend build targets and local ports for all three web consoles.
 
 ## 4. Multi-Equation Point Authoring
 
