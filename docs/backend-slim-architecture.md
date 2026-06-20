@@ -112,6 +112,10 @@ These paths were intentionally deleted rather than kept as compatibility barrels
 - `server/app/agent.py`
 - `server/app/media.py`
 - `server/app/video_worker.py`
+- `server/app/db.py`
+- `server/app/rag.py`
+- `server/app/report.py`
+- `server/app/recommendation.py`
 - `server/app/routers/`
 - `server/app/services/`
 

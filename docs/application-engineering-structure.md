@@ -159,7 +159,7 @@ Rules:
 Current follow-up debt:
 
 - Large domain files such as question workbench, student learning detail, assistant agent runtime, analytics read models, roster classes, and assessment modules should be evaluated before they become new service-layer monoliths.
-- Root-level backend modules that remain outside `domains` and `infrastructure` are migration candidates, not compatibility owners.
+- Root-level backend modules that remain outside `domains` and `infrastructure` are migration candidates, process entrypoints, or seed-backed support modules, not compatibility owners. Retired demo/RAG/report modules must stay deleted rather than returning as wrappers.
 
 ## Validation Gates
 
