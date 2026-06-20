@@ -46,6 +46,7 @@ class GenerationRequest(BaseModel):
     difficulty: str | None = "basic"
     chapter_ids: list[str] = Field(default_factory=list)
     knowledge_point_ids: list[str] = Field(default_factory=list)
+    target_point_node_ids: list[str] = Field(default_factory=list)
 
 
 class QuestionBankAssistantRequest(BaseModel):

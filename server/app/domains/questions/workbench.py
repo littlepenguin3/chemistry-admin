@@ -43,8 +43,14 @@ from server.app.domains.questions.bank import (
 )
 from server.app.domains.questions.generation import (
     CATALOG_NODE_EVIDENCE_REQUIRED_DETAIL,
+    attach_evidence_to_point_contexts,
+    attach_generation_lineage,
+    catalog_point_generation_contexts,
+    question_payload_has_catalog_evidence_lineage,
+    _catalog_node_evidence_package,
     _catalog_node_evidence_ready,
     _load_generation_sources,
+    _static_catalog_node_evidence_package,
 )
 from server.app.domains.assistant.rag_sources import _source_evidence_payload, _source_from_chunk
 from server.app.schemas import AgentAskRequest
@@ -498,6 +504,12 @@ def _load_workbench_evidence_package(
 ) -> dict[str, Any]:
     chapter_ids = _workbench_chapter_ids(session, experiment, target_question)
     knowledge_point_ids = list((target_question or {}).get("related_knowledge_point_ids") or [])
+    static_package = _static_catalog_node_evidence_package(session, target_points=target_points)
+    if _catalog_node_evidence_ready(static_package, target_point_node_ids=_unique_point_node_ids(target_points or [])):
+        return static_package
+    static_diagnostics = static_package.get("diagnostics") if isinstance(static_package.get("diagnostics"), dict) else {}
+    if static_diagnostics.get("freshness_status") == "stale":
+        return static_package
     evidence_prompt = _workbench_evidence_prompt(
         experiment=experiment,
         prompt=prompt,
@@ -545,36 +557,31 @@ def _load_workbench_evidence_package(
         except Exception as exc:
             fallback_reason = f"{exc.__class__.__name__}: {str(exc)[:160]}"
     else:
-        strategy = "canonical_evidence"
+        strategy = "dynamic_rag_unavailable"
         fallback_reason = "rag_gate_unhealthy"
 
-    if not source_refs:
-        strategy = "canonical_evidence_after_hybrid_fallback" if fallback_reason else "canonical_evidence"
-        source_refs = _load_workbench_source_refs(
-            session,
-            experiment=experiment,
-            prompt=evidence_prompt,
-            target_question=target_question,
-            target_points=target_points,
-        )
-
-    return {
-        "mode": trace.get("mode") or strategy,
-        "source_refs": source_refs,
-        "source_count": len(source_refs),
-        "diagnostics": {
+    return _catalog_node_evidence_package(
+        source_refs=source_refs,
+        target_points=target_points,
+        source_mode="dynamic_rag_catalog_node_evidence" if source_refs else strategy,
+        freshness_status="fresh" if source_refs else "missing",
+        diagnostics={
             "rag_gate": rag_gate or {},
             "rag_trace": trace,
-            "source_strategy": strategy,
+            "source_strategy": "catalog_node_evidence",
+            "dynamic_source_strategy": trace.get("mode") or strategy,
             "fallback_reason": fallback_reason,
             "requires_catalog_node_evidence": True,
-            "catalog_node_evidence_ready": False,
+            "catalog_node_evidence_ready": bool(source_refs),
             "chapter_ids": chapter_ids,
             "knowledge_point_ids": knowledge_point_ids,
             "target_point_keys": [point.get("point_key") for point in (target_points or []) if point.get("point_key")],
             "target_point_node_ids": _unique_point_node_ids(target_points or []),
+            "static_evidence_diagnostics": static_diagnostics,
+            "evidence_status": "fresh" if source_refs else "missing",
+            "freshness_status": "fresh" if source_refs else "missing",
         },
-    }
+    )
 
 
 def _create_or_reopen_workbench_session(
@@ -771,12 +778,15 @@ def _workbench_candidate_validation_errors(
 ) -> list[str]:
     errors: list[str] = []
     metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
-    point_keys = metadata.get("primary_point_keys") if isinstance(metadata, dict) else []
-    if not isinstance(point_keys, list) or not [item for item in point_keys if str(item).strip()]:
-        errors.append("primary_point_keys are required")
+    point_node_ids = payload.get("primary_point_node_ids") or metadata.get("primary_point_node_ids") or []
+    normalized_point_node_ids = _unique_point_node_ids(point_node_ids)
+    if not normalized_point_node_ids:
+        errors.append("primary_point_node_ids are required")
     source_audit = metadata.get("source_audit") if isinstance(metadata, dict) else None
     if not isinstance(source_audit, dict):
         errors.append("source_audit is required")
+    elif not question_payload_has_catalog_evidence_lineage(payload, target_point_node_ids=normalized_point_node_ids):
+        errors.append("catalog-node evidence lineage is required")
     if payload.get("question_type") == "single_choice":
         option_links = metadata.get("option_links") if isinstance(metadata, dict) else []
         if not isinstance(option_links, list) or not option_links:
@@ -1062,6 +1072,10 @@ def send_question_workbench_message(*, payload: WorkbenchMessageRequest, session
             )
             return _workbench_session_response(session, session_id)
 
+        point_contexts = attach_evidence_to_point_contexts(
+            catalog_point_generation_contexts(session, target_points=target_points),
+            source_refs=source_refs,
+        )
         context_snapshot = {
             **context_snapshot,
             "selected_point": selected_point,
@@ -1071,6 +1085,7 @@ def send_question_workbench_message(*, payload: WorkbenchMessageRequest, session
             "source_refs": source_refs,
             "rag_gate": rag_gate,
             "evidence_package": evidence_package,
+            "catalog_point_contexts": point_contexts,
             "teacher_point_content": _teacher_point_content_context(
                 session,
                 str(experiment.get("id") or context_snapshot.get("experiment", {}).get("id") or ""),
@@ -1115,6 +1130,7 @@ def send_question_workbench_message(*, payload: WorkbenchMessageRequest, session
                 point=selected_point,
                 target_question=target_question,
                 source_refs=source_refs,
+                point_contexts=point_contexts,
             )
             mode = "openai_sdk" if generated else "local_template"
             if not generated:
@@ -1171,6 +1187,7 @@ def send_question_workbench_message(*, payload: WorkbenchMessageRequest, session
                                 "point_keys": target_point_keys,
                                 "point_node_id": _point_node_id(selected_point),
                                 "point_node_ids": target_point_node_ids,
+                                "catalog_point_contexts": point_contexts,
                                 "question_id": suggestion_request.question_id,
                                 "rag_gate": rag_gate,
                             }
@@ -1187,6 +1204,12 @@ def send_question_workbench_message(*, payload: WorkbenchMessageRequest, session
                     source_refs=source_refs,
                     target_question=target_question,
                     index=index,
+                )
+                row_payload = attach_generation_lineage(
+                    row_payload,
+                    evidence_package=evidence_package,
+                    target_points=target_points,
+                    generation_id=generation_id,
                 )
                 metadata = row_payload.get("metadata") if isinstance(row_payload.get("metadata"), dict) else {}
                 lineage = metadata.get("review_lineage") if isinstance(metadata.get("review_lineage"), dict) else {}
@@ -1345,6 +1368,11 @@ def publish_question_workbench_candidate(*, candidate_id: str, user: Any) -> dic
             "published_from_workbench_at": datetime.now(timezone.utc).isoformat(),
         }
         payload_data["metadata"] = metadata
+        if not question_payload_has_catalog_evidence_lineage(payload_data):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"errors": ["catalog-node evidence lineage is required before publication"]},
+            )
         payload_data["status"] = "published"
         inserted = _insert_question(
             session,

@@ -329,15 +329,30 @@ def test_workbench_candidate_validation_requires_lineage_and_publish_metadata():
         "stem": "Candidate stem",
         "options": [{"label": "A", "text": "Correct"}, {"label": "B", "text": "Wrong"}],
         "answer": {"value": "A"},
+        "primary_point_node_ids": ["cat-point-1"],
         "metadata": {
+            "primary_point_node_ids": ["cat-point-1"],
             "primary_point_keys": ["point-1"],
-            "source_audit": {"canonical_chunk_ids": ["chunk-1"], "evidence_sufficient": True},
-            "option_links": [{"label": "A", "role": "correct_evidence", "point_key": "point-1"}],
+            "source_audit": {
+                "canonical_chunk_ids": ["chunk-1"],
+                "evidence_sufficient": True,
+                "evidence_contract": "catalog_node_evidence",
+                "evidence_source": "dynamic_rag_catalog_node_evidence",
+                "target_point_node_ids": ["cat-point-1"],
+            },
+            "evidence_lineage": {
+                "evidence_contract": "catalog_node_evidence",
+                "evidence_source": "dynamic_rag_catalog_node_evidence",
+                "target_point_node_ids": ["cat-point-1"],
+                "source_ref_count": 1,
+            },
+            "option_links": [{"label": "A", "role": "correct_evidence", "point_node_id": "cat-point-1", "point_key": "point-1"}],
             "review_lineage": {
                 "workbench_session_id": "session-1",
                 "workbench_turn_id": "turn-1",
             },
         },
+        "source_refs": [{"chunk_id": "chunk-1", "point_node_id": "cat-point-1"}],
     }
 
     assert _workbench_candidate_validation_errors(payload, session_id="session-1", turn_id="turn-1") == []

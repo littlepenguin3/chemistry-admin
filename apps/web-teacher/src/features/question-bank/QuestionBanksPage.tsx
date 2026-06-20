@@ -44,6 +44,7 @@ import type { LearningAssistantRuntime } from "../../api/learningAssistant";
 import type {
   PointAwareSuggestionResponse,
   Question,
+  QuestionBankListResponse,
   QuestionBankSummary,
   QuestionDraft,
   QuestionWorkbenchCandidate,
@@ -122,7 +123,7 @@ export function QuestionBanksPage() {
 
   const banks = useQuery({
     queryKey: ["question-banks"],
-    queryFn: () => api<ApiList<QuestionBankSummary>>("/api/admin/question-banks"),
+    queryFn: () => api<QuestionBankListResponse>("/api/admin/question-banks"),
   });
 
   const bankExperiments = banks.data?.items || [];
@@ -190,6 +191,8 @@ export function QuestionBanksPage() {
     [bankExperiments],
   );
   const isCatalogResetEmptyBank = !banks.isLoading && !banks.error && totals.total === 0;
+  const regenerationAudit = banks.data?.regeneration_audit || banks.data?.baseline?.regeneration_audit;
+  const evidenceSourceEntries = Object.entries(regenerationAudit?.evidence_source_counts || {}).filter(([, count]) => Number(count) > 0);
 
   const pointOptions = useMemo<QuestionPointOption[]>(() => {
     const byId = new Map<string, QuestionPointOption>();
@@ -445,7 +448,29 @@ export function QuestionBanksPage() {
           type="info"
           showIcon
           message="当前默认实验题库为空"
-          description="旧题库已随新版实验目录重置退休；新题库需等待每个目录点位完成 chunk 绑定和 GPU/BGE rerank 后再生成。"
+          description={
+            <div className="question-bank-regeneration-audit">
+              <Text>旧题库已随新版实验目录重置退休；新题库需绑定到 catalog point node，并保留可审计的 catalog-node evidence lineage。</Text>
+              {regenerationAudit ? (
+                <div className="question-bank-regeneration-tags">
+                  <Tag color="blue">点位 {regenerationAudit.catalog_point_count}</Tag>
+                  <Tag color="green">已覆盖 {regenerationAudit.covered_point_count}</Tag>
+                  <Tag color="gold">待生成 {regenerationAudit.unresolved_point_count}</Tag>
+                  <Tag>采纳草稿 {regenerationAudit.accepted_draft_count}</Tag>
+                  <Tag>拒绝草稿 {regenerationAudit.rejected_draft_count}</Tag>
+                  {evidenceSourceEntries.length ? (
+                    evidenceSourceEntries.map(([source, count]) => (
+                      <Tag key={source}>
+                        {source} {count}
+                      </Tag>
+                    ))
+                  ) : (
+                    <Tag>catalog-node evidence 待建立</Tag>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          }
           className="question-bank-empty-baseline-alert"
         />
       ) : null}
@@ -801,6 +826,24 @@ export function QuestionBanksPage() {
                     <div className="question-evidence-row">
                       <Text type="secondary">审查备注</Text>
                       <Text>{selectedQuestion.metadata.source_audit.reviewer_note}</Text>
+                    </div>
+                  ) : null}
+                  {selectedQuestion.metadata?.source_audit?.evidence_source ? (
+                    <div className="question-evidence-row">
+                      <Text type="secondary">生成证据来源</Text>
+                      <Text>
+                        {selectedQuestion.metadata.source_audit.evidence_contract || "catalog_node_evidence"} ·{" "}
+                        {selectedQuestion.metadata.source_audit.evidence_source}
+                      </Text>
+                    </div>
+                  ) : null}
+                  {selectedQuestion.metadata?.evidence_lineage ? (
+                    <div className="question-evidence-row">
+                      <Text type="secondary">生成 lineage</Text>
+                      <Text>
+                        {selectedQuestion.metadata.evidence_lineage.generation_id || "draft"} · refs{" "}
+                        {selectedQuestion.metadata.evidence_lineage.source_ref_count ?? selectedQuestion.source_refs?.length ?? 0}
+                      </Text>
                     </div>
                   ) : null}
                 </div>

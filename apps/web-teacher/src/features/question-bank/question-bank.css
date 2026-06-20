@@ -73,6 +73,17 @@
   line-height: 1.6;
 }
 
+.question-bank-regeneration-audit {
+  display: grid;
+  gap: 8px;
+}
+
+.question-bank-regeneration-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .question-list-heading-actions {
   flex-shrink: 0;
   padding-top: 2px;

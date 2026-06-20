@@ -18,7 +18,8 @@ from server.app.experiment_admin_schemas import (
 from server.app.domains.platform.settings import ai_feature_enabled
 from server.app.domains.catalog.experiments import _ensure_experiment, _list_experiments
 
-OBJECTIVE_TYPES = {"single_choice", "true_false", "fill_blank"}
+QUESTION_TYPE_ORDER = ("single_choice", "true_false", "fill_blank")
+OBJECTIVE_TYPES = set(QUESTION_TYPE_ORDER)
 QUESTION_STATUSES = {"draft", "published", "disabled", "archived"}
 
 def _json(value: Any) -> str:
@@ -59,6 +60,268 @@ def _point_node_ids_from_payload(payload: dict[str, Any], metadata: dict[str, An
         [point.get("point_node_id") or point.get("point_id") or point.get("node_id") for point in primary_points if isinstance(point, dict)],
         [link.get("point_node_id") or link.get("point_id") or link.get("node_id") for link in option_links if isinstance(link, dict)],
     )
+
+
+def _zero_type_counts() -> dict[str, int]:
+    return {question_type: 0 for question_type in QUESTION_TYPE_ORDER}
+
+
+def _inc_count(target: dict[str, int], key: str, amount: int = 1) -> None:
+    clean_key = str(key or "unknown").strip() or "unknown"
+    target[clean_key] = int(target.get(clean_key) or 0) + amount
+
+
+def _metadata(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _payload_point_node_ids(payload: dict[str, Any]) -> list[str]:
+    return _point_node_ids_from_payload(payload, _metadata(payload.get("metadata")))
+
+
+def _question_evidence_source(metadata: dict[str, Any]) -> str:
+    source_audit = metadata.get("source_audit") if isinstance(metadata.get("source_audit"), dict) else {}
+    lineage = metadata.get("evidence_lineage") if isinstance(metadata.get("evidence_lineage"), dict) else {}
+    source = (
+        source_audit.get("evidence_source")
+        or lineage.get("evidence_source")
+        or source_audit.get("evidence_contract")
+        or lineage.get("evidence_contract")
+        or "unknown"
+    )
+    return str(source or "unknown").strip() or "unknown"
+
+
+def _empty_point_audit(point_node_id: str, row: dict[str, Any] | None = None) -> dict[str, Any]:
+    row = row or {}
+    return {
+        "point_node_id": point_node_id,
+        "point_title": row.get("point_title") or point_node_id,
+        "chapter_id": row.get("chapter_id") or "",
+        "directory_id": row.get("directory_id") or "",
+        "directory_title": row.get("directory_title") or "",
+        "evidence_status": row.get("evidence_status") or "missing",
+        "evidence_source_mode": row.get("evidence_source_mode") or "none",
+        "question_type_counts": _zero_type_counts(),
+        "published_count": 0,
+        "draft_count": 0,
+        "disabled_count": 0,
+        "accepted_draft_count": 0,
+        "rejected_draft_count": 0,
+        "evidence_source_counts": {},
+    }
+
+
+def _ensure_audit_bucket(
+    buckets: dict[str, dict[str, Any]],
+    key: str,
+    *,
+    title: str,
+    chapter_id: str = "",
+) -> dict[str, Any]:
+    clean_key = key or "unassigned"
+    if clean_key not in buckets:
+        buckets[clean_key] = {
+            "id": clean_key,
+            "title": title or clean_key,
+            "chapter_id": chapter_id,
+            "point_count": 0,
+            "covered_point_count": 0,
+            "unresolved_point_count": 0,
+            "question_type_counts": _zero_type_counts(),
+            "published_count": 0,
+            "draft_count": 0,
+            "accepted_draft_count": 0,
+            "rejected_draft_count": 0,
+            "evidence_source_counts": {},
+        }
+    return buckets[clean_key]
+
+
+def _question_generation_audit(session: Any, *, chapter_id: str | None = None) -> dict[str, Any]:
+    point_params: dict[str, Any] = {}
+    point_filter = ""
+    if chapter_id:
+        point_filter = "AND n.chapter_id = :chapter_id"
+        point_params["chapter_id"] = chapter_id
+    point_query = text(
+        f"""
+        SELECT n.id AS point_node_id,
+               n.chapter_id,
+               n.title AS point_title,
+               parent.id AS directory_id,
+               parent.title AS directory_title,
+               COALESCE(state.evidence_status, 'missing') AS evidence_status,
+               COALESCE(state.source_mode, 'none') AS evidence_source_mode
+        FROM experiment_catalog_nodes n
+        LEFT JOIN experiment_catalog_nodes parent ON parent.id = n.parent_id
+        LEFT JOIN experiment_catalog_point_evidence_state state ON state.node_id = n.id
+        WHERE n.node_kind = 'point'
+          AND n.status <> 'archived'
+          {point_filter}
+        ORDER BY n.chapter_id, parent.display_order NULLS FIRST, n.display_order, n.id
+        """
+    )
+    point_result = session.execute(point_query, point_params) if point_params else session.execute(point_query)
+    point_rows = [dict(row) for row in point_result.mappings().all()]
+    points = {
+        str(row["point_node_id"]): _empty_point_audit(str(row["point_node_id"]), row)
+        for row in point_rows
+    }
+    chapters: dict[str, dict[str, Any]] = {}
+    directories: dict[str, dict[str, Any]] = {}
+    for point in points.values():
+        chapter = _ensure_audit_bucket(
+            chapters,
+            str(point.get("chapter_id") or "unassigned"),
+            title=str(point.get("chapter_id") or "unassigned"),
+        )
+        directory = _ensure_audit_bucket(
+            directories,
+            str(point.get("directory_id") or "unassigned"),
+            title=str(point.get("directory_title") or "Unassigned directory"),
+            chapter_id=str(point.get("chapter_id") or ""),
+        )
+        chapter["point_count"] += 1
+        directory["point_count"] += 1
+
+    question_rows = [
+        dict(row)
+        for row in session.execute(
+            text(
+                """
+                SELECT question_type, status, primary_point_node_ids, metadata
+                FROM experiment_questions
+                WHERE status <> 'archived'
+                """
+            )
+        )
+        .mappings()
+        .all()
+    ]
+    question_type_counts = _zero_type_counts()
+    evidence_source_counts: dict[str, int] = {}
+    for row in question_rows:
+        q_type = str(row.get("question_type") or "unknown")
+        q_status = str(row.get("status") or "unknown")
+        metadata = _metadata(row.get("metadata"))
+        source = _question_evidence_source(metadata)
+        _inc_count(question_type_counts, q_type)
+        _inc_count(evidence_source_counts, source)
+        payload = {"primary_point_node_ids": row.get("primary_point_node_ids") or [], "metadata": metadata}
+        for point_id in _payload_point_node_ids(payload):
+            point = points.setdefault(point_id, _empty_point_audit(point_id))
+            _inc_count(point["question_type_counts"], q_type)
+            _inc_count(point["evidence_source_counts"], source)
+            if q_status == "published":
+                point["published_count"] += 1
+            elif q_status == "draft":
+                point["draft_count"] += 1
+            elif q_status == "disabled":
+                point["disabled_count"] += 1
+
+    draft_rows = [
+        dict(row)
+        for row in session.execute(
+            text(
+                """
+                SELECT status, payload, validation_errors
+                FROM experiment_question_drafts
+                """
+            )
+        )
+        .mappings()
+        .all()
+    ]
+    draft_status_counts: dict[str, int] = {}
+    draft_question_type_counts = _zero_type_counts()
+    for row in draft_rows:
+        draft_status = str(row.get("status") or "unknown")
+        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        q_type = str(payload.get("question_type") or "unknown")
+        _inc_count(draft_status_counts, draft_status)
+        _inc_count(draft_question_type_counts, q_type)
+        for point_id in _payload_point_node_ids(payload):
+            point = points.setdefault(point_id, _empty_point_audit(point_id))
+            if draft_status == "draft":
+                point["draft_count"] += 1
+            elif draft_status == "published":
+                point["accepted_draft_count"] += 1
+            elif draft_status == "rejected":
+                point["rejected_draft_count"] += 1
+
+    candidate_rows = [
+        dict(row)
+        for row in session.execute(
+            text(
+                """
+                SELECT status, payload, validation_errors
+                FROM experiment_question_workbench_candidates
+                """
+            )
+        )
+        .mappings()
+        .all()
+    ]
+    candidate_status_counts: dict[str, int] = {}
+    for row in candidate_rows:
+        _inc_count(candidate_status_counts, str(row.get("status") or "unknown"))
+
+    for point in points.values():
+        chapter = _ensure_audit_bucket(
+            chapters,
+            str(point.get("chapter_id") or "unassigned"),
+            title=str(point.get("chapter_id") or "unassigned"),
+        )
+        directory = _ensure_audit_bucket(
+            directories,
+            str(point.get("directory_id") or "unassigned"),
+            title=str(point.get("directory_title") or "Unassigned directory"),
+            chapter_id=str(point.get("chapter_id") or ""),
+        )
+        for bucket in (chapter, directory):
+            bucket["published_count"] += int(point.get("published_count") or 0)
+            bucket["draft_count"] += int(point.get("draft_count") or 0)
+            bucket["accepted_draft_count"] += int(point.get("accepted_draft_count") or 0)
+            bucket["rejected_draft_count"] += int(point.get("rejected_draft_count") or 0)
+            if point.get("published_count") or point.get("draft_count") or point.get("accepted_draft_count"):
+                bucket["covered_point_count"] += 1
+            else:
+                bucket["unresolved_point_count"] += 1
+            for q_type, count in point.get("question_type_counts", {}).items():
+                bucket["question_type_counts"][q_type] = int(bucket["question_type_counts"].get(q_type) or 0) + int(count or 0)
+            for source, count in point.get("evidence_source_counts", {}).items():
+                _inc_count(bucket["evidence_source_counts"], source, int(count or 0))
+
+    by_point = sorted(points.values(), key=lambda item: (str(item.get("chapter_id") or ""), str(item.get("directory_id") or ""), str(item.get("point_node_id") or "")))
+    unresolved_points = [
+        {
+            "point_node_id": point["point_node_id"],
+            "point_title": point.get("point_title"),
+            "chapter_id": point.get("chapter_id"),
+            "directory_id": point.get("directory_id"),
+            "directory_title": point.get("directory_title"),
+            "evidence_status": point.get("evidence_status"),
+        }
+        for point in by_point
+        if not point.get("published_count") and not point.get("draft_count") and not point.get("accepted_draft_count")
+    ]
+    return {
+        "catalog_point_count": len(by_point),
+        "covered_point_count": len(by_point) - len(unresolved_points),
+        "unresolved_point_count": len(unresolved_points),
+        "question_type_counts": question_type_counts,
+        "draft_question_type_counts": draft_question_type_counts,
+        "evidence_source_counts": evidence_source_counts,
+        "draft_status_counts": draft_status_counts,
+        "workbench_candidate_status_counts": candidate_status_counts,
+        "accepted_draft_count": int(draft_status_counts.get("published") or 0) + int(candidate_status_counts.get("published") or 0),
+        "rejected_draft_count": int(draft_status_counts.get("rejected") or 0) + int(candidate_status_counts.get("rejected") or 0),
+        "by_chapter": sorted(chapters.values(), key=lambda item: str(item.get("id") or "")),
+        "by_directory": sorted(directories.values(), key=lambda item: (str(item.get("chapter_id") or ""), str(item.get("id") or ""))),
+        "by_point": by_point,
+        "unresolved_points": unresolved_points[:100],
+    }
 
 def _normalize_answer(question_type: str, answer: Any) -> dict[str, Any]:
     if question_type == "single_choice":
@@ -667,6 +930,7 @@ def list_question_banks(
             .mappings()
             .all()
         ]
+        regeneration_audit = _question_generation_audit(session, chapter_id=chapter_id)
     banks_by_experiment: dict[str, list[dict[str, Any]]] = {}
     for bank in banks:
         banks_by_experiment.setdefault(bank["experiment_id"], []).append(bank)
@@ -684,7 +948,9 @@ def list_question_banks(
                 else ""
             ),
             "requires_catalog_node_evidence": True,
+            "regeneration_audit": regeneration_audit,
         },
+        "regeneration_audit": regeneration_audit,
     }
 
 

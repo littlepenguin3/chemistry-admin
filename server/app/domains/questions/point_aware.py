@@ -21,6 +21,9 @@ from server.app.domains.questions.bank import _json, _json_array, _validate_ques
 from server.app.domains.questions.generation import (
     CATALOG_NODE_EVIDENCE_REQUIRED_DETAIL,
     OBJECTIVE_TYPES,
+    attach_evidence_to_point_contexts,
+    attach_generation_lineage,
+    catalog_point_generation_contexts,
     _catalog_node_evidence_ready,
     _question_source_chunk_ids,
 )
@@ -458,6 +461,7 @@ def _try_openai_point_aware_suggestions(
     point: dict[str, str] | None,
     target_question: dict[str, Any] | None,
     source_refs: list[dict[str, Any]],
+    point_contexts: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]] | None:
     settings = effective_ai_settings(get_settings())
     if settings.agent_llm_provider == "disabled":
@@ -480,7 +484,7 @@ def _try_openai_point_aware_suggestions(
                         "Generate teacher-review draft chemistry objective questions for a point-aware experiment question bank. "
                         "Return JSON only: {\"questions\":[...]}. "
                         "Each question must include question_type, stem, options, answer, explanation, primary_point_keys, "
-                        "source_audit, and option_links for single_choice. Do not publish."
+                        "primary_point_node_ids, source_audit, and option_links for single_choice. Do not publish."
                     ),
                 },
                 {
@@ -499,6 +503,7 @@ def _try_openai_point_aware_suggestions(
                                 "summary": experiment.get("summary"),
                             },
                             "selected_point": point,
+                            "catalog_point_contexts": point_contexts or [],
                             "original_question": target_question,
                             "source_refs": source_refs,
                         },
@@ -586,6 +591,10 @@ def create_point_aware_suggestions(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=CATALOG_NODE_EVIDENCE_REQUIRED_DETAIL,
             )
+        point_contexts = attach_evidence_to_point_contexts(
+            catalog_point_generation_contexts(session, target_points=selected_points),
+            source_refs=source_refs,
+        )
         ai_settings = effective_ai_settings(get_settings())
         generated = _try_openai_point_aware_suggestions(
             request=payload,
@@ -593,6 +602,7 @@ def create_point_aware_suggestions(
             point=selected_point,
             target_question=target_question,
             source_refs=source_refs,
+            point_contexts=point_contexts,
         )
         mode = "openai_sdk" if generated else "local_template"
         if not generated:
@@ -639,6 +649,7 @@ def create_point_aware_suggestions(
                             "point_keys": target_point_keys,
                             "point_node_id": _point_node_id(selected_point),
                             "point_node_ids": target_point_node_ids,
+                            "catalog_point_contexts": point_contexts,
                             "question_id": payload.question_id,
                             "rag_gate": rag_gate,
                             "evidence_package": evidence_package,
@@ -657,6 +668,12 @@ def create_point_aware_suggestions(
                 source_refs=source_refs,
                 target_question=target_question,
                 index=index,
+            )
+            row_payload = attach_generation_lineage(
+                row_payload,
+                evidence_package=evidence_package,
+                target_points=selected_points,
+                generation_id=generation_id,
             )
             normalized, errors = _validate_question_payload(row_payload)
             draft = dict(

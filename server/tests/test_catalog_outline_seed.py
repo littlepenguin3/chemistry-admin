@@ -137,13 +137,29 @@ def test_question_generation_requires_fresh_catalog_node_evidence() -> None:
     }
     catalog_package = {
         "mode": "catalog_node_evidence",
+        "evidence_contract": "catalog_node_evidence",
+        "source_mode": "static_catalog_node_evidence",
         "source_refs": [{"chunk_id": "chunk-1"}],
         "target_point_node_ids": ["cat-outline-point-1"],
+    }
+    dynamic_package = {
+        "mode": "catalog_node_evidence",
+        "evidence_contract": "catalog_node_evidence",
+        "source_mode": "dynamic_rag_catalog_node_evidence",
+        "source_refs": [{"chunk_id": "chunk-2"}],
+        "target_point_node_ids": ["cat-outline-point-1"],
+    }
+    stale_package = {
+        **catalog_package,
+        "freshness_status": "stale",
+        "evidence_status": "stale",
     }
 
     assert _catalog_node_evidence_ready(legacy_package, target_point_node_ids=["cat-outline-point-1"]) is False
     assert _catalog_node_evidence_ready(catalog_package, target_point_node_ids=["cat-outline-point-2"]) is False
     assert _catalog_node_evidence_ready(catalog_package, target_point_node_ids=["cat-outline-point-1"]) is True
+    assert _catalog_node_evidence_ready(dynamic_package, target_point_node_ids=["cat-outline-point-1"]) is True
+    assert _catalog_node_evidence_ready(stale_package, target_point_node_ids=["cat-outline-point-1"]) is False
 
 
 def test_question_bank_empty_baseline_response_marks_retired_seed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -178,6 +194,94 @@ def test_question_bank_empty_baseline_response_marks_retired_seed(monkeypatch: p
     assert response["baseline"]["question_bank_empty"] is True
     assert response["baseline"]["retired_legacy_seed"] is True
     assert response["baseline"]["requires_catalog_node_evidence"] is True
+    assert response["baseline"]["regeneration_audit"]["catalog_point_count"] == 0
+    assert response["regeneration_audit"]["unresolved_point_count"] == 0
+
+
+def test_question_bank_regeneration_audit_reports_catalog_node_coverage() -> None:
+    class FakeResult:
+        def __init__(self, rows: list[dict[str, Any]]) -> None:
+            self._rows = rows
+
+        def mappings(self) -> FakeResult:
+            return self
+
+        def all(self) -> list[dict[str, Any]]:
+            return self._rows
+
+    class FakeSession:
+        def execute(self, statement: Any, _params: dict[str, Any] | None = None) -> FakeResult:
+            sql = str(statement)
+            if "FROM experiment_catalog_nodes n" in sql:
+                return FakeResult(
+                    [
+                        {
+                            "point_node_id": "cat-point-1",
+                            "chapter_id": "CH13",
+                            "point_title": "Point 1",
+                            "directory_id": "cat-dir-1",
+                            "directory_title": "Directory 1",
+                            "evidence_status": "succeeded",
+                            "evidence_source_mode": "dynamic_rag_catalog_node_evidence",
+                        },
+                        {
+                            "point_node_id": "cat-point-2",
+                            "chapter_id": "CH13",
+                            "point_title": "Point 2",
+                            "directory_id": "cat-dir-1",
+                            "directory_title": "Directory 1",
+                            "evidence_status": "missing",
+                            "evidence_source_mode": "none",
+                        },
+                    ]
+                )
+            if "FROM experiment_questions" in sql:
+                return FakeResult(
+                    [
+                        {
+                            "question_type": "single_choice",
+                            "status": "published",
+                            "primary_point_node_ids": ["cat-point-1"],
+                            "metadata": {
+                                "source_audit": {
+                                    "evidence_contract": "catalog_node_evidence",
+                                    "evidence_source": "dynamic_rag_catalog_node_evidence",
+                                }
+                            },
+                        }
+                    ]
+                )
+            if "FROM experiment_question_drafts" in sql:
+                return FakeResult(
+                    [
+                        {
+                            "status": "rejected",
+                            "payload": {
+                                "question_type": "true_false",
+                                "primary_point_node_ids": ["cat-point-2"],
+                                "metadata": {"primary_point_node_ids": ["cat-point-2"]},
+                            },
+                            "validation_errors": [],
+                        }
+                    ]
+                )
+            if "FROM experiment_question_workbench_candidates" in sql:
+                return FakeResult([{"status": "published", "payload": {}, "validation_errors": []}])
+            return FakeResult([])
+
+    audit = question_bank_domain._question_generation_audit(FakeSession())
+
+    assert audit["catalog_point_count"] == 2
+    assert audit["covered_point_count"] == 1
+    assert audit["unresolved_point_count"] == 1
+    assert audit["question_type_counts"]["single_choice"] == 1
+    assert audit["draft_question_type_counts"]["true_false"] == 1
+    assert audit["evidence_source_counts"]["dynamic_rag_catalog_node_evidence"] == 1
+    assert audit["accepted_draft_count"] == 1
+    assert audit["rejected_draft_count"] == 1
+    assert audit["by_chapter"][0]["id"] == "CH13"
+    assert audit["by_directory"][0]["id"] == "cat-dir-1"
+    assert audit["unresolved_points"][0]["point_node_id"] == "cat-point-2"
 
 
 def test_thirty_seed_examples_build_search_documents_without_legacy_ai_evidence() -> None:

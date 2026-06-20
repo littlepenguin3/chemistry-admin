@@ -90,16 +90,16 @@
 
 ## 7. Question Bank Reset And Generation Gate
 
-- [ ] 7.1 Verify old question-bank seed data is absent or inactive after the catalog reset.
-- [ ] 7.2 Add teacher question-bank empty/pending-regeneration state when no fresh catalog-node bank exists.
-- [ ] 7.3 Implement generation readiness checks for target catalog point node ids.
-- [ ] 7.4 Reject generation when evidence is missing, stale, legacy-keyed, or incompatible with the requested catalog node ids.
-- [ ] 7.5 Allow dynamic RAG evidence as a recorded generation source when runtime policy permits and static binding is absent.
-- [ ] 7.6 Build generation prompts from structured catalog point context, normalized equations, videos, related points, and compatible evidence sources.
-- [ ] 7.7 Preserve separate identity/evidence context for multi-point generation requests.
-- [ ] 7.8 Store generated questions as teacher-reviewable drafts rather than publishing them directly.
-- [ ] 7.9 Validate generated candidates for objective type, deterministic answer shape, point node ids, source audit, and evidence lineage.
-- [ ] 7.10 Block publication of candidates without compatible catalog-node evidence lineage.
-- [ ] 7.11 Add regeneration coverage/audit reports by chapter, directory, point node, question type, evidence source, accepted drafts, rejected drafts, and unresolved points.
-- [ ] 7.12 Update question-bank UI to show linked catalog point titles, evidence status, deterministic answer data, and generation lineage without legacy point keys as authoritative metadata.
-- [ ] 7.13 Add tests for empty baseline, readiness gate failures, dynamic evidence generation, draft validation, publication blocking, and coverage audit output.
+- [x] 7.1 Verify old question-bank seed data is absent or inactive after the catalog reset.
+- [x] 7.2 Add teacher question-bank empty/pending-regeneration state when no fresh catalog-node bank exists.
+- [x] 7.3 Implement generation readiness checks for target catalog point node ids.
+- [x] 7.4 Reject generation when evidence is missing, stale, legacy-keyed, or incompatible with the requested catalog node ids.
+- [x] 7.5 Allow dynamic RAG evidence as a recorded generation source when runtime policy permits and static binding is absent.
+- [x] 7.6 Build generation prompts from structured catalog point context, normalized equations, videos, related points, and compatible evidence sources.
+- [x] 7.7 Preserve separate identity/evidence context for multi-point generation requests.
+- [x] 7.8 Store generated questions as teacher-reviewable drafts rather than publishing them directly.
+- [x] 7.9 Validate generated candidates for objective type, deterministic answer shape, point node ids, source audit, and evidence lineage.
+- [x] 7.10 Block publication of candidates without compatible catalog-node evidence lineage.
+- [x] 7.11 Add regeneration coverage/audit reports by chapter, directory, point node, question type, evidence source, accepted drafts, rejected drafts, and unresolved points.
+- [x] 7.12 Update question-bank UI to show linked catalog point titles, evidence status, deterministic answer data, and generation lineage without legacy point keys as authoritative metadata.
+- [x] 7.13 Add tests for empty baseline, readiness gate failures, dynamic evidence generation, draft validation, publication blocking, and coverage audit output.

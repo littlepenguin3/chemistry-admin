@@ -81,9 +81,21 @@ export type Question = {
     machine_grading?: string;
     source_audit?: {
       evidence_sufficient?: boolean;
+      evidence_contract?: string;
+      evidence_source?: string;
+      target_point_node_ids?: string[];
       canonical_chunk_ids?: string[];
       supporting_theory_chunk_ids?: string[];
       reviewer_note?: string;
+      model_reviewer_note?: string;
+    };
+    evidence_lineage?: {
+      generation_id?: string | null;
+      evidence_contract?: string;
+      evidence_source?: string;
+      target_point_node_ids?: string[];
+      source_ref_count?: number;
+      [key: string]: unknown;
     };
     [key: string]: unknown;
   };
@@ -236,6 +248,7 @@ export type QuestionWorkbenchSession = {
     target_points?: QuestionPoint[];
     target_point_node_ids?: string[];
     target_point_keys?: string[];
+    catalog_point_contexts?: Array<Record<string, unknown>>;
     source_refs?: SourceRef[];
     rag_gate?: {
       healthy?: boolean;
@@ -270,8 +283,38 @@ export type QuestionWorkbenchSession = {
   updated_at?: string;
 };
 
-export function listQuestionBanks(): Promise<ApiList<QuestionBankSummary>> {
-  return api<ApiList<QuestionBankSummary>>("/api/admin/question-banks");
+export type QuestionRegenerationAudit = {
+  catalog_point_count: number;
+  covered_point_count: number;
+  unresolved_point_count: number;
+  question_type_counts: Record<string, number>;
+  draft_question_type_counts: Record<string, number>;
+  evidence_source_counts: Record<string, number>;
+  draft_status_counts: Record<string, number>;
+  workbench_candidate_status_counts: Record<string, number>;
+  accepted_draft_count: number;
+  rejected_draft_count: number;
+  by_chapter: Array<Record<string, unknown>>;
+  by_directory: Array<Record<string, unknown>>;
+  by_point: Array<Record<string, unknown>>;
+  unresolved_points: Array<Record<string, unknown>>;
+};
+
+export type QuestionBankBaseline = {
+  question_bank_empty: boolean;
+  retired_legacy_seed: boolean;
+  message?: string;
+  requires_catalog_node_evidence: boolean;
+  regeneration_audit?: QuestionRegenerationAudit;
+};
+
+export type QuestionBankListResponse = ApiList<QuestionBankSummary> & {
+  baseline?: QuestionBankBaseline;
+  regeneration_audit?: QuestionRegenerationAudit;
+};
+
+export function listQuestionBanks(): Promise<QuestionBankListResponse> {
+  return api<QuestionBankListResponse>("/api/admin/question-banks");
 }
 
 export function listQuestionBankQuestions(params: URLSearchParams): Promise<ApiList<Question>> {
