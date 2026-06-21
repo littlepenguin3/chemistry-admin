@@ -193,6 +193,7 @@ export type CatalogStaticEvidencePayload = {
 export type CatalogPointAiContext = {
   teacher_only: true;
   node_id: string;
+  canonical_point_id?: string | null;
   point_title: string;
   catalog_path: CatalogBreadcrumb[];
   catalog_path_text: string;

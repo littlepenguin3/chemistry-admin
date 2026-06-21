@@ -9,10 +9,12 @@ from typing import Any
 
 from sqlalchemy import text
 
+from server.app.chemistry_search import chemistry_vocabulary_metadata
 from server.app.infrastructure.settings import ROOT, get_settings
 from server.app.infrastructure.database import db_session
 
 
+VIDEO_LIBRARY_INDEX_MAPPING_VERSION = "chemistry-point-placement-v4"
 ANALYZER_ASSET_ROOT = ROOT / "data" / "seed" / "search" / "es_ik"
 ANALYZER_ASSET_FILES = [
     ("manifest", ANALYZER_ASSET_ROOT / "manifest.json"),
@@ -123,6 +125,10 @@ def video_library_index_mapping(
             }
         },
         "mappings": {
+            "_meta": {
+                "mapping_version": VIDEO_LIBRARY_INDEX_MAPPING_VERSION,
+                "retrieval_model": "point-placement-with-chemistry-facets",
+            },
             "dynamic": "false",
             "properties": {
                 "id": {"type": "keyword"},
@@ -132,6 +138,7 @@ def video_library_index_mapping(
                 "canonical_point_id": {"type": "keyword"},
                 "chapter_id": {"type": "keyword"},
                 "chapter_ids": {"type": "keyword"},
+                "chapter_path": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},
                 "catalog_path": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},
                 "category_text": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},
                 "title": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},
@@ -143,8 +150,32 @@ def video_library_index_mapping(
                 "safety_note": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},
                 "related_text": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},
                 "formulae": {"type": "keyword", "normalizer": "chemistry_keyword"},
-                "aliases": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},
+                "title_formulae": {"type": "keyword", "normalizer": "chemistry_keyword"},
+                "title_formula_pairs": {"type": "keyword", "normalizer": "chemistry_keyword"},
+                "aliases": {
+                    "type": "text",
+                    "analyzer": "chemistry_ik",
+                    "search_analyzer": search_analyzer,
+                    "fields": {"keyword": {"type": "keyword", "normalizer": "chemistry_keyword"}},
+                },
+                "strict_aliases": {"type": "keyword", "normalizer": "chemistry_keyword"},
+                "reactants": {"type": "keyword", "normalizer": "chemistry_keyword"},
+                "products": {"type": "keyword", "normalizer": "chemistry_keyword"},
+                "participants": {"type": "keyword", "normalizer": "chemistry_keyword"},
+                "equation_formula_pairs": {"type": "keyword", "normalizer": "chemistry_keyword"},
+                "equation_rows": {"type": "text", "analyzer": "chemistry_ik", "search_analyzer": search_analyzer},
+                "annotation_formulae": {"type": "keyword", "normalizer": "chemistry_keyword"},
+                "annotation_aliases": {"type": "keyword", "normalizer": "chemistry_keyword"},
+                "reagent_aliases": {
+                    "type": "text",
+                    "analyzer": "chemistry_ik",
+                    "search_analyzer": search_analyzer,
+                    "fields": {"keyword": {"type": "keyword", "normalizer": "chemistry_keyword"}},
+                },
                 "reaction_features": {"type": "keyword"},
+                "condition_tags": {"type": "keyword", "normalizer": "chemistry_keyword"},
+                "phenomenon_tags": {"type": "keyword", "normalizer": "chemistry_keyword"},
+                "property_tags": {"type": "keyword", "normalizer": "chemistry_keyword"},
                 "has_video": {"type": "boolean"},
                 "video_count": {"type": "integer"},
                 "target": {"type": "object", "enabled": True},
@@ -253,6 +284,32 @@ def video_library_index_diagnostics() -> dict[str, Any]:
             es["health"] = client.health()
             count_payload = client.request("GET", f"/{client.index}/_count")
             es["document_count"] = count_payload.get("count")
+            mapping_payload = client.request("GET", f"/{client.index}/_mapping")
+            mapping = mapping_payload.get(client.index, {}).get("mappings", {})
+            properties = mapping.get("properties", {})
+            es["mapping"] = {
+                "version": (mapping.get("_meta") or {}).get("mapping_version"),
+                "desired_version": VIDEO_LIBRARY_INDEX_MAPPING_VERSION,
+                "field_count": len(properties),
+                "chemistry_fields_present": {
+                    field: field in properties
+                    for field in [
+                        "formulae",
+                        "title_formulae",
+                        "title_formula_pairs",
+                        "aliases",
+                        "reactants",
+                        "products",
+                        "participants",
+                        "equation_formula_pairs",
+                        "equation_rows",
+                        "reagent_aliases",
+                        "condition_tags",
+                        "phenomenon_tags",
+                        "property_tags",
+                    ]
+                },
+            }
         except Exception as exc:  # noqa: BLE001 - diagnostics should be best-effort.
             es["error"] = str(exc)
     return {
@@ -260,9 +317,11 @@ def video_library_index_diagnostics() -> dict[str, Any]:
             "enabled": settings.video_library_search_enabled,
             "backend": settings.video_library_search_backend,
             "index": settings.video_library_search_index,
+            "desired_mapping_version": VIDEO_LIBRARY_INDEX_MAPPING_VERSION,
             "analyzer": settings.video_library_search_analyzer,
             "local_fallback": settings.video_library_search_local_fallback,
             "analyzer_assets": video_library_analyzer_assets(),
+            "dictionary_assets": chemistry_vocabulary_metadata(),
         },
         "postgres": {
             "published_point_content_count": published_point_count,

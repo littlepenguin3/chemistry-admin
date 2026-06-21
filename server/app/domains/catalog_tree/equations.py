@@ -14,6 +14,7 @@ from server.app.chemistry_search import (
     expand_formula_aliases,
     extract_formulae,
     extract_reaction_features,
+    formula_pair_terms,
     normalize_chemistry_text,
 )
 from server.app.domains.platform.settings import effective_ai_settings
@@ -929,7 +930,7 @@ def list_reaction_equations(session: Any, node_id: str, *, canonical_point_id: s
                        reaction_features, validation_status, warnings, errors, parser_version,
                        migrated_from_principle_equation, metadata
                 FROM experiment_catalog_point_reaction_equations
-                WHERE (:canonical_point_id IS NOT NULL AND canonical_point_id = :canonical_point_id)
+                WHERE (CAST(:canonical_point_id AS text) IS NOT NULL AND canonical_point_id = CAST(:canonical_point_id AS text))
                    OR node_id = :node_id
                 ORDER BY row_order, created_at, id
                 """
@@ -954,7 +955,7 @@ def replace_reaction_equations(
         text(
             """
             DELETE FROM experiment_catalog_point_reaction_equations
-            WHERE (:canonical_point_id IS NOT NULL AND canonical_point_id = :canonical_point_id)
+            WHERE (CAST(:canonical_point_id AS text) IS NOT NULL AND canonical_point_id = CAST(:canonical_point_id AS text))
                OR node_id = :node_id
             """
         ),
@@ -1023,9 +1024,38 @@ def reaction_principle_text(content: dict[str, Any] | None, *, include_annotatio
 
 def reaction_derived_terms(content: dict[str, Any] | None) -> dict[str, list[str]]:
     rows = active_reaction_equations(content)
+    equation_rows = _unique(
+        [
+            value
+            for row in rows
+            for value in (
+                reaction_row_display_text(row),
+                row.get("plain_search_text"),
+                row.get("canonical_display"),
+                row.get("raw_text"),
+            )
+            if value
+        ]
+    )
+    reactants = _unique([formula for row in rows for formula in row.get("reactants", [])])
+    products = _unique([formula for row in rows for formula in row.get("products", [])])
+    participant_values: list[str] = []
+    equation_formula_pairs: list[str] = []
+    for row in rows:
+        participants = row.get("participants")
+        if isinstance(participants, dict):
+            participant_values.extend(str(item) for item in participants.get("all", []) if item)
+        participant_values.extend(str(item) for item in row.get("reactants", []) if item)
+        participant_values.extend(str(item) for item in row.get("products", []) if item)
+        equation_formula_pairs.extend(formula_pair_terms(row.get("formulae", [])))
     return {
         "formulae": _unique([formula for row in rows for formula in row.get("formulae", [])]),
         "aliases": _unique([alias for row in rows for alias in row.get("aliases", [])]),
+        "reactants": reactants,
+        "products": products,
+        "participants": _unique(participant_values),
+        "equation_formula_pairs": _unique(equation_formula_pairs),
+        "equation_rows": equation_rows,
         "reaction_features": _unique([feature for row in rows for feature in row.get("reaction_features", [])]),
         "annotation_formulae": _unique([formula for row in rows for formula in row.get("annotation_formulae", [])]),
         "annotation_aliases": _unique([alias for row in rows for alias in row.get("annotation_aliases", [])]),

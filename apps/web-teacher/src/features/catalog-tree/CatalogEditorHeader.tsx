@@ -160,7 +160,7 @@ export function CatalogEditorHeader({
   const summaryItems = pointCapable ? buildPointSummaryItems(detail) : buildDirectorySummaryItems(detail);
   const diagnosticsItems = [
     { key: "node-status", label: "节点状态" },
-    ...(pointCapable ? [{ key: "ai-context", label: "AI 上下文" }] : []),
+    ...(pointCapable ? [{ key: "ai-context", label: "点位检索诊断" }] : []),
     { key: "advanced", label: "高级调试" },
   ];
 

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Path
 
 from server.app.auth import AuthUser, require_teacher_console_user
 from server.app.domains.video_library.index_client import video_library_index_diagnostics
+from server.app.domains.video_library.search import diagnose_video_library_search
 from server.app.domains.catalog.experiments import (
     get_experiment,
     list_experiment_videos,
@@ -55,3 +56,13 @@ async def admin_video_library_index_diagnostics(
     user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return video_library_index_diagnostics()
+
+
+@router.get("/video-library/search/diagnostics")
+async def admin_video_library_search_diagnostics(
+    q: str = "",
+    limit: int = 10,
+    user: AuthUser = Depends(require_teacher_console_user),
+) -> dict[str, Any]:
+    bounded_limit = max(1, min(limit, 50))
+    return diagnose_video_library_search(query=q, limit=bounded_limit)

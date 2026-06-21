@@ -84,5 +84,5 @@ export const adminRoutes: AdminRouteDefinition[] = [
     nav: { icon: <SafetyCertificateOutlined />, label: "学习助手" },
   },
   { path: "/settings", Component: SettingsPage, nav: { icon: <SettingOutlined />, label: "系统设置" } },
-  { path: "/ai-config", Component: AIConfigurationPage, nav: { icon: <ApiOutlined />, label: "AI 接入" } },
+  { path: "/ai-config", Component: AIConfigurationPage, nav: { icon: <ApiOutlined />, label: "智能监控" } },
 ];

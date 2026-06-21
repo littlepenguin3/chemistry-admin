@@ -233,8 +233,8 @@ export function CatalogAiContextPanel({ detail, mutations }: { detail: CatalogNo
     <section className="catalog-editor-section catalog-ai-context-panel">
       <div className="catalog-panel-title-row">
         <div>
-          <Title level={4}>AI 上下文</Title>
-          <Text type="secondary">仅教师可见，用于诊断静态兜底证据、真实 RAG 搜索和点位上下文。</Text>
+          <Title level={4}>点位检索诊断</Title>
+          <Text type="secondary">仅教师可见，用于诊断学生端可见内容、ES 同步状态、静态兜底证据、真实 RAG 搜索和点位上下文。</Text>
         </div>
         <Space wrap>
           <Button
@@ -259,6 +259,7 @@ export function CatalogAiContextPanel({ detail, mutations }: { detail: CatalogNo
               <Title level={5}>学生端可见点位内容</Title>
               <Descriptions size="small" column={2} bordered>
                 <Descriptions.Item label="节点 ID">{contextQuery.data.node_id}</Descriptions.Item>
+                <Descriptions.Item label="canonical 点位">{contextQuery.data.canonical_point_id || "-"}</Descriptions.Item>
                 <Descriptions.Item label="目录路径">{contextQuery.data.catalog_path_text || "-"}</Descriptions.Item>
                 <Descriptions.Item label="标题">{contextQuery.data.point_title}</Descriptions.Item>
                 <Descriptions.Item label="发布状态">{displayLabel(contextQuery.data.publication_state.content_status || "-")}</Descriptions.Item>

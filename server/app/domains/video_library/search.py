@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -8,7 +9,7 @@ from typing import Any, Protocol
 
 from sqlalchemy import text
 
-from server.app.chemistry_search import chemistry_terms_for_document, normalize_search_query
+from server.app.chemistry_search import chemistry_query_terms, chemistry_terms_for_document, formula_pair_terms, normalize_search_query
 from server.app.infrastructure.settings import get_settings
 from server.app.infrastructure.database import db_session
 from server.app.domains.student_learning.point_detail import _learning_profiles, _student_id
@@ -81,6 +82,39 @@ def _local_score(document: VideoLibraryDocument, query: str) -> float:
     ]
     score = document.score_boost
     tokens = [token for token in normalized_query.replace("，", " ").replace(",", " ").split() if token] or [normalized_query]
+    for token in tokens:
+        for field, weight in fields:
+            if token in field:
+                score += weight
+    return score
+
+
+def _query_tokens(query: str) -> list[str]:
+    normalized_query = normalize_search_query(query).strip().lower()
+    if not normalized_query:
+        return []
+    return [token for token in re.split(r"[\s,，;；+→=]+", normalized_query) if token]
+
+
+def _contains_any(text_value: str, query: str) -> bool:  # type: ignore[no-redef]
+    normalized_text = text_value.lower()
+    tokens = _query_tokens(query)
+    if not tokens:
+        return True
+    return any(token in normalized_text for token in tokens)
+
+
+def _local_score(document: VideoLibraryDocument, query: str) -> float:  # type: ignore[no-redef]
+    tokens = _query_tokens(query)
+    if not tokens:
+        return document.score_boost
+    fields = [
+        (document.title.lower(), 6.0),
+        (document.subtitle.lower(), 3.0),
+        (document.snippet.lower(), 2.0),
+        (document.search_text.lower(), 1.0),
+    ]
+    score = document.score_boost
     for token in tokens:
         for field, weight in fields:
             if token in field:
@@ -217,7 +251,7 @@ def _load_published_point_rows(session: Any) -> list[dict[str, Any]]:
                     WHERE ((n.canonical_point_id IS NOT NULL AND mb.canonical_point_id = n.canonical_point_id)
                         OR mb.node_id = n.id)
                       AND ma.upload_status = 'ready'
-                      AND mb.binding_status = 'published'
+                      AND mb.binding_status <> 'archived'
                   ), '[]'::jsonb) AS videos,
                   COALESCE((
                     SELECT jsonb_agg(
@@ -225,7 +259,7 @@ def _load_published_point_rows(session: Any) -> list[dict[str, Any]]:
                         'node_id', COALESCE(target_placement.id, target.id),
                         'placement_node_id', COALESCE(target_placement.id, target.id),
                         'canonical_point_id', COALESCE(l.target_canonical_point_id, target.canonical_point_id),
-                        'title', COALESCE(l.label, target_point.title, target_placement.title, target.title),
+                        'title', COALESCE(target_point.title, target_placement.title, target.title),
                         'relation_type', l.relation_type
                       )
                       ORDER BY l.sort_order, l.created_at
@@ -312,6 +346,8 @@ def _point_document(row: dict[str, Any], profiles: list[dict[str, Any]]) -> Vide
     )
     chapter_title = _clean_text(row.get("chapter_title"))
     chemistry = chemistry_terms_for_document(point_title, principle, phenomenon, safety)
+    title_chemistry = chemistry_terms_for_document(point_title)
+    title_formula_pairs = formula_pair_terms(title_chemistry["formulae"])
     if not node_id:
         return None
     target = StudentVideoLibraryRouteTarget(
@@ -339,7 +375,13 @@ def _point_document(row: dict[str, Any], profiles: list[dict[str, Any]]) -> Vide
         [item.get("title") for item in related_links if isinstance(item, dict)],
         [item.get("title") for item in videos if isinstance(item, dict)],
         chemistry["formulae"],
+        title_chemistry["formulae"],
+        title_formula_pairs,
         chemistry["aliases"],
+        chemistry.get("reagent_aliases", []),
+        chemistry.get("condition_tags", []),
+        chemistry.get("phenomenon_tags", []),
+        chemistry.get("property_tags", []),
         chemistry["reaction_features"],
         profile.get("title") if profile else "",
         profile.get("family_name") if profile else "",
@@ -365,7 +407,21 @@ def _point_document(row: dict[str, Any], profiles: list[dict[str, Any]]) -> Vide
         "safety_note": safety,
         "related_text": [item.get("title") for item in related_links if isinstance(item, dict) and item.get("title")],
         "formulae": chemistry["formulae"],
+        "title_formulae": title_chemistry["formulae"],
+        "title_formula_pairs": title_formula_pairs,
         "aliases": chemistry["aliases"],
+        "strict_aliases": chemistry.get("strict_aliases", chemistry["aliases"]),
+        "reactants": [],
+        "products": [],
+        "participants": chemistry["formulae"],
+        "equation_formula_pairs": formula_pair_terms(chemistry["formulae"]) if row.get("principle_mode") == "equation" else [],
+        "equation_rows": [principle] if row.get("principle_mode") == "equation" and principle else [],
+        "annotation_formulae": [],
+        "annotation_aliases": [],
+        "reagent_aliases": chemistry.get("reagent_aliases", []),
+        "condition_tags": chemistry.get("condition_tags", []),
+        "phenomenon_tags": chemistry.get("phenomenon_tags", []),
+        "property_tags": chemistry.get("property_tags", []),
         "reaction_features": chemistry["reaction_features"],
         "has_video": bool(videos),
         "video_count": len(videos),
@@ -437,6 +493,177 @@ class LocalVideoLibrarySearchAdapter:
         return sorted(matches, key=lambda item: _local_score(item, query), reverse=True)[:limit]
 
 
+def _keyword_terms(values: list[Any]) -> list[str]:
+    return _unique([str(value).strip().lower() for value in values if str(value or "").strip()])
+
+
+def _add_route(routes: list[dict[str, Any]], *, name: str, label: str, fields: list[str], weight: float) -> None:
+    routes.append({"name": name, "label": label, "fields": fields, "weight": weight})
+
+
+def _build_elasticsearch_search_payload(query: str, *, limit: int) -> tuple[dict[str, Any], dict[str, Any]]:
+    terms = chemistry_query_terms(query)
+    routes: list[dict[str, Any]] = []
+    if not terms["query_text"].strip():
+        return {"size": limit, "query": {"match_all": {}}}, {"terms": terms, "routes": routes}
+
+    should: list[dict[str, Any]] = []
+    normalized_query = terms["normalized_query"]
+    raw_query = terms["query_text"]
+
+    _add_route(routes, name="title_phrase", label="标题短语精确匹配", fields=["title"], weight=9.0)
+    should.append({"match_phrase": {"title": {"query": raw_query, "boost": 9.0, "_name": "title_phrase"}}})
+
+    _add_route(
+        routes,
+        name="core_text",
+        label="标题/三要素/摘要全文匹配",
+        fields=["title", "snippet", "principle", "phenomenon_explanation", "aliases", "search_text"],
+        weight=5.0,
+    )
+    should.append(
+        {
+            "multi_match": {
+                "query": normalized_query,
+                "fields": [
+                    "title^6",
+                    "snippet^3",
+                    "principle^4",
+                    "phenomenon_explanation^4",
+                    "aliases^4",
+                    "reagent_aliases^3",
+                    "search_text",
+                ],
+                "type": "best_fields",
+                "_name": "core_text",
+            }
+        }
+    )
+
+    _add_route(
+        routes,
+        name="directory_context",
+        label="目录/章节上下文匹配",
+        fields=["catalog_path", "category_text", "subtitle", "chapter_path"],
+        weight=2.0,
+    )
+    should.append(
+        {
+            "multi_match": {
+                "query": raw_query,
+                "fields": ["catalog_path^2", "category_text^2", "subtitle^1.5", "chapter_path"],
+                "type": "best_fields",
+                "_name": "directory_context",
+            }
+        }
+    )
+
+    formula_terms = _keyword_terms(terms.get("formulae") or [])
+    if formula_terms:
+        formula_pairs = _keyword_terms(formula_pair_terms(terms.get("formulae") or []))
+        if formula_pairs:
+            _add_route(
+                routes,
+                name="title_formula_pair",
+                label="标题公式组合匹配",
+                fields=["title_formula_pairs"],
+                weight=260.0,
+            )
+            should.append({"terms": {"title_formula_pairs": formula_pairs, "boost": 260.0, "_name": "title_formula_pair"}})
+        _add_route(routes, name="title_formula_exact", label="标题化学式精确匹配", fields=["title_formulae"], weight=24.0)
+        should.append({"terms": {"title_formulae": formula_terms, "boost": 24.0, "_name": "title_formula_exact"}})
+        if formula_pairs:
+            _add_route(
+                routes,
+                name="equation_formula_pair",
+                label="同一方程式行公式组合匹配",
+                fields=["equation_formula_pairs"],
+                weight=34.0,
+            )
+            should.append({"terms": {"equation_formula_pairs": formula_pairs, "boost": 34.0, "_name": "equation_formula_pair"}})
+        _add_route(routes, name="formula_exact", label="化学式精确匹配", fields=["formulae"], weight=14.0)
+        should.append({"terms": {"formulae": formula_terms, "boost": 14.0, "_name": "formula_exact"}})
+        _add_route(
+            routes,
+            name="participants_exact",
+            label="方程式反应物/生成物匹配",
+            fields=["participants", "reactants", "products"],
+            weight=12.0,
+        )
+        _add_route(routes, name="reactants_exact", label="方程式反应物匹配", fields=["reactants"], weight=10.0)
+        _add_route(routes, name="products_exact", label="方程式生成物匹配", fields=["products"], weight=10.0)
+        _add_route(routes, name="annotation_formulae", label="方程式注释化学式匹配", fields=["annotation_formulae"], weight=5.0)
+        should.extend(
+            [
+                {"terms": {"participants": formula_terms, "boost": 12.0, "_name": "participants_exact"}},
+                {"terms": {"reactants": formula_terms, "boost": 10.0, "_name": "reactants_exact"}},
+                {"terms": {"products": formula_terms, "boost": 10.0, "_name": "products_exact"}},
+                {"terms": {"annotation_formulae": formula_terms, "boost": 5.0, "_name": "annotation_formulae"}},
+            ]
+        )
+
+    strict_alias_terms = _keyword_terms(terms.get("strict_aliases") or [])
+    if strict_alias_terms:
+        _add_route(routes, name="strict_alias_exact", label="严格化学同义词匹配", fields=["strict_aliases", "aliases.keyword"], weight=9.0)
+        should.extend(
+            [
+                {"terms": {"strict_aliases": strict_alias_terms, "boost": 9.0, "_name": "strict_alias_exact"}},
+                {"terms": {"aliases.keyword": strict_alias_terms, "boost": 6.0, "_name": "alias_keyword"}},
+            ]
+        )
+
+    if normalized_query:
+        _add_route(routes, name="equation_text", label="方程式文本匹配", fields=["equation_rows", "principle"], weight=6.0)
+        should.append(
+            {
+                "multi_match": {
+                    "query": normalized_query,
+                    "fields": ["equation_rows^6", "principle^3"],
+                    "type": "best_fields",
+                    "_name": "equation_text",
+                }
+            }
+        )
+
+    reagent_terms = _keyword_terms(terms.get("reagent_aliases") or [])
+    if reagent_terms:
+        _add_route(routes, name="reagent_aliases", label="试剂形态/俗称匹配", fields=["reagent_aliases"], weight=5.0)
+        should.extend(
+            [
+                {"terms": {"reagent_aliases.keyword": reagent_terms, "boost": 5.0, "_name": "reagent_aliases"}},
+                {"match": {"reagent_aliases": {"query": " ".join(reagent_terms), "boost": 3.0, "_name": "reagent_alias_text"}}},
+            ]
+        )
+
+    for route_name, label, field_name, values, boost in [
+        ("condition_tags", "条件标签匹配", "condition_tags", terms.get("condition_tags") or [], 4.0),
+        ("phenomenon_tags", "实验现象标签匹配", "phenomenon_tags", terms.get("phenomenon_tags") or [], 4.0),
+        ("property_tags", "化学性质标签匹配", "property_tags", terms.get("property_tags") or [], 4.0),
+        ("reaction_features", "反应特征匹配", "reaction_features", terms.get("reaction_features") or [], 3.0),
+    ]:
+        field_terms = _keyword_terms(values)
+        if not field_terms:
+            continue
+        _add_route(routes, name=route_name, label=label, fields=[field_name], weight=boost)
+        should.append({"terms": {field_name: field_terms, "boost": boost, "_name": route_name}})
+
+    return {
+        "size": limit,
+        "query": {"bool": {"should": should, "minimum_should_match": 1}},
+    }, {"terms": terms, "routes": routes}
+
+
+def _execute_elasticsearch_search(*, base_url: str, index: str, payload: dict[str, Any], timeout: float) -> dict[str, Any]:
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}/{index}/_search",
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 class ElasticsearchVideoLibrarySearchAdapter:
     backend = "elasticsearch"
 
@@ -448,42 +675,8 @@ class ElasticsearchVideoLibrarySearchAdapter:
     def search(self, query: str, documents: list[VideoLibraryDocument], limit: int) -> list[VideoLibraryDocument]:
         if not query.strip():
             return LocalVideoLibrarySearchAdapter().search(query, documents, limit)
-        normalized_query = normalize_search_query(query)
-        payload = {
-            "size": limit,
-            "query": {
-                "bool": {
-                    "should": [
-                        {
-                            "multi_match": {
-                                "query": normalized_query,
-                                "fields": [
-                                    "title^5",
-                                    "subtitle^2",
-                                    "snippet^3",
-                                    "principle^4",
-                                    "phenomenon_explanation^4",
-                                    "search_text",
-                                    "aliases^4",
-                                ],
-                                "type": "best_fields",
-                            }
-                        },
-                        {"terms": {"formulae": [token.upper() for token in normalized_query.split()]}},
-                        {"terms": {"reaction_features": normalized_query.split()}},
-                    ],
-                    "minimum_should_match": 1,
-                }
-            },
-        }
-        request = urllib.request.Request(
-            f"{self.base_url}/{self.index}/_search",
-            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            raw = json.loads(response.read().decode("utf-8"))
+        payload, _diagnostics = _build_elasticsearch_search_payload(query, limit=limit)
+        raw = _execute_elasticsearch_search(base_url=self.base_url, index=self.index, payload=payload, timeout=self.timeout)
         source_ids = [
             str(hit.get("_source", {}).get("id") or hit.get("_id") or "")
             for hit in raw.get("hits", {}).get("hits", [])
@@ -504,6 +697,151 @@ def _adapter() -> VideoLibrarySearchAdapter | None:
             timeout=settings.video_library_search_timeout_seconds,
         )
     return LocalVideoLibrarySearchAdapter()
+
+
+def _source_route_matches(source: dict[str, Any], query_terms: dict[str, Any]) -> list[str]:
+    routes: list[str] = []
+    query_text = str(query_terms.get("query_text") or "").lower()
+    normalized_query = str(query_terms.get("normalized_query") or "").lower()
+    title_text = _document_search_text(source.get("title")).lower()
+    core_text = _document_search_text(
+        source.get("title"),
+        source.get("snippet"),
+        source.get("principle"),
+        source.get("phenomenon_explanation"),
+        source.get("aliases"),
+        source.get("reagent_aliases"),
+        source.get("search_text"),
+    ).lower()
+    directory_text = _document_search_text(source.get("catalog_path"), source.get("category_text"), source.get("subtitle")).lower()
+    if query_text and query_text in title_text:
+        routes.append("title_phrase")
+    if any(token and token in core_text for token in re.split(r"[\s,，;；+→=]+", normalized_query)):
+        routes.append("core_text")
+    if query_text and query_text in directory_text:
+        routes.append("directory_context")
+    formulae = set(_keyword_terms(query_terms.get("formulae") or []))
+    strict_aliases = set(_keyword_terms(query_terms.get("strict_aliases") or []))
+    formula_pairs = set(_keyword_terms(formula_pair_terms(query_terms.get("formulae") or [])))
+    if formula_pairs & set(_keyword_terms(source.get("title_formula_pairs") or [])):
+        routes.append("title_formula_pair")
+    if formulae & set(_keyword_terms(source.get("title_formulae") or [])):
+        routes.append("title_formula_exact")
+    if formula_pairs & set(_keyword_terms(source.get("equation_formula_pairs") or [])):
+        routes.append("equation_formula_pair")
+    if formulae & set(_keyword_terms(source.get("formulae") or [])):
+        routes.append("formula_exact")
+    if formulae & set(_keyword_terms(source.get("participants") or [])):
+        routes.append("participants_exact")
+    if formulae & set(_keyword_terms(source.get("reactants") or [])):
+        routes.append("reactants_exact")
+    if formulae & set(_keyword_terms(source.get("products") or [])):
+        routes.append("products_exact")
+    if strict_aliases & set(_keyword_terms(source.get("strict_aliases") or source.get("aliases") or [])):
+        routes.append("strict_alias_exact")
+    if normalized_query and any(token and token in _document_search_text(source.get("equation_rows"), source.get("principle")).lower() for token in re.split(r"[\s,，;；+→=]+", normalized_query)):
+        routes.append("equation_text")
+    for route_name, field_name in [
+        ("reagent_aliases", "reagent_aliases"),
+        ("condition_tags", "condition_tags"),
+        ("phenomenon_tags", "phenomenon_tags"),
+        ("property_tags", "property_tags"),
+        ("reaction_features", "reaction_features"),
+    ]:
+        if set(_keyword_terms(query_terms.get(field_name) or [])) & set(_keyword_terms(source.get(field_name) or [])):
+            routes.append(route_name)
+    return _unique(routes)
+
+
+def _diagnostic_hit_from_source(
+    *,
+    rank: int,
+    score: float,
+    source: dict[str, Any],
+    matched_routes: list[str],
+) -> dict[str, Any]:
+    return {
+        "rank": rank,
+        "score": score,
+        "id": _clean_text(source.get("id")),
+        "node_id": _clean_text(source.get("node_id")),
+        "placement_node_id": _clean_text(source.get("placement_node_id")),
+        "canonical_point_id": _clean_text(source.get("canonical_point_id")),
+        "title": _clean_text(source.get("title")),
+        "subtitle": _clean_text(source.get("subtitle")),
+        "catalog_path": source.get("catalog_path") or [],
+        "snippet": _clean_text(source.get("snippet")),
+        "matched_routes": matched_routes,
+        "formulae": source.get("formulae") or [],
+        "participants": source.get("participants") or [],
+        "reaction_features": source.get("reaction_features") or [],
+        "condition_tags": source.get("condition_tags") or [],
+        "phenomenon_tags": source.get("phenomenon_tags") or [],
+        "property_tags": source.get("property_tags") or [],
+    }
+
+
+def diagnose_video_library_search(*, query: str, limit: int = 10) -> dict[str, Any]:
+    settings = get_settings()
+    with db_session() as session:
+        point_rows = _load_published_point_rows(session)
+    profiles = _learning_profiles()
+    documents = _build_documents([], profiles, point_rows=point_rows)
+    payload, plan = _build_elasticsearch_search_payload(query, limit=limit)
+    response: dict[str, Any] = {
+        "query": query,
+        "status": "ok",
+        "backend": settings.video_library_search_backend,
+        "index": settings.video_library_search_index,
+        "document_count": len(documents),
+        "query_plan": plan,
+        "payload": payload,
+        "results": [],
+    }
+    if (
+        settings.video_library_search_enabled
+        and settings.video_library_search_backend == "elasticsearch"
+        and settings.video_library_search_url
+    ):
+        try:
+            raw = _execute_elasticsearch_search(
+                base_url=settings.video_library_search_url,
+                index=settings.video_library_search_index,
+                payload=payload,
+                timeout=settings.video_library_search_timeout_seconds,
+            )
+            hits = raw.get("hits", {}).get("hits", [])
+            response["total"] = raw.get("hits", {}).get("total")
+            response["results"] = [
+                _diagnostic_hit_from_source(
+                    rank=index + 1,
+                    score=float(hit.get("_score") or 0),
+                    source=hit.get("_source") or {},
+                    matched_routes=[str(route) for route in hit.get("matched_queries") or []],
+                )
+                for index, hit in enumerate(hits)
+                if isinstance(hit, dict)
+            ]
+            return response
+        except Exception as exc:  # noqa: BLE001 - diagnostics should report backend failure.
+            response["status"] = "fallback" if settings.video_library_search_local_fallback else "error"
+            response["error"] = str(exc)
+            if not settings.video_library_search_local_fallback:
+                return response
+
+    matched_documents = LocalVideoLibrarySearchAdapter().search(query, documents, limit)
+    response["backend"] = "local"
+    response["results"] = [
+        _diagnostic_hit_from_source(
+            rank=index + 1,
+            score=_local_score(document, query),
+            source=document.index_source or {},
+            matched_routes=_source_route_matches(document.index_source or {}, plan["terms"]),
+        )
+        for index, document in enumerate(matched_documents)
+    ]
+    response["total"] = {"value": len(matched_documents), "relation": "eq"}
+    return response
 
 
 def _browse_chips(documents: list[VideoLibraryDocument], profiles: list[dict[str, Any]]) -> list[StudentVideoLibraryBrowseChip]:

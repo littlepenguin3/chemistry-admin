@@ -223,7 +223,7 @@ export function CatalogTreeEditor({
   ];
   const tabItems = allTabItems.filter((item) => visibleTabKeys.includes(item.key as CatalogEditorTabKey));
   const diagnosticsTitle =
-    diagnosticsPanel === "ai-context" ? "AI 上下文" : diagnosticsPanel === "advanced" ? "高级调试" : "节点状态";
+    diagnosticsPanel === "ai-context" ? "点位检索诊断" : diagnosticsPanel === "advanced" ? "高级调试" : "节点状态";
   const diagnosticsContent =
     diagnosticsPanel === "ai-context" ? (
       <CatalogAiContextPanel detail={detail} mutations={mutations} />

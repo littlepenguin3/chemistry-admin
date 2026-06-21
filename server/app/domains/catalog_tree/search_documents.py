@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy import text
 
-from server.app.chemistry_search import chemistry_terms_for_document
+from server.app.chemistry_search import chemistry_terms_for_document, formula_pair_terms
 from server.app.domains.catalog_tree.common import (
     breadcrumbs,
     clean,
@@ -165,13 +165,24 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
     phenomenon = clean(content_for_search.get("phenomenon_explanation"))
     safety = clean(content_for_search.get("safety_note"))
     chemistry = chemistry_terms_for_document(content_for_search.get("point_title"), core_principle, phenomenon, safety)
+    title_chemistry = chemistry_terms_for_document(content_for_search.get("point_title"))
     equation_terms = reaction_derived_terms(content_for_search)
     formulae = sorted(set([*chemistry["formulae"], *equation_terms["formulae"]]))
+    title_formulae = sorted(set(title_chemistry["formulae"]))
+    title_formula_pairs = formula_pair_terms(title_formulae)
     aliases = sorted(set([*chemistry["aliases"], *equation_terms["aliases"]]))
+    reactants = sorted(set(equation_terms.get("reactants") or []))
+    products = sorted(set(equation_terms.get("products") or []))
+    participants = sorted(set([*reactants, *products, *(equation_terms.get("participants") or [])]))
+    equation_formula_pairs = sorted(set(equation_terms.get("equation_formula_pairs") or []))
+    equation_rows = sorted(set(equation_terms.get("equation_rows") or []))
     reaction_features = sorted(set([*chemistry["reaction_features"], *equation_terms["reaction_features"]]))
     annotation_formulae = sorted(set(equation_terms.get("annotation_formulae") or []))
     annotation_aliases = sorted(set(equation_terms.get("annotation_aliases") or []))
-    condition_tags = sorted(set(equation_terms.get("condition_tags") or []))
+    reagent_aliases = sorted(set(chemistry.get("reagent_aliases") or []))
+    condition_tags = sorted(set([*(chemistry.get("condition_tags") or []), *(equation_terms.get("condition_tags") or [])]))
+    phenomenon_tags = sorted(set(chemistry.get("phenomenon_tags") or []))
+    property_tags = sorted(set(chemistry.get("property_tags") or []))
     search_text = " ".join(
         item
         for item in [
@@ -184,11 +195,21 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
             " ".join(clean(link.get("target_title")) for link in related),
             " ".join(clean(video.get("title")) for video in videos),
             " ".join(formulae),
+            " ".join(title_formulae),
+            " ".join(title_formula_pairs),
             " ".join(aliases),
+            " ".join(reactants),
+            " ".join(products),
+            " ".join(participants),
+            " ".join(equation_formula_pairs),
+            " ".join(equation_rows),
             " ".join(reaction_features),
             " ".join(annotation_formulae),
             " ".join(annotation_aliases),
+            " ".join(reagent_aliases),
             " ".join(condition_tags),
+            " ".join(phenomenon_tags),
+            " ".join(property_tags),
         ]
         if item
     )
@@ -211,11 +232,22 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
         "safety_note": safety,
         "reaction_equations": content_for_search.get("reaction_equations") if content_for_search.get("principle_mode") == "equation" else [],
         "formulae": formulae,
+        "title_formulae": title_formulae,
+        "title_formula_pairs": title_formula_pairs,
         "aliases": aliases,
+        "strict_aliases": aliases,
+        "reactants": reactants,
+        "products": products,
+        "participants": participants,
+        "equation_formula_pairs": equation_formula_pairs,
+        "equation_rows": equation_rows,
         "reaction_features": reaction_features,
         "annotation_formulae": annotation_formulae,
         "annotation_aliases": annotation_aliases,
+        "reagent_aliases": reagent_aliases,
         "condition_tags": condition_tags,
+        "phenomenon_tags": phenomenon_tags,
+        "property_tags": property_tags,
         "related_text": [clean(link.get("target_title")) for link in related if clean(link.get("target_title"))],
         "has_video": bool(videos),
         "video_count": len(videos),

@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any
+import json
 import urllib.error
 
 import pytest
@@ -19,7 +20,12 @@ from server.app.domains.video_library.index_client import (
     video_library_index_mapping,
 )
 from server.app.domains.video_library import search as student_video_library_service
-from server.app.domains.video_library.search import ElasticsearchVideoLibrarySearchAdapter, _build_documents, search_student_video_library
+from server.app.domains.video_library.search import (
+    ElasticsearchVideoLibrarySearchAdapter,
+    _build_documents,
+    _build_elasticsearch_search_payload,
+    search_student_video_library,
+)
 from server.tests.route_helpers import assert_route
 
 
@@ -207,6 +213,13 @@ def test_video_library_point_documents_use_teacher_content_without_ai_evidence()
     assert document.index_source["node_id"] == "cat-point-orange-layer"
     assert document.index_source["has_video"] is False
     assert "NA2S2O3" in document.index_source["formulae"]
+    assert document.index_source["title_formulae"]
+    assert "title_formula_pairs" in document.index_source
+    assert "NA2S2O3" in document.index_source["participants"]
+    assert document.index_source["equation_formula_pairs"]
+    assert document.index_source["equation_rows"]
+    assert "strict_aliases" in document.index_source
+    assert "phenomenon_tags" in document.index_source
     assert "gas_generation" in document.index_source["reaction_features"]
     assert "precipitation" in document.index_source["reaction_features"]
 
@@ -214,7 +227,9 @@ def test_video_library_point_documents_use_teacher_content_without_ai_evidence()
 def test_video_library_es_mapping_uses_chemistry_ik_stopwords_and_synonyms() -> None:
     mapping = video_library_index_mapping()
     analysis = mapping["settings"]["analysis"]
+    properties = mapping["mappings"]["properties"]
 
+    assert mapping["mappings"]["_meta"]["mapping_version"] == "chemistry-point-placement-v4"
     assert analysis["analyzer"]["chemistry_ik"]["tokenizer"] == "ik_max_word"
     assert analysis["analyzer"]["chemistry_ik"]["filter"] == ["lowercase", "chemistry_stop"]
     assert analysis["analyzer"]["chemistry_ik_search"]["tokenizer"] == "ik_smart"
@@ -222,10 +237,48 @@ def test_video_library_es_mapping_uses_chemistry_ik_stopwords_and_synonyms() -> 
     assert analysis["filter"]["chemistry_stop"]["stopwords_path"] == "analysis/chemistry_stopwords.txt"
     assert analysis["filter"]["chemistry_synonyms"]["synonyms_path"] == "analysis/chemistry_synonyms.txt"
 
-    for field in ["title", "search_text", "principle", "phenomenon_explanation", "safety_note", "related_text"]:
-        field_mapping = mapping["mappings"]["properties"][field]
+    for field in ["title", "search_text", "principle", "phenomenon_explanation", "safety_note", "related_text", "equation_rows"]:
+        field_mapping = properties[field]
         assert field_mapping["analyzer"] == "chemistry_ik"
         assert field_mapping["search_analyzer"] == "chemistry_ik_search"
+
+    for field in [
+        "formulae",
+        "title_formulae",
+        "title_formula_pairs",
+        "strict_aliases",
+        "reactants",
+        "products",
+        "participants",
+        "equation_formula_pairs",
+        "condition_tags",
+        "phenomenon_tags",
+        "property_tags",
+    ]:
+        assert field in properties
+
+
+def test_elasticsearch_query_payload_uses_formula_and_retrieval_routes() -> None:
+    payload, plan = _build_elasticsearch_search_payload("H2O2 KMnO4 \u9178\u6027", limit=5)
+    route_names = {route["name"] for route in plan["routes"]}
+    payload_text = json.dumps(payload, ensure_ascii=False)
+
+    assert {
+        "title_formula_exact",
+        "title_formula_pair",
+        "equation_formula_pair",
+        "formula_exact",
+        "participants_exact",
+        "strict_alias_exact",
+        "equation_text",
+        "condition_tags",
+    }.issubset(route_names)
+    assert "h2o2" in payload_text
+    assert "kmno4" in payload_text
+    assert "formula_exact" in payload_text
+    assert "title_formula_pair" in payload_text
+    assert "equation_formula_pair" in payload_text
+    assert "participants_exact" in payload_text
 
 
 def test_video_library_index_client_serializes_datetime_payloads(monkeypatch: pytest.MonkeyPatch) -> None:
