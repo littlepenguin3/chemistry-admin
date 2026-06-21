@@ -67,8 +67,8 @@ def test_handle_media_asset_archived_archives_bindings_and_queues_point_refresh(
     update_call = session.calls[0]
     assert "binding_status = 'archived'" in update_call["sql"]
     assert "'archived_reason', 'media_asset_archived'" in update_call["sql"]
-    assert "'archived_media_asset_id', :media_asset_id" in update_call["sql"]
-    assert "'media_asset_lifecycle_event_id', :lifecycle_event_id" in update_call["sql"]
+    assert "'archived_media_asset_id', CAST(:media_asset_id AS text)" in update_call["sql"]
+    assert "'media_asset_lifecycle_event_id', CAST(:lifecycle_event_id AS text)" in update_call["sql"]
     assert "'previous_binding_status', binding_status" in update_call["sql"]
     assert update_call["params"]["media_asset_id"] == "asset-1"
     assert update_call["params"]["lifecycle_event_id"] == "event-1"

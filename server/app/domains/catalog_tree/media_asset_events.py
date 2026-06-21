@@ -43,7 +43,7 @@ def handle_media_asset_archived(
                     metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
                       'archived_reason', 'media_asset_archived',
                       'archived_media_asset_id', CAST(:media_asset_id AS text),
-                      'media_asset_lifecycle_event_id', :lifecycle_event_id,
+                      'media_asset_lifecycle_event_id', CAST(:lifecycle_event_id AS text),
                       'archived_by', CAST(:actor_user_id AS text),
                       'archive_reason', CAST(:reason AS text),
                       'previous_binding_status', binding_status

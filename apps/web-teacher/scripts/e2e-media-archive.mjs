@@ -428,40 +428,149 @@ with db_session() as session:
   });
 }
 
+function cleanupOwnedMediaArchiveFixtures({ cleanupAll = false } = {}) {
+  const script = String.raw`
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+from sqlalchemy import text
+
+from server.app.infrastructure.database import db_session
+from server.app.infrastructure.settings import get_settings
+
+run_id = os.environ.get("E2E_MEDIA_ARCHIVE_RUN_ID", "")
+cleanup_all = os.environ.get("E2E_MEDIA_ARCHIVE_CLEANUP_ALL") == "1"
+summary = {
+    "cleanup_all": cleanup_all,
+    "run_id": run_id,
+    "nodes": [],
+    "canonical_points": [],
+    "assets": [],
+    "files_deleted": [],
+    "files_missing": [],
+}
+root = Path(get_settings().media_root).resolve()
+
+with db_session() as session:
+    node_rows = session.execute(
+        text(
+            """
+            WITH RECURSIVE selected AS (
+              SELECT id, parent_id, canonical_point_id, title
+              FROM experiment_catalog_nodes
+              WHERE COALESCE(metadata->>'e2e', '') = 'media_archive'
+                AND (:cleanup_all OR metadata->>'run_id' = :run_id)
+            ),
+            subtree AS (
+              SELECT id, parent_id, canonical_point_id, title FROM selected
+              UNION ALL
+              SELECT child.id, child.parent_id, child.canonical_point_id, child.title
+              FROM experiment_catalog_nodes child
+              JOIN subtree parent ON child.parent_id = parent.id
+            )
+            SELECT DISTINCT id, canonical_point_id, title
+            FROM subtree
+            ORDER BY id
+            """
+        ),
+        {"cleanup_all": cleanup_all, "run_id": run_id},
+    ).mappings().all()
+    node_ids = [str(row["id"]) for row in node_rows]
+    canonical_ids = sorted({str(row["canonical_point_id"]) for row in node_rows if row["canonical_point_id"]})
+    summary["nodes"] = [{"id": str(row["id"]), "title": row["title"]} for row in node_rows]
+
+    asset_rows = session.execute(
+        text(
+            """
+            SELECT id, title, relative_path, source_relative_path, playback_relative_path, thumbnail_relative_path
+            FROM media_assets
+            WHERE COALESCE(metadata->>'e2e', '') = 'media_archive'
+              AND (:cleanup_all OR metadata->>'run_id' = :run_id)
+            ORDER BY created_at
+            """
+        ),
+        {"cleanup_all": cleanup_all, "run_id": run_id},
+    ).mappings().all()
+    asset_ids = [str(row["id"]) for row in asset_rows]
+    paths: set[str] = set()
+    for row in asset_rows:
+        summary["assets"].append({"id": str(row["id"]), "title": row["title"]})
+        for key in ("relative_path", "source_relative_path", "playback_relative_path", "thumbnail_relative_path"):
+            if row[key]:
+                paths.add(str(row[key]))
+    if asset_ids:
+        extra_paths = session.execute(
+            text(
+                """
+                SELECT relative_path
+                FROM media_renditions
+                WHERE media_asset_id::text = ANY(:asset_ids)
+                UNION
+                SELECT relative_path
+                FROM media_video_fingerprints
+                WHERE media_asset_id::text = ANY(:asset_ids)
+                  AND relative_path IS NOT NULL
+                """
+            ),
+            {"asset_ids": asset_ids},
+        ).scalars().all()
+        paths.update(str(path) for path in extra_paths if path)
+
+    if node_ids:
+        session.execute(text("DELETE FROM experiment_catalog_nodes WHERE id = ANY(:node_ids)"), {"node_ids": node_ids})
+    if canonical_ids:
+        deleted_canon = session.execute(
+            text(
+                """
+                DELETE FROM experiment_catalog_points cp
+                WHERE cp.id = ANY(:canonical_ids)
+                  AND cp.title LIKE 'E2E media archive point %'
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM experiment_catalog_nodes n
+                    WHERE n.canonical_point_id = cp.id
+                  )
+                RETURNING id, title
+                """
+            ),
+            {"canonical_ids": canonical_ids},
+        ).mappings().all()
+        summary["canonical_points"] = [{"id": str(row["id"]), "title": row["title"]} for row in deleted_canon]
+    if asset_ids:
+        session.execute(text("DELETE FROM media_assets WHERE id::text = ANY(:asset_ids)"), {"asset_ids": asset_ids})
+
+for relative in sorted(paths):
+    target = (root / relative).resolve()
+    if target != root and root in target.parents:
+        if target.exists():
+            target.unlink()
+            summary["files_deleted"].append(relative)
+        else:
+            summary["files_missing"].append(relative)
+
+print(json.dumps(summary, ensure_ascii=False))
+`;
+  return dockerPython(script, {
+    E2E_MEDIA_ARCHIVE_RUN_ID: runId,
+    E2E_MEDIA_ARCHIVE_CLEANUP_ALL: cleanupAll ? "1" : "0",
+  });
+}
+
 async function cleanupFixture(token, fixture, asset) {
   const cleanup = { attempted: true, steps: [] };
-  if (asset?.id) {
-    try {
-      await api(`/api/admin/media/assets/${encodeURIComponent(asset.id)}/archive`, token, {
-        method: "POST",
-        body: { reason: "media_archive_e2e_cleanup" },
-      });
-      cleanup.steps.push("asset archived");
-    } catch (error) {
-      cleanup.steps.push(`asset archive skipped: ${String(error)}`);
-    }
-  }
-  if (fixture?.point_node_id) {
-    try {
-      await api(`/api/admin/catalog/nodes/${encodeURIComponent(fixture.point_node_id)}/point-content/publication`, token, {
-        method: "POST",
-        body: { action: "unpublish" },
-      });
-      cleanup.steps.push("point content unpublished");
-    } catch (error) {
-      cleanup.steps.push(`point content unpublish skipped: ${String(error)}`);
-    }
-  }
-  if (fixture?.directory_node_id) {
-    try {
-      await api(`/api/admin/catalog/nodes/${encodeURIComponent(fixture.directory_node_id)}/status`, token, {
-        method: "POST",
-        body: { action: "unpublish", include_subtree: true },
-      });
-      cleanup.steps.push("catalog fixture unpublished");
-    } catch (error) {
-      cleanup.steps.push(`catalog unpublish skipped: ${String(error)}`);
-    }
+  void token;
+  void fixture;
+  void asset;
+  try {
+    cleanup.database = cleanupOwnedMediaArchiveFixtures();
+    cleanup.steps.push(
+      `hard-deleted ${cleanup.database.nodes.length} catalog nodes and ${cleanup.database.assets.length} media assets`,
+    );
+  } catch (error) {
+    cleanup.steps.push(`database cleanup failed: ${String(error)}`);
   }
   try {
     cleanup.rebuild = rebuildVideoLibraryIndex("cleanup");
@@ -556,6 +665,7 @@ async function main() {
   const bootstrap = bootstrapAdmin();
   const loginResponse = await login();
   const token = loginResponse.access_token;
+  const preflightCleanup = cleanupOwnedMediaArchiveFixtures({ cleanupAll: true });
   const asset = seedMediaAsset();
   let fixture;
   let cleanup;
@@ -627,6 +737,7 @@ async function main() {
       es: { url: esUrl, index: esIndex },
       username,
       bootstrap,
+      preflight_cleanup: preflightCleanup,
       asset: { id: asset.id, title: asset.title },
       fixture,
       archive_plan: {
@@ -651,6 +762,7 @@ async function main() {
           run_id: runId,
           asset: asset ? { id: asset.id, title: asset.title } : null,
           fixture,
+          preflight_cleanup: preflightCleanup,
           cleanup,
           error: error instanceof Error ? error.stack || error.message : String(error),
         },
