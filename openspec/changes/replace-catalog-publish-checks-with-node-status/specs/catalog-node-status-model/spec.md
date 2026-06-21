@@ -54,6 +54,11 @@ The system SHALL choose a single primary node state using stable priority rules 
 - **AND** the chosen state MUST follow the priority order `archived`, `blocked`, `needs_content`, `needs_video`, `draft`, `ready`, `published`, `sync_attention`
 - **AND** the remaining conditions MUST stay available in the selected-node status panel.
 
+#### Scenario: Structural blocked state is presented as an exception
+- **WHEN** the chosen `primary_state` is `blocked`
+- **THEN** teacher-facing labels MUST call it `异常`
+- **AND** tree markers, selected-node tags, and summary cards MUST use the red error treatment instead of the yellow warning treatment.
+
 #### Scenario: Core readiness is incomplete while sync state also failed
 - **WHEN** a point is missing content or video and its ES/RAG job state is failed
 - **THEN** the primary state MUST be `needs_content` or `needs_video` according to the core-readiness priority

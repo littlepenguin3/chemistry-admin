@@ -54,7 +54,7 @@ export function CatalogDirectoryPanel({
       <div className="catalog-panel-head">
         <p>{pathText}</p>
         <h2>{detail.node.title}</h2>
-        {detail.node.student_description ? <span>{detail.node.student_description}</span> : null}
+        {detail.node.summary ? <span>{detail.node.summary}</span> : null}
       </div>
       {detail.children.length ? (
         <CatalogNodeCards nodes={detail.children} breadcrumbs={detail.breadcrumbs} onOpenDirectory={onOpenDirectory} onOpenPoint={onOpenPoint} />

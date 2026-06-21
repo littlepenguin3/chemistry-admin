@@ -19,16 +19,6 @@ export type CatalogNodeFormValues = {
   summary?: string;
   node_kind: CatalogNodeKind;
   teacher_note?: string;
-  student_description?: string;
-  card_image_asset_id?: string;
-  card_icon_key?: string;
-  card_accent?: string;
-  card_layout?: string;
-  point_card_cover_image_asset_id?: string;
-  point_card_short_description?: string;
-  point_card_icon_key?: string;
-  point_card_accent?: string;
-  point_card_emphasis?: boolean;
   canonical_point_id?: string;
 };
 
@@ -70,28 +60,11 @@ export function hydrateCatalogNodeForm(detail: CatalogNodeDetail | null | undefi
     summary: node?.summary || "",
     node_kind: node?.node_kind || "directory",
     teacher_note: node?.teacher_note || node?.summary || "",
-    student_description: node?.student_description || "",
-    card_image_asset_id: node?.card_image_asset_id || "",
-    card_icon_key: node?.card_icon_key || "",
-    card_accent: node?.card_accent || "",
-    card_layout: node?.card_layout || "default",
-    point_card_cover_image_asset_id: String(node?.point_card_presentation?.cover_image_asset_id || ""),
-    point_card_short_description: String(node?.point_card_presentation?.short_description || ""),
-    point_card_icon_key: String(node?.point_card_presentation?.icon_key || ""),
-    point_card_accent: String(node?.point_card_presentation?.accent || ""),
-    point_card_emphasis: Boolean(node?.point_card_presentation?.emphasis),
     canonical_point_id: node?.canonical_point_id || "",
   };
 }
 
 export function buildCatalogNodeCreatePayload(values: CatalogNodeFormValues, chapterId: string, parentId?: string | null): CatalogNodeCreatePayload {
-  const pointCard = {
-    cover_image_asset_id: values.point_card_cover_image_asset_id?.trim() || "",
-    short_description: values.point_card_short_description?.trim() || "",
-    icon_key: values.point_card_icon_key?.trim() || "",
-    accent: values.point_card_accent?.trim() || "",
-    emphasis: Boolean(values.point_card_emphasis),
-  };
   return {
     chapter_id: chapterId,
     parent_id: parentId || null,
@@ -99,37 +72,16 @@ export function buildCatalogNodeCreatePayload(values: CatalogNodeFormValues, cha
     title: values.title.trim(),
     summary: values.summary?.trim() || "",
     teacher_note: values.teacher_note?.trim() || "",
-    student_description: values.student_description?.trim() || "",
-    card_image_asset_id: values.card_image_asset_id?.trim() || null,
-    card_icon_key: values.card_icon_key?.trim() || null,
-    card_accent: values.card_accent?.trim() || null,
-    card_layout: values.card_layout || "default",
-    card_presentation: values.node_kind === "directory" ? {} : {},
-    point_card_presentation: values.node_kind === "point" ? pointCard : {},
     canonical_point_id: values.node_kind === "point" ? values.canonical_point_id?.trim() || null : null,
   };
 }
 
 export function buildCatalogNodeUpdatePayload(values: CatalogNodeFormValues): CatalogNodeUpdatePayload {
-  const pointCard = {
-    cover_image_asset_id: values.point_card_cover_image_asset_id?.trim() || "",
-    short_description: values.point_card_short_description?.trim() || "",
-    icon_key: values.point_card_icon_key?.trim() || "",
-    accent: values.point_card_accent?.trim() || "",
-    emphasis: Boolean(values.point_card_emphasis),
-  };
   return {
     title: values.title.trim(),
     summary: values.summary?.trim() || "",
     node_kind: values.node_kind,
     teacher_note: values.teacher_note?.trim() || "",
-    student_description: values.student_description?.trim() || "",
-    card_image_asset_id: values.card_image_asset_id?.trim() || null,
-    card_icon_key: values.card_icon_key?.trim() || null,
-    card_accent: values.card_accent?.trim() || null,
-    card_layout: values.card_layout || "default",
-    card_presentation: values.node_kind === "directory" ? {} : {},
-    point_card_presentation: values.node_kind === "point" ? pointCard : {},
   };
 }
 
@@ -352,7 +304,7 @@ export function resolveCatalogNodeStatus(source: CatalogNodeCard | CatalogNodeDe
 export function catalogNodePrimaryStateLabel(state: string): string {
   const labels: Record<string, string> = {
     archived: "已归档",
-    blocked: "阻断",
+    blocked: "异常",
     needs_content: "缺内容",
     needs_video: "缺视频",
     draft: "草稿",
@@ -366,7 +318,8 @@ export function catalogNodePrimaryStateLabel(state: string): string {
 export function catalogNodePrimaryStateClass(state: string): string {
   if (state === "published" || state === "ready") return "is-published";
   if (state === "archived") return "is-archived";
-  if (state === "blocked" || state === "needs_content" || state === "needs_video" || state === "sync_attention") return "is-warning";
+  if (state === "blocked") return "is-error";
+  if (state === "needs_content" || state === "needs_video" || state === "sync_attention") return "is-warning";
   return "is-draft";
 }
 

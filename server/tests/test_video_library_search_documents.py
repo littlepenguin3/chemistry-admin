@@ -34,9 +34,6 @@ def test_directory_category_text_matches_descendant_point_without_directory_docu
                 "directory_context": [
                     {
                         "title": "Oxidation experiments",
-                        "student_description": "Directory category for displacement verification",
-                        "card_icon_key": "flask",
-                        "card_accent": "green",
                     }
                 ],
                 "related_links": [],
@@ -46,7 +43,7 @@ def test_directory_category_text_matches_descendant_point_without_directory_docu
         ],
     )
 
-    matches = LocalVideoLibrarySearchAdapter().search("displacement verification", documents, 10)
+    matches = LocalVideoLibrarySearchAdapter().search("oxidation experiments", documents, 10)
 
     assert [document.id for document in documents] == ["cat-point-halogen"]
     assert matches and matches[0].id == "cat-point-halogen"
@@ -58,4 +55,4 @@ def test_directory_category_text_matches_descendant_point_without_directory_docu
     assert matches[0].index_source is not None
     assert matches[0].index_source["placement_node_id"] == "cat-point-halogen"
     assert matches[0].index_source["canonical_point_id"] == "cat-canon-halogen"
-    assert "Directory category for displacement verification" in matches[0].index_source["category_text"]
+    assert "Oxidation experiments" in matches[0].index_source["category_text"]

@@ -22,82 +22,65 @@ import {
 } from "./catalogTreeMappers";
 
 describe("catalog tree mappers", () => {
-  it("builds directory create payloads with card fields", () => {
-    expect(
-      buildCatalogNodeCreatePayload(
-        {
-          title: "  Observation branch  ",
-          summary: "  nested  ",
-          node_kind: "directory",
-          teacher_note: " private ",
-          student_description: " student card ",
-          card_icon_key: " flask ",
-          card_accent: " green ",
-          card_layout: "compact",
-        },
-        "CH1",
-        "cat-parent",
-      ),
-    ).toEqual({
+  it("builds directory create payloads without manual student-card fields", () => {
+    const payload = buildCatalogNodeCreatePayload(
+      {
+        title: "  Observation branch  ",
+        summary: "  nested  ",
+        node_kind: "directory",
+        teacher_note: " private ",
+      },
+      "CH1",
+      "cat-parent",
+    );
+
+    expect(payload).toEqual({
       chapter_id: "CH1",
       parent_id: "cat-parent",
       node_kind: "directory",
       title: "Observation branch",
       summary: "nested",
       teacher_note: "private",
-      student_description: "student card",
-      card_image_asset_id: null,
-      card_icon_key: "flask",
-      card_accent: "green",
-      card_layout: "compact",
-      card_presentation: {},
-      point_card_presentation: {},
       canonical_point_id: null,
     });
+    expect(payload).not.toHaveProperty("student_description");
+    expect(payload).not.toHaveProperty("card_presentation");
   });
 
-  it("does not reuse teaching notes or legacy summaries as student-facing descriptions", () => {
-    expect(
-      buildCatalogNodeCreatePayload(
-        {
-          title: "Teacher notes only",
-          summary: "legacy summary",
-          node_kind: "point",
-          teacher_note: "teacher-only note",
-          student_description: "",
-        },
-        "CH1",
-      ),
-    ).toMatchObject({
+  it("keeps teacher notes out of derived student-facing card data", () => {
+    const payload = buildCatalogNodeCreatePayload(
+      {
+        title: "Teacher notes only",
+        summary: "legacy summary",
+        node_kind: "point",
+        teacher_note: "teacher-only note",
+      },
+      "CH1",
+    );
+
+    expect(payload).toMatchObject({
       summary: "legacy summary",
       teacher_note: "teacher-only note",
-      student_description: "",
     });
+    expect(payload).not.toHaveProperty("student_description");
+    expect(payload).not.toHaveProperty("point_card_presentation");
   });
 
-  it("hydrates and serializes constrained point card overrides", () => {
+  it("hydrates node forms without stale manual student-card values", () => {
     const detail = {
       node: {
         title: "Video point",
         summary: "summary",
         node_kind: "point",
-        point_card_presentation: {
-          cover_image_asset_id: "asset-1",
-          short_description: "Watch the color change",
-          icon_key: "play",
-          accent: "blue",
-          emphasis: true,
-        },
+        teacher_note: "teacher note",
       },
     } as unknown as CatalogNodeDetail;
 
-    expect(hydrateCatalogNodeForm(detail)).toMatchObject({
-      point_card_cover_image_asset_id: "asset-1",
-      point_card_short_description: "Watch the color change",
-      point_card_icon_key: "play",
-      point_card_accent: "blue",
-      point_card_emphasis: true,
-    });
+    const form = hydrateCatalogNodeForm(detail);
+
+    expect(form).toMatchObject({ title: "Video point", summary: "summary", teacher_note: "teacher note" });
+    expect(form).not.toHaveProperty("student_description");
+    expect(form).not.toHaveProperty("point_card_short_description");
   });
 
   it("keeps teacher note in authoring payload while separating principle modes", () => {
@@ -320,6 +303,7 @@ describe("catalog tree mappers", () => {
 
     expect(resolveCatalogNodeStatus(detail).primary_state).toBe("sync_attention");
     expect(catalogNodePrimaryStateClass("sync_attention")).toBe("is-warning");
+    expect(catalogNodePrimaryStateClass("blocked")).toBe("is-error");
     expect(catalogNodeStatusTooltip(detail)).toBe("同步异常：搜索或 AI 同步异常");
   });
 

@@ -6,6 +6,7 @@ import {
   changeCatalogNodeStatus,
   changeCatalogPointContentPublication,
   copyCatalogNode,
+  createCatalogPointPreviewToken,
   createCatalogNode,
   getCatalogNode,
   getCatalogPointAiContext,
@@ -188,6 +189,11 @@ export function useCatalogMutations(message: MessageApi) {
     onError: (error) => message.error(errorMessage(error)),
   });
 
+  const createPreviewToken = useMutation({
+    mutationFn: ({ nodeId }: { nodeId: string }) => createCatalogPointPreviewToken(nodeId),
+    onError: (error) => message.error(errorMessage(error)),
+  });
+
   const savePointContent = useMutation({
     mutationFn: ({ nodeId, payload }: { nodeId: string; payload: CatalogPointContentPayload }) => saveCatalogPointContent(nodeId, payload),
     onSuccess: (detail) => {
@@ -285,6 +291,7 @@ export function useCatalogMutations(message: MessageApi) {
     moveNode,
     reorderNodes,
     changeNodeStatus,
+    createPreviewToken,
     savePointContent,
     changePointPublication,
     saveRelatedLinks,

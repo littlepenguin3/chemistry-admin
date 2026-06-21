@@ -178,13 +178,6 @@ export type StudentCatalogNodeCard = {
   summary: string;
   status: string;
   display_order: number;
-  student_description: string;
-  card_image_asset_id?: string | null;
-  card_icon_key?: string | null;
-  card_accent?: string | null;
-  card_layout: string;
-  card_presentation: Record<string, unknown>;
-  point_card_presentation: Record<string, unknown>;
   actions: string[];
   has_children: boolean;
   has_point_content: boolean;
@@ -246,7 +239,6 @@ export type StudentPointDetailResponse = {
   chapter_id: string;
   title: string;
   summary: string;
-  point_card_presentation?: Record<string, unknown>;
   breadcrumbs: StudentCatalogBreadcrumb[];
   principle_mode: "equation" | "text" | string;
   principle_equation?: string | null;
@@ -738,6 +730,11 @@ export function getStudentCatalogPointDetail(nodeId: string): Promise<StudentPoi
   return api<StudentPointDetailResponse>(`/api/student/catalog/points/${encodeURIComponent(nodeId)}`);
 }
 
+export function getPreviewCatalogPointDetail(nodeId: string, previewToken: string): Promise<StudentPointDetailResponse> {
+  const params = new URLSearchParams({ preview_token: previewToken });
+  return api<StudentPointDetailResponse>(`/api/preview/catalog/points/${encodeURIComponent(nodeId)}?${params.toString()}`);
+}
+
 export function searchStudentVideoLibrary(query = "", limit = 24): Promise<StudentVideoLibrarySearchResponse> {
   const params = new URLSearchParams({ domain: "experiment_video", limit: String(limit) });
   if (query.trim()) params.set("q", query.trim());
@@ -789,6 +786,10 @@ export function submitStudentFeedback(payload: StudentFeedbackSubmitRequest): Pr
 export function studentMediaUrl(path: string): string {
   const separator = path.includes("?") ? "&" : "?";
   return `${apiBase}${path}${separator}access_token=${encodeURIComponent(authToken)}`;
+}
+
+export function previewMediaUrl(path: string): string {
+  return `${apiBase}${path}`;
 }
 
 export async function logout(): Promise<void> {

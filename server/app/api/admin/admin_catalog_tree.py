@@ -13,6 +13,7 @@ from server.app.catalog_tree_schemas import (
     CatalogEquationPreviewResponse,
     CatalogNodeCreateRequest,
     CatalogNodeMoveRequest,
+    CatalogPreviewTokenResponse,
     CatalogNodeReorderRequest,
     CatalogNodeStatusRequest,
     CatalogNodeUpdateRequest,
@@ -24,6 +25,7 @@ from server.app.catalog_tree_schemas import (
 from server.app.domains.catalog_tree.equations import assist_reaction_equations, equation_rows_from_inputs, normalize_reaction_equations
 from server.app.domains.catalog_tree.ai_context import catalog_point_ai_context, catalog_point_rag_probe
 from server.app.domains.catalog_tree.jobs import catalog_point_job_state, trigger_catalog_point_job
+from server.app.domains.catalog_tree.preview import create_catalog_point_preview_token
 from server.app.domains.catalog_tree.tree import (
     bind_existing_media,
     copy_node,
@@ -124,6 +126,14 @@ async def admin_catalog_node_status(
     user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return set_node_status(node_id=node_id, payload=payload, user=user)
+
+
+@router.post("/nodes/{node_id}/preview-token", response_model=CatalogPreviewTokenResponse)
+async def admin_catalog_point_preview_token(
+    node_id: str = Path(min_length=1),
+    user: AuthUser = Depends(require_teacher_console_user),
+) -> CatalogPreviewTokenResponse:
+    return CatalogPreviewTokenResponse(**create_catalog_point_preview_token(node_id=node_id, user=user))
 
 
 @router.put("/nodes/{node_id}/point-content")

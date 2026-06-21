@@ -1,21 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { Form, Tabs, Typography, type TabsProps } from "antd";
+import { Form, Modal, Tabs, Typography, type TabsProps } from "antd";
 import { FlaskConical, Folder } from "lucide-react";
 
 import type { CatalogNodeCard, CatalogNodeDetail, CatalogNodeKind } from "../../api/catalogTree";
 import { QueryState } from "../../components/QueryState";
 import { CatalogAdvancedPanel } from "./CatalogAdvancedPanel";
 import { CatalogAiContextPanel } from "./CatalogAiContextPanel";
-import { CatalogEditorHeader } from "./CatalogEditorHeader";
+import { CatalogEditorHeader, type CatalogHeaderDiagnosticsKey } from "./CatalogEditorHeader";
 import { CatalogNodeContentPanel } from "./CatalogNodeContentPanel";
 import { CatalogNodeStatusPanel } from "./CatalogNodeStatusPanel";
 import { CatalogRelatedLinksPanel } from "./CatalogRelatedLinksPanel";
-import { CatalogStudentCardPanel } from "./CatalogStudentCardPanel";
 import { CatalogVideoPanel } from "./CatalogVideoPanel";
 import { useCatalogMediaAssets, useCatalogSearch, useCatalogValidation, type CatalogMutations } from "./catalogTreeHooks";
 import {
   buildCatalogNodeUpdatePayload,
   buildCatalogPointContentPayload,
+  displayCatalogPointTitle,
   hydrateCatalogNodeForm,
   hydrateCatalogPointContentForm,
   hydrateCatalogRelatedLinksForm,
@@ -28,8 +28,8 @@ import {
 
 const { Text, Title } = Typography;
 
-export const directoryCatalogEditorTabKeys = ["content", "student-card", "node-status", "advanced"] as const;
-export const pointCatalogEditorTabKeys = ["content", "video", "related", "student-card", "ai-context", "node-status", "advanced"] as const;
+export const directoryCatalogEditorTabKeys = ["content"] as const;
+export const pointCatalogEditorTabKeys = ["content", "video", "related"] as const;
 
 export type CatalogEditorTabKey = (typeof pointCatalogEditorTabKeys)[number];
 
@@ -59,6 +59,8 @@ export function CatalogTreeEditor({
   const [mediaAssetIds, setMediaAssetIds] = useState<string[]>([]);
   const [relatedQuery, setRelatedQuery] = useState("");
   const [activeTab, setActiveTab] = useState<CatalogEditorTabKey>("content");
+  const [diagnosticsPanel, setDiagnosticsPanel] = useState<CatalogHeaderDiagnosticsKey | null>(null);
+  const [previewFallbackUrl, setPreviewFallbackUrl] = useState("");
   const node = detail?.node;
   const pointCapable = isPointCapable(node?.node_kind);
   const principleMode = Form.useWatch("principle_mode", pointForm);
@@ -87,10 +89,16 @@ export function CatalogTreeEditor({
   }, [detail, linksForm, nodeForm, pointForm]);
 
   useEffect(() => {
-    if (!pointCapable && (activeTab === "video" || activeTab === "related" || activeTab === "ai-context")) {
+    if (!pointCapable && (activeTab === "video" || activeTab === "related")) {
       setActiveTab("content");
     }
   }, [activeTab, pointCapable]);
+
+  useEffect(() => {
+    if (!pointCapable && diagnosticsPanel === "ai-context") {
+      setDiagnosticsPanel(null);
+    }
+  }, [diagnosticsPanel, pointCapable]);
 
   const savePointContent = async (values: CatalogPointContentFormValues) => {
     if (!node) return;
@@ -114,6 +122,25 @@ export function CatalogTreeEditor({
       <Form form={linksForm} component={false} />
     </div>
   );
+
+  const openLearningCardPreview = async () => {
+    if (!node || !pointCapable) return;
+    const response = await mutations.createPreviewToken.mutateAsync({ nodeId: node.node_id });
+    const params = new URLSearchParams({
+      nodeId: node.node_id,
+      title: displayCatalogPointTitle(detail) || node.title,
+      previewUrl: response.preview_url,
+      expiresAt: response.expires_at,
+    });
+    const previewWindowUrl = `/catalog-preview?${params.toString()}`;
+    const opened = window.open(previewWindowUrl, "_blank", "popup,width=520,height=920");
+    if (!opened) {
+      setPreviewFallbackUrl(previewWindowUrl);
+      return;
+    }
+    opened.opener = null;
+    opened.focus();
+  };
 
   if (!detail && !loading && !error) {
     return (
@@ -193,49 +220,39 @@ export function CatalogTreeEditor({
         />
       ),
     },
-    {
-      key: "student-card",
-      label: "学生卡片",
-      forceRender: true,
-      children: <CatalogStudentCardPanel detail={detail} nodeForm={nodeForm} mutations={mutations} />,
-    },
-    {
-      key: "ai-context",
-      label: "AI 上下文",
-      forceRender: true,
-      children: <CatalogAiContextPanel detail={detail} mutations={mutations} />,
-    },
-    {
-      key: "node-status",
-      label: "节点状态",
-      forceRender: true,
-      children: <CatalogNodeStatusPanel detail={detail} validation={validation} mutations={mutations} />,
-    },
-    {
-      key: "advanced",
-      label: "高级",
-      forceRender: true,
-      children: (
-        <CatalogAdvancedPanel
-          detail={detail}
-          siblings={siblings}
-          moveParentId={moveParentId}
-          setMoveParentId={setMoveParentId}
-          moveDisplayOrder={moveDisplayOrder}
-          setMoveDisplayOrder={setMoveDisplayOrder}
-          mutations={mutations}
-        />
-      ),
-    },
   ];
   const tabItems = allTabItems.filter((item) => visibleTabKeys.includes(item.key as CatalogEditorTabKey));
+  const diagnosticsTitle =
+    diagnosticsPanel === "ai-context" ? "AI 上下文" : diagnosticsPanel === "advanced" ? "高级调试" : "节点状态";
+  const diagnosticsContent =
+    diagnosticsPanel === "ai-context" ? (
+      <CatalogAiContextPanel detail={detail} mutations={mutations} />
+    ) : diagnosticsPanel === "advanced" ? (
+      <CatalogAdvancedPanel
+        detail={detail}
+        siblings={siblings}
+        moveParentId={moveParentId}
+        setMoveParentId={setMoveParentId}
+        moveDisplayOrder={moveDisplayOrder}
+        setMoveDisplayOrder={setMoveDisplayOrder}
+        mutations={mutations}
+      />
+    ) : diagnosticsPanel === "node-status" ? (
+      <CatalogNodeStatusPanel detail={detail} validation={validation} mutations={mutations} />
+    ) : null;
 
   return (
     <QueryState loading={Boolean(loading)} error={error} empty={!detail}>
       {detail && node ? (
         <div className="catalog-editor catalog-editor-selected">
           {formAnchors}
-          <CatalogEditorHeader detail={detail} mutations={mutations} />
+          <CatalogEditorHeader
+            detail={detail}
+            mutations={mutations}
+            onPreviewLearningCard={openLearningCardPreview}
+            previewLoading={mutations.createPreviewToken.isPending}
+            onOpenDiagnostics={setDiagnosticsPanel}
+          />
           <Tabs
             className="catalog-editor-tabs"
             activeKey={activeTab}
@@ -243,6 +260,30 @@ export function CatalogTreeEditor({
             destroyOnHidden={false}
             items={tabItems}
           />
+          <Modal
+            title={diagnosticsTitle}
+            open={Boolean(diagnosticsPanel)}
+            onCancel={() => setDiagnosticsPanel(null)}
+            footer={null}
+            width={diagnosticsPanel === "advanced" || diagnosticsPanel === "ai-context" ? 1080 : 920}
+            destroyOnHidden={false}
+          >
+            <div className="catalog-diagnostics-modal-body">{diagnosticsContent}</div>
+          </Modal>
+          <Modal
+            title="打开学习卡片预览"
+            open={Boolean(previewFallbackUrl)}
+            onCancel={() => setPreviewFallbackUrl("")}
+            footer={null}
+            width={520}
+          >
+            <div className="catalog-preview-fallback">
+              <Text type="secondary">浏览器拦截了新窗口。请用下面的按钮打开本次短时预览。</Text>
+              <a href={previewFallbackUrl} target="_blank" rel="noreferrer" className="catalog-preview-fallback-link">
+                打开预览窗口
+              </a>
+            </div>
+          </Modal>
         </div>
       ) : null}
     </QueryState>

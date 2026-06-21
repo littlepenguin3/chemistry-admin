@@ -18,10 +18,6 @@ function node(partial: Partial<CatalogNodeCard> & { node_id: string; title: stri
     summary: "",
     status: "draft",
     display_order: 1,
-    student_description: "",
-    card_layout: "default",
-    card_presentation: {},
-    point_card_presentation: {},
     actions: [],
     has_children: false,
     descendant_point_count: 0,
@@ -176,6 +172,21 @@ describe("CatalogTreeRow", () => {
 
     expect(screen.getByLabelText("点位状态：缺视频：无视频")).toBeInTheDocument();
     expect(container.querySelector(".catalog-sidebar-point-status")).toHaveClass("is-warning");
+  });
+
+  it("renders structural point exceptions with the error status class", () => {
+    const { container } = renderRow({
+      catalogNode: node({
+        node_id: "point-error",
+        title: "Point with invalid identity",
+        node_kind: "point",
+        validation: { ok: false, errors: ["Missing canonical experiment identity"], warnings: [] },
+      }),
+      isInternal: false,
+    });
+
+    expect(container.querySelector(".catalog-sidebar-point-status")).toHaveClass("is-error");
+    expect(container.querySelector(".catalog-sidebar-point-status")).not.toHaveClass("is-warning");
   });
 
   it("renders complete draft point as ready", () => {

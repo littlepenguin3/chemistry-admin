@@ -13,13 +13,6 @@ class CatalogNodeCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     summary: str | None = None
     teacher_note: str | None = None
-    student_description: str | None = None
-    card_image_asset_id: str | None = None
-    card_icon_key: str | None = Field(default=None, max_length=80)
-    card_accent: str | None = Field(default=None, max_length=80)
-    card_layout: str | None = Field(default="default", max_length=40)
-    card_presentation: dict[str, Any] = Field(default_factory=dict)
-    point_card_presentation: dict[str, Any] = Field(default_factory=dict)
     canonical_point_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -36,13 +29,6 @@ class CatalogNodeUpdateRequest(BaseModel):
     summary: str | None = None
     node_kind: str | None = Field(default=None, pattern="^(directory|point)$")
     teacher_note: str | None = None
-    student_description: str | None = None
-    card_image_asset_id: str | None = None
-    card_icon_key: str | None = Field(default=None, max_length=80)
-    card_accent: str | None = Field(default=None, max_length=80)
-    card_layout: str | None = Field(default=None, max_length=40)
-    card_presentation: dict[str, Any] | None = None
-    point_card_presentation: dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
 
 
@@ -63,6 +49,12 @@ class CatalogNodeReorderRequest(BaseModel):
 class CatalogNodeStatusRequest(BaseModel):
     action: str = Field(pattern="^(archive|restore|publish|unpublish)$")
     include_subtree: bool = False
+
+
+class CatalogPreviewTokenResponse(BaseModel):
+    preview_url: str
+    token: str
+    expires_at: str
 
 
 class CatalogReactionEquationInput(BaseModel):
@@ -205,13 +197,6 @@ class CatalogNodeCard(BaseModel):
     status: str
     display_order: int = 0
     teacher_note: str | None = Field(default=None, exclude=True)
-    student_description: str = ""
-    card_image_asset_id: str | None = None
-    card_icon_key: str | None = None
-    card_accent: str | None = None
-    card_layout: str = "default"
-    card_presentation: dict[str, Any] = Field(default_factory=dict)
-    point_card_presentation: dict[str, Any] = Field(default_factory=dict)
     actions: list[str] = Field(default_factory=list)
     has_children: bool = False
     descendant_point_count: int = 0
@@ -270,7 +255,6 @@ class StudentPointDetailResponse(BaseModel):
     chapter_id: str
     title: str
     summary: str = ""
-    point_card_presentation: dict[str, Any] = Field(default_factory=dict)
     breadcrumbs: list[CatalogBreadcrumb] = Field(default_factory=list)
     principle_mode: str = "text"
     principle_equation: str | None = None

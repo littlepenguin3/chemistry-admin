@@ -32,6 +32,7 @@ const apiMocks = vi.hoisted(() => ({
   getStudentChapterCatalog: vi.fn(),
   getStudentCatalogNode: vi.fn(),
   getStudentCatalogPointDetail: vi.fn(),
+  getPreviewCatalogPointDetail: vi.fn(),
   searchStudentVideoLibrary: vi.fn(),
   startStudentPosttest: vi.fn(),
   submitStudentPosttest: vi.fn(),
@@ -58,6 +59,7 @@ vi.mock("./api", () => ({
   getStudentChapterCatalog: apiMocks.getStudentChapterCatalog,
   getStudentCatalogNode: apiMocks.getStudentCatalogNode,
   getStudentCatalogPointDetail: apiMocks.getStudentCatalogPointDetail,
+  getPreviewCatalogPointDetail: apiMocks.getPreviewCatalogPointDetail,
   searchStudentVideoLibrary: apiMocks.searchStudentVideoLibrary,
   startStudentPosttest: apiMocks.startStudentPosttest,
   submitStudentPosttest: apiMocks.submitStudentPosttest,
@@ -66,6 +68,7 @@ vi.mock("./api", () => ({
   streamStudentAssistantAsk: apiMocks.streamStudentAssistantAsk,
   submitStudentFeedback: apiMocks.submitStudentFeedback,
   studentMediaUrl: (path: string) => path,
+  previewMediaUrl: (path: string) => path,
   errorMessage: (error: unknown) => (error instanceof Error ? error.message : "request failed"),
 }));
 
@@ -252,10 +255,6 @@ const catalogChapter: StudentCatalogChapterResponse = {
       node_kind: "directory",
       title: "Halogen displacement catalog",
       summary: "Open catalog entries for halogen experiments.",
-      student_description: "Open catalog entries for halogen experiments.",
-      card_layout: "default",
-      card_presentation: {},
-      point_card_presentation: {},
       status: "published",
       display_order: 1,
       actions: ["open_directory"],
@@ -274,10 +273,6 @@ const catalogNestedDirectoryNode: StudentCatalogNodeResponse["children"][number]
   node_kind: "directory",
   title: "Oxidation experiments",
   summary: "Choose a concrete displacement point.",
-  student_description: "Choose a concrete displacement point.",
-  card_layout: "compact",
-  card_presentation: { badge: "Experiment list" },
-  point_card_presentation: {},
   status: "published",
   display_order: 1,
   actions: ["open_directory"],
@@ -294,10 +289,6 @@ const catalogPointNode: StudentCatalogNodeResponse["children"][number] = {
   node_kind: "point",
   title: "Orange layer observation",
   summary: "Chlorine water displaces bromide and produces bromine in CCl4.",
-  student_description: "Chlorine water displaces bromide and produces bromine in CCl4.",
-  card_layout: "default",
-  card_presentation: {},
-  point_card_presentation: { short_description: "Watch bromine appear in the organic layer.", accent: "blue", emphasis: true },
   status: "published",
   display_order: 1,
   actions: ["open_point"],
@@ -619,6 +610,7 @@ describe("student app route stack", () => {
       Promise.resolve(nodeId === "cat-dir-oxidation" ? catalogNestedDirectory : catalogDirectory),
     );
     apiMocks.getStudentCatalogPointDetail.mockResolvedValue(catalogPointDetail);
+    apiMocks.getPreviewCatalogPointDetail.mockResolvedValue(catalogPointDetail);
     apiMocks.searchStudentVideoLibrary.mockResolvedValue(videoLibraryResponse);
     apiMocks.startStudentPosttest.mockResolvedValue(posttestResponse);
     apiMocks.submitStudentPosttest.mockResolvedValue({ status: "completed", report });
@@ -767,6 +759,21 @@ describe("student app route stack", () => {
     fireEvent.click(screen.getByRole("button", { name: "开始练习" }));
     await waitFor(() => expect(window.location.pathname).toBe("/assessment/session/posttest-session-e2e"));
     expectBottomNavHidden();
+  });
+
+  it("renders teacher preview point details without creating a student session or mutation actions", async () => {
+    window.history.replaceState({}, "", "/preview/catalog/points/cat-point-halogen?preview_token=teacher-preview-token");
+    render(<App />);
+
+    await waitFor(() => expect(apiMocks.getPreviewCatalogPointDetail).toHaveBeenCalledWith("cat-point-halogen", "teacher-preview-token"));
+    expect(apiMocks.loadCurrentUser).not.toHaveBeenCalled();
+    expect(document.querySelector(".student-app-shell")).toBeNull();
+    expect(screen.getAllByText("Orange layer observation").length).toBeGreaterThan(0);
+    expect(screen.queryByText("开始练习")).not.toBeInTheDocument();
+    expect(screen.queryByText("带着这个点位问 AI")).not.toBeInTheDocument();
+    expect(document.querySelector(".finish-action")).toBeNull();
+    expect(apiMocks.submitStudentPosttest).not.toHaveBeenCalled();
+    expect(apiMocks.submitStudentFeedback).not.toHaveBeenCalled();
   });
 
   it("serves direct root and detail client routes with route-level navigation visibility", async () => {

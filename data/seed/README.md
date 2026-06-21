@@ -6,7 +6,7 @@ Protected resource groups:
 
 - `formal_experiments.json`: 77 current formal experiments.
 - `knowledge_framework/`: 11 chapters, 133 knowledge units, 385 knowledge points, plus the reviewed curriculum source used to publish them.
-- `experiment_catalog/`: the current catalog-outline seed from `docs/实验目录_整理版.md`, with 569 nodes, 176 directories, 393 points, and 30 mapped point-content smoke examples.
+- `experiment_catalog/`: the current catalog-outline seed from `docs/实验目录_整理版.md`, with 569 nodes, 176 directories, 393 points, and 76 reviewed point-content records, including 71 equation-mode records and 122 structured reaction-equation rows.
 - `canonical_rag/`: mirrored canonical chunks and embeddings from `E:/chemistry-rag/data/rag_ready`, including 3637 chunks/embeddings.
 - `student_learning/`: explicit student-facing family and element learning profiles used by the H5 learning page; these display facts are curated seed data, not dynamically inferred from chunks.
 - `import_reports/`: current import/validation reports retained for auditability.
@@ -22,8 +22,8 @@ Retired legacy groups:
 Catalog seed source of truth:
 
 - Regenerate the seed from `docs/实验目录_整理版.md`; directories stay first-class tree nodes and only leaves become experiment point nodes.
-- The 30 examples from `docs/30点位例子.txt` are smoke content mapped to concrete catalog point nodes. Mapping uses title, path, reagent/formula terms, and source content; ambiguous matches require a reviewed target-path override recorded in each example's `semantic_mapping`.
-- Known source wording corrections, including `NaClO + 品红溶液`, must appear in the semantic mapping report and validation output.
+- `point_content_seed.json` is the authoritative point-content seed for reviewed experiment three-elements. It replaces the retired 30-example text-only attempt and must preserve `principle_mode`, text-mode principles, and equation-mode `reaction_equations`.
+- The semantic node mapping for these records is audited in `normalized_three_element_node_mapping.json`; every content record must resolve to a concrete point node and canonical point id.
 
 Student learning element focus cards:
 

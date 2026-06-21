@@ -11,7 +11,7 @@ Protected resources now include:
 - `data/seed/formal_experiments.json`: 77 formal experiments.
 - `data/seed/knowledge_framework/`: 11 chapters, 133 units, 385 knowledge points, plus reviewed curriculum source.
 - `data/seed/experiment_catalog/catalog_tree.json`: the canonical outline seed with 569 nodes, 176 directories, 393 points, and no chapter 21 placeholder nodes.
-- `data/seed/experiment_catalog/point_content_examples.json`: 30 mapped point-content smoke examples from `docs/30点位例子.txt`.
+- `data/seed/experiment_catalog/point_content_seed.json`: 76 reviewed point-content records from the normalized three-element pass, including equation-mode reaction rows for ES testing.
 - `data/seed/canonical_rag/chunks/`: 3637 canonical chunks mirrored from the external RAG package.
 - `data/seed/canonical_rag/embeddings/canonical_base_v1/`: 3637 canonical embeddings.
 - `data/seed/import_reports/`: current import reports retained as production manifests.

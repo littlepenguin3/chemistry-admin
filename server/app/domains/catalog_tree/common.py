@@ -46,6 +46,25 @@ def actions_for_kind(kind: str) -> list[str]:
     return []
 
 
+def derived_point_summary(node: dict[str, Any], content: dict[str, Any] | None = None) -> str:
+    source = content or {
+        "phenomenon_explanation": node.get("point_phenomenon_explanation"),
+        "principle_mode": node.get("point_principle_mode"),
+        "principle_equation": node.get("point_principle_equation"),
+        "principle_text": node.get("point_principle_text"),
+        "safety_note": node.get("point_safety_note"),
+    }
+    for value in (
+        source.get("phenomenon_explanation"),
+        reaction_principle_text(source) if source.get("principle_mode") == "equation" else source.get("principle_text"),
+        source.get("safety_note"),
+    ):
+        text_value = clean(value)
+        if text_value:
+            return text_value[:160]
+    return ""
+
+
 def node_select(where_clause: str) -> str:
     return f"""
         SELECT
@@ -57,13 +76,6 @@ def node_select(where_clause: str) -> str:
           n.title,
           n.summary,
           n.teacher_note,
-          n.student_description,
-          n.card_image_asset_id,
-          n.card_icon_key,
-          n.card_accent,
-          n.card_layout,
-          n.card_presentation,
-          n.point_card_presentation,
           n.canonical_point_id,
           cp.title AS canonical_point_title,
           cp.status AS canonical_point_status,
@@ -302,9 +314,7 @@ def row_dict(row: Any) -> dict[str, Any]:
     item["media_count"] = int(item.get("media_count") or 0)
     item["published_media_count"] = int(item.get("published_media_count") or 0)
     item["active_placement_count"] = int(item.get("active_placement_count") or 0)
-    if item.get("card_image_asset_id") is not None:
-        item["card_image_asset_id"] = str(item["card_image_asset_id"])
-    for key in ("metadata", "card_presentation", "point_card_presentation"):
+    for key in ("metadata",):
         if not isinstance(item.get(key), dict):
             item[key] = {}
     if item.get("index_state") is not None and not isinstance(item.get("index_state"), dict):
@@ -403,7 +413,7 @@ def _map_ai_evidence_state(evidence_state: dict[str, Any] | None) -> str:
 def _primary_state_label(primary_state: str) -> str:
     labels = {
         "archived": "已归档",
-        "blocked": "阻断",
+        "blocked": "异常",
         "needs_content": "缺内容",
         "needs_video": "缺视频",
         "draft": "草稿",
@@ -488,7 +498,7 @@ def _directory_node_status(node: dict[str, Any]) -> dict[str, Any]:
         primary_reason = "目录已归档"
     elif blocked:
         primary_state = "blocked"
-        primary_reason = f"{blocked} 个后代点位不可发布"
+        primary_reason = f"{blocked} 个后代点位结构异常"
     elif needs_content:
         primary_state = "needs_content"
         primary_reason = f"{needs_content} 个后代点位缺内容"
@@ -700,7 +710,7 @@ def catalog_node_status_summary(
         primary_reason = "点位已归档"
     elif validation.get("errors"):
         primary_state = "blocked"
-        primary_reason = "点位结构需要处理"
+        primary_reason = "点位结构异常"
     elif missing_fields:
         primary_state = "needs_content"
         primary_reason = f"缺少{ '、'.join(missing_fields) }"
@@ -750,20 +760,16 @@ def node_card(
 ) -> dict[str, Any]:
     kind = str(node.get("node_kind") or "directory")
     active_validation = validation if validation is not None else validate_node_payload(node, content)
+    summary = clean(node.get("summary"))
+    if kind == "point" and not summary:
+        summary = derived_point_summary(node, content)
     card = {
         "node_id": node["node_id"],
         "chapter_id": node["chapter_id"],
         "parent_id": node.get("parent_id"),
         "node_kind": kind,
         "title": node.get("title") or "",
-        "summary": node.get("summary") or "",
-        "student_description": node.get("student_description") or "",
-        "card_image_asset_id": node.get("card_image_asset_id"),
-        "card_icon_key": node.get("card_icon_key"),
-        "card_accent": node.get("card_accent"),
-        "card_layout": node.get("card_layout") or "default",
-        "card_presentation": node.get("card_presentation") if isinstance(node.get("card_presentation"), dict) else {},
-        "point_card_presentation": node.get("point_card_presentation") if isinstance(node.get("point_card_presentation"), dict) else {},
+        "summary": summary,
         "placement_node_id": node["node_id"] if kind == "point" else None,
         "canonical_point_id": node.get("canonical_point_id") if kind == "point" else None,
         "canonical_point_title": node.get("canonical_point_title") if kind == "point" else None,

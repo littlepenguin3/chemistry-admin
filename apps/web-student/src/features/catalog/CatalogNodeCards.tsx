@@ -1,5 +1,4 @@
-import { ChevronRight, FlaskConical, FolderOpen, PlayCircle, Shield, Zap } from "lucide-react";
-import type { CSSProperties } from "react";
+import { ChevronRight, FolderOpen, PlayCircle } from "lucide-react";
 
 import type { StudentCatalogBreadcrumb, StudentCatalogNodeCard } from "../../api";
 
@@ -13,9 +12,6 @@ export function isPointNode(node: StudentCatalogNodeCard): boolean {
 
 function nodeIcon(node: StudentCatalogNodeCard) {
   if (node.node_kind === "point") return <PlayCircle size={20} />;
-  if (node.card_icon_key === "flask") return <FlaskConical size={20} />;
-  if (node.card_icon_key === "shield") return <Shield size={20} />;
-  if (node.card_icon_key === "lightning") return <Zap size={20} />;
   return <FolderOpen size={20} />;
 }
 
@@ -25,10 +21,7 @@ function nodeMeta(node: StudentCatalogNodeCard): string {
 }
 
 function nodeDescription(node: StudentCatalogNodeCard): string {
-  if (node.node_kind === "point") {
-    return String(node.point_card_presentation?.short_description || "");
-  }
-  return node.student_description || "";
+  return node.summary || "";
 }
 
 export function CatalogNodeCards({
@@ -50,8 +43,7 @@ export function CatalogNodeCards({
         const description = nodeDescription(node);
         return (
           <div
-            className={`catalog-node-card kind-${node.node_kind} layout-${node.card_layout || "default"}`}
-            style={{ "--catalog-card-accent": node.card_accent || (node.node_kind === "point" ? "#2563eb" : "#0f8a5f") } as CSSProperties}
+            className={`catalog-node-card kind-${node.node_kind} layout-default`}
             key={node.node_id}
           >
             <button

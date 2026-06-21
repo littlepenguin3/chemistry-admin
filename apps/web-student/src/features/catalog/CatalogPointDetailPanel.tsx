@@ -29,6 +29,9 @@ export function CatalogPointDetailPanel({
   assistantEnabled,
   onOpenAssistant,
   onOpenRelatedPoint,
+  previewMode = false,
+  loadPointDetail = getStudentCatalogPointDetail,
+  resolveMediaUrl = studentMediaUrl,
 }: {
   nodeId: string;
   search: StudentRouteSearch;
@@ -39,6 +42,9 @@ export function CatalogPointDetailPanel({
   assistantEnabled: boolean;
   onOpenAssistant: (context: AssistantContext) => void;
   onOpenRelatedPoint: (nodeId: string, pointTitle: string) => void;
+  previewMode?: boolean;
+  loadPointDetail?: (nodeId: string) => Promise<StudentPointDetailResponse>;
+  resolveMediaUrl?: (path: string) => string;
 }) {
   const [detail, setDetail] = useState<StudentPointDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,7 +54,7 @@ export function CatalogPointDetailPanel({
     let cancelled = false;
     setLoading(true);
     setError("");
-    getStudentCatalogPointDetail(nodeId)
+    loadPointDetail(nodeId)
       .then((payload) => {
         if (!cancelled) setDetail(payload);
       })
@@ -61,7 +67,7 @@ export function CatalogPointDetailPanel({
     return () => {
       cancelled = true;
     };
-  }, [nodeId]);
+  }, [loadPointDetail, nodeId]);
 
   const video = detail?.videos[0] || null;
   const principleText =
@@ -105,8 +111,8 @@ export function CatalogPointDetailPanel({
               <video
                 controls
                 playsInline
-                poster={video.thumbnail_path ? studentMediaUrl(video.thumbnail_path) : undefined}
-                src={studentMediaUrl(video.stream_path)}
+                poster={video.thumbnail_path ? resolveMediaUrl(video.thumbnail_path) : undefined}
+                src={resolveMediaUrl(video.stream_path)}
               />
             ) : (
               <div className="video-placeholder">
@@ -131,7 +137,7 @@ export function CatalogPointDetailPanel({
             {detail.related_points.length ? (
               <div className="related-point-list">
                 {detail.related_points.map((item) => (
-                  <button type="button" key={item.node_id} onClick={() => onOpenRelatedPoint(item.node_id, item.title)}>
+                  <button type="button" key={item.node_id} disabled={previewMode} onClick={() => onOpenRelatedPoint(item.node_id, item.title)}>
                     <span>{item.title}</span>
                     {item.relation_type ? <small>{item.relation_type}</small> : null}
                   </button>
@@ -142,6 +148,7 @@ export function CatalogPointDetailPanel({
             )}
           </section>
 
+          {!previewMode ? (
           <section className="detail-section practice-strip">
             <div>
               <p>固定练习入口</p>
@@ -152,14 +159,15 @@ export function CatalogPointDetailPanel({
               <span>开始练习</span>
             </button>
           </section>
+          ) : null}
 
-          {assistantEnabled && assistantContext ? (
+          {!previewMode && assistantEnabled && assistantContext ? (
             <MobileButton className="secondary-action full context-assistant-action" type="button" variant="secondary" onClick={() => onOpenAssistant(assistantContext)}>
               <MessageCircle size={18} />
               <span>带着这个点位问 AI</span>
             </MobileButton>
           ) : null}
-          <FinishLearningAction loading={finishing} error={finishError} onClick={() => onFinishLearning(detail)} />
+          {!previewMode ? <FinishLearningAction loading={finishing} error={finishError} onClick={() => onFinishLearning(detail)} /> : null}
         </>
       ) : null}
     </section>

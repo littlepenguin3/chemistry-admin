@@ -239,15 +239,12 @@ def create_node(*, payload: CatalogNodeCreateRequest, user: Any) -> dict[str, An
                 """
                 INSERT INTO experiment_catalog_nodes (
                   id, chapter_id, parent_id, node_kind, title, summary, teacher_note,
-                  student_description, card_image_asset_id, card_icon_key, card_accent,
-                  card_layout, card_presentation, point_card_presentation, status,
-                  display_order, canonical_point_id, metadata, created_by, updated_by, updated_at
+                  status, display_order, canonical_point_id, metadata, created_by, updated_by, updated_at
                 )
                 VALUES (
                   :id, :chapter_id, :parent_id, :node_kind, :title, :summary, :teacher_note,
-                  :student_description, CAST(:card_image_asset_id AS uuid), :card_icon_key, :card_accent,
-                  :card_layout, CAST(:card_presentation AS jsonb), CAST(:point_card_presentation AS jsonb), 'draft',
-                  :display_order, :canonical_point_id, CAST(:metadata AS jsonb), CAST(:user_id AS uuid), CAST(:user_id AS uuid), now()
+                  'draft', :display_order, :canonical_point_id, CAST(:metadata AS jsonb),
+                  CAST(:user_id AS uuid), CAST(:user_id AS uuid), now()
                 )
                 """
             ),
@@ -409,15 +406,12 @@ def _insert_copied_node(
             """
             INSERT INTO experiment_catalog_nodes (
               id, chapter_id, parent_id, node_kind, title, summary, teacher_note,
-              student_description, card_image_asset_id, card_icon_key, card_accent,
-              card_layout, card_presentation, point_card_presentation, status,
-              display_order, canonical_point_id, metadata, created_by, updated_by, updated_at
+              status, display_order, canonical_point_id, metadata, created_by, updated_by, updated_at
             )
             VALUES (
               :id, :chapter_id, :parent_id, :node_kind, :title, :summary, :teacher_note,
-              :student_description, CAST(:card_image_asset_id AS uuid), :card_icon_key, :card_accent,
-              :card_layout, CAST(:card_presentation AS jsonb), CAST(:point_card_presentation AS jsonb), 'draft',
-              :display_order, :canonical_point_id, CAST(:metadata AS jsonb), CAST(:user_id AS uuid), CAST(:user_id AS uuid), now()
+              'draft', :display_order, :canonical_point_id, CAST(:metadata AS jsonb),
+              CAST(:user_id AS uuid), CAST(:user_id AS uuid), now()
             )
             """
         ),
@@ -429,15 +423,6 @@ def _insert_copied_node(
             "title": title,
             "summary": source.get("summary") or "",
             "teacher_note": source.get("teacher_note") or "",
-            "student_description": source.get("student_description") or "",
-            "card_image_asset_id": str(source["card_image_asset_id"]) if source.get("card_image_asset_id") else None,
-            "card_icon_key": source.get("card_icon_key"),
-            "card_accent": source.get("card_accent"),
-            "card_layout": source.get("card_layout") or "default",
-            "card_presentation": json_dump(source.get("card_presentation") if isinstance(source.get("card_presentation"), dict) else {}),
-            "point_card_presentation": json_dump(
-                source.get("point_card_presentation") if isinstance(source.get("point_card_presentation"), dict) else {}
-            ),
             "display_order": display_order,
             "canonical_point_id": canonical_point_id,
             "metadata": json_dump(metadata),
@@ -711,13 +696,6 @@ def update_node(*, node_id: str, payload: CatalogNodeUpdateRequest, user: Any) -
                 SET title = :title,
                     summary = :summary,
                     teacher_note = :teacher_note,
-                    student_description = :student_description,
-                    card_image_asset_id = CAST(:card_image_asset_id AS uuid),
-                    card_icon_key = :card_icon_key,
-                    card_accent = :card_accent,
-                    card_layout = :card_layout,
-                    card_presentation = CAST(:card_presentation AS jsonb),
-                    point_card_presentation = CAST(:point_card_presentation AS jsonb),
                     node_kind = :node_kind,
                     metadata = CAST(:metadata AS jsonb),
                     updated_by = CAST(:user_id AS uuid),
@@ -992,7 +970,6 @@ def search_catalog_nodes(*, query: str, chapter_id: str | None = None, limit: in
                           AND (
                             n.title ILIKE :term
                             OR n.summary ILIKE :term
-                            OR n.student_description ILIKE :term
                             OR n.teacher_note ILIKE :term
                             OR pc.point_title ILIKE :term
                             OR pc.principle_equation ILIKE :term

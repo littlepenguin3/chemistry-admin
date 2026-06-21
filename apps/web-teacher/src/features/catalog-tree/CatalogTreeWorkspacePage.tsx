@@ -230,10 +230,7 @@ export function CatalogTreeWorkspacePage() {
         summary: "",
         node_kind: createIntent.kind,
         canonical_point_id: "",
-        student_description: "",
         teacher_note: "",
-        card_layout: "default",
-        point_card_emphasis: false,
       });
     }
   }, [createForm, createIntent]);
@@ -264,9 +261,9 @@ export function CatalogTreeWorkspacePage() {
   const nodeStatusSummary = useMemo(() => {
     if (!selectedDetail.data) return null;
     const status = resolveCatalogNodeStatus(selectedDetail.data);
-    const color = ["blocked", "needs_content", "needs_video"].includes(status.primary_state)
+    const color = status.primary_state === "blocked"
       ? "red"
-      : status.primary_state === "sync_attention"
+      : ["needs_content", "needs_video", "sync_attention"].includes(status.primary_state)
         ? "gold"
         : status.primary_state === "published"
           ? "green"
@@ -573,9 +570,6 @@ export function CatalogTreeWorkspacePage() {
             extra="仅教师端可见，不进入学生端、学生搜索或题目证据链。"
           >
             <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} />
-          </Form.Item>
-          <Form.Item name="student_description" label="学生端卡片描述">
-            <Input.TextArea autoSize={{ minRows: 2, maxRows: 3 }} />
           </Form.Item>
         </Form>
       </Modal>

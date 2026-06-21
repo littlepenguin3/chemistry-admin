@@ -18,7 +18,7 @@ from server.app.domains.catalog_tree.catalog_seed import (
     CATALOG_SEED_VALIDATION_REPORT_PATH,
     CATALOG_TREE_SEED_PATH,
     EXPECTED_CATALOG_COUNTS,
-    POINT_CONTENT_EXAMPLES_SEED_PATH,
+    load_point_content_seed,
     validate_catalog_seed,
 )
 
@@ -500,7 +500,11 @@ def _build_semantic_mapping_report(
     return report
 
 
-def build_point_content_examples(nodes: list[dict[str, Any]], example_source: Path) -> list[dict[str, Any]]:
+def build_retired_point_content_examples(nodes: list[dict[str, Any]], example_source: Path) -> list[dict[str, Any]]:
+    raise RuntimeError(
+        "The 30-example point-content seed path is retired. Use "
+        "data/seed/experiment_catalog/point_content_seed.json, generated from the normalized three-element review."
+    )
     blocks = _parse_example_blocks(example_source)
     nodes_by_path = {" / ".join(node["path_titles"]): node for node in nodes}
     examples: list[dict[str, Any]] = []
@@ -559,17 +563,15 @@ def write_json(path: Path, payload: Any) -> None:
 def generate_catalog_seed(
     *,
     outline_path: Path = OUTLINE_SOURCE,
-    example_path: Path = EXAMPLE_SOURCE,
     catalog_path: Path = CATALOG_TREE_SEED_PATH,
     groups_path: Path = CANONICAL_POINT_GROUPS_SEED_PATH,
-    examples_path: Path = POINT_CONTENT_EXAMPLES_SEED_PATH,
     report_path: Path = CATALOG_SEED_VALIDATION_REPORT_PATH,
 ) -> dict[str, Any]:
     nodes = parse_catalog_outline(outline_path)
     grouping = build_canonical_point_groups(nodes)
     canonical_points = grouping["canonical_points"]
-    examples = build_point_content_examples(nodes, example_path)
-    validation = validate_catalog_seed(nodes, examples)
+    point_content = load_point_content_seed()
+    validation = validate_catalog_seed(nodes, point_content)
     catalog_payload = {
         "metadata": {
             "artifact_type": "experiment_catalog_outline_seed",
@@ -582,29 +584,17 @@ def generate_catalog_seed(
         "canonical_points": canonical_points,
         "nodes": nodes,
     }
-    examples_payload = {
-        "metadata": {
-            "artifact_type": "experiment_catalog_point_content_examples",
-            "version": "catalog-outline-30-examples-v2-canonical-placements",
-            "source_doc": EXAMPLE_SOURCE_LABEL,
-            "mapping_source": "openspec/changes/catalog-point-ai-platform-roadmap/design.md",
-            "mapping_method": "semantic title/path/reagent scoring with reviewed target-path overrides for ties",
-            "content_status": "published",
-        },
-        "examples": examples,
-    }
     report = {
         **validation,
         "catalog_seed": catalog_path.relative_to(ROOT).as_posix(),
         "canonical_point_groups_seed": groups_path.relative_to(ROOT).as_posix(),
-        "point_content_examples_seed": examples_path.relative_to(ROOT).as_posix(),
+        "point_content_seed": "data/seed/experiment_catalog/point_content_seed.json",
         "canonical_grouping": grouping["counts"],
         "reviewed_duplicate_groups": grouping["groups"],
         "ambiguous_duplicate_groups": grouping["ambiguous_groups"],
     }
     write_json(catalog_path, catalog_payload)
     write_json(groups_path, grouping)
-    write_json(examples_path, examples_payload)
     write_json(report_path, report)
     return report
 
@@ -612,19 +602,15 @@ def generate_catalog_seed(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate the canonical experiment catalog outline seed.")
     parser.add_argument("--outline", type=Path, default=OUTLINE_SOURCE)
-    parser.add_argument("--examples", type=Path, default=EXAMPLE_SOURCE)
     parser.add_argument("--catalog-output", type=Path, default=CATALOG_TREE_SEED_PATH)
     parser.add_argument("--groups-output", type=Path, default=CANONICAL_POINT_GROUPS_SEED_PATH)
-    parser.add_argument("--examples-output", type=Path, default=POINT_CONTENT_EXAMPLES_SEED_PATH)
     parser.add_argument("--report", type=Path, default=CATALOG_SEED_VALIDATION_REPORT_PATH)
     args = parser.parse_args()
 
     report = generate_catalog_seed(
         outline_path=args.outline,
-        example_path=args.examples,
         catalog_path=args.catalog_output,
         groups_path=args.groups_output,
-        examples_path=args.examples_output,
         report_path=args.report,
     )
     sys.stdout.buffer.write((json.dumps(report, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))

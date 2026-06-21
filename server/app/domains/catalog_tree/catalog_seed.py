@@ -7,12 +7,13 @@ from typing import Any
 
 from sqlalchemy import text
 
+from server.app.domains.catalog_tree.equations import normalize_reaction_equations, replace_reaction_equations
 from server.app.infrastructure.settings import ROOT
 
 CATALOG_SEED_DIR = ROOT / "data" / "seed" / "experiment_catalog"
 CATALOG_TREE_SEED_PATH = CATALOG_SEED_DIR / "catalog_tree.json"
 CANONICAL_POINT_GROUPS_SEED_PATH = CATALOG_SEED_DIR / "canonical_point_groups.json"
-POINT_CONTENT_EXAMPLES_SEED_PATH = CATALOG_SEED_DIR / "point_content_examples.json"
+POINT_CONTENT_SEED_PATH = CATALOG_SEED_DIR / "point_content_seed.json"
 CATALOG_SEED_VALIDATION_REPORT_PATH = (
     ROOT / "data" / "seed" / "import_reports" / "catalog_outline_seed_validation_report.json"
 )
@@ -26,7 +27,10 @@ EXPECTED_CATALOG_COUNTS = {
     "duplicate_group_count": 32,
     "duplicate_placement_surplus": 36,
     "chapter_21_nodes": 0,
-    "point_content_examples": 30,
+    "point_content_records": 76,
+    "equation_content_records": 71,
+    "text_content_records": 5,
+    "reaction_equation_rows": 122,
 }
 
 CORRECTED_HYPOCHLORITE_PARENT = (
@@ -92,17 +96,16 @@ def load_canonical_point_seed(path: Path = CATALOG_TREE_SEED_PATH) -> list[dict[
     return list(by_canonical.values())
 
 
-def load_point_content_examples(path: Path = POINT_CONTENT_EXAMPLES_SEED_PATH) -> list[dict[str, Any]]:
+def load_point_content_seed(path: Path = POINT_CONTENT_SEED_PATH) -> list[dict[str, Any]]:
     data = _read_json(path)
-    examples = data.get("examples")
-    if not isinstance(examples, list):
-        raise ValueError(f"{path} must contain a top-level examples list")
-    return [dict(item) for item in examples if isinstance(item, dict)]
-
+    records = data.get("records")
+    if not isinstance(records, list):
+        raise ValueError(f"{path} must contain a top-level records list")
+    return [dict(item) for item in records if isinstance(item, dict)]
 
 def validate_catalog_seed(
     nodes: list[dict[str, Any]],
-    examples: list[dict[str, Any]] | None = None,
+    point_content: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     by_key: dict[str, dict[str, Any]] = {}
@@ -208,96 +211,111 @@ def validate_catalog_seed(
     if len(hypochlorite_canonical_ids) != len(CORRECTED_HYPOCHLORITE_POINTS):
         errors.append("corrected hypochlorite sibling points must target distinct canonical experiments")
 
-    example_counts: dict[str, int] = {
-        "point_content_examples": 0,
+    content_counts: dict[str, int] = {
+        "point_content_records": 0,
+        "equation_content_records": 0,
+        "text_content_records": 0,
+        "reaction_equation_rows": 0,
         "unique_target_seed_keys": 0,
         "unique_target_canonical_point_ids": 0,
     }
-    if examples is not None:
+    if point_content is not None:
         target_seed_keys: list[str] = []
         target_canonical_point_ids: list[str] = []
-        semantic_mapped_examples = 0
-        reviewed_override_examples = 0
-        ambiguous_example_mappings = 0
-        corrected_wording_examples = 0
-        for index, example in enumerate(examples, start=1):
-            leaked_keys = sorted(key for key in LEGACY_IDENTITY_KEYS if example.get(key))
+        semantic_mapped_records = 0
+        user_kept_source_records = 0
+        researched_update_records = 0
+        equation_content_records = 0
+        text_content_records = 0
+        reaction_equation_rows = 0
+        for index, record in enumerate(point_content, start=1):
+            record_label = str(record.get("record_id") or f"content[{index}]")
+            leaked_keys = sorted(key for key in LEGACY_IDENTITY_KEYS if record.get(key))
             if leaked_keys:
-                errors.append(f"examples[{index}]: legacy identity keys are not allowed: {', '.join(leaked_keys)}")
-            target_seed_key = str(example.get("target_seed_key") or "").strip()
+                errors.append(f"{record_label}: legacy identity keys are not allowed: {', '.join(leaked_keys)}")
+            target_seed_key = str(record.get("target_seed_key") or "").strip()
             if not target_seed_key:
-                errors.append(f"examples[{index}]: target_seed_key is required")
+                errors.append(f"{record_label}: target_seed_key is required")
                 continue
             target_seed_keys.append(target_seed_key)
-            target_canonical_point_id = str(example.get("target_canonical_point_id") or "").strip()
+            target_canonical_point_id = str(record.get("target_canonical_point_id") or "").strip()
             if not target_canonical_point_id:
-                errors.append(f"examples[{index}]: target_canonical_point_id is required")
+                errors.append(f"{record_label}: target_canonical_point_id is required")
             else:
                 target_canonical_point_ids.append(target_canonical_point_id)
             target = by_key.get(target_seed_key)
             if not target:
-                errors.append(f"examples[{index}]: target seed key does not resolve: {target_seed_key}")
+                errors.append(f"{record_label}: target seed key does not resolve: {target_seed_key}")
             elif target.get("node_kind") != "point":
-                errors.append(f"examples[{index}]: target must resolve to a point node: {target_seed_key}")
+                errors.append(f"{record_label}: target must resolve to a point node: {target_seed_key}")
             elif target_canonical_point_id and target_canonical_point_id != str(target.get("canonical_point_id") or ""):
-                errors.append(f"examples[{index}]: target_canonical_point_id does not match target placement")
-            target_path_titles = example.get("target_path_titles") or []
+                errors.append(f"{record_label}: target_canonical_point_id does not match target placement")
+            target_path_titles = record.get("target_path_titles") or []
             if target and list(target.get("path_titles") or []) != list(target_path_titles):
-                errors.append(f"examples[{index}]: target path does not match catalog seed")
-            semantic_mapping = example.get("semantic_mapping")
+                errors.append(f"{record_label}: target path does not match catalog seed")
+            semantic_mapping = record.get("semantic_mapping")
             if not isinstance(semantic_mapping, dict):
-                errors.append(f"examples[{index}]: semantic_mapping report is required")
+                errors.append(f"{record_label}: semantic_mapping report is required")
             else:
-                if semantic_mapping.get("method") != "semantic_title_path_reagent_match":
-                    errors.append(f"examples[{index}]: unsupported semantic mapping method")
-                candidates = semantic_mapping.get("top_candidates")
-                if not isinstance(candidates, list) or not candidates:
-                    errors.append(f"examples[{index}]: semantic_mapping.top_candidates is required")
-                elif target_seed_key not in {str(candidate.get("seed_key") or "") for candidate in candidates if isinstance(candidate, dict)}:
-                    errors.append(f"examples[{index}]: target seed key is missing from semantic candidates")
-                review_status = str(semantic_mapping.get("review_status") or "")
-                if review_status not in {"semantic_match", "reviewed_override"}:
-                    errors.append(f"examples[{index}]: invalid semantic mapping review_status")
-                semantic_mapped_examples += 1
-                if review_status == "reviewed_override":
-                    reviewed_override_examples += 1
-                    override = semantic_mapping.get("override")
-                    if not isinstance(override, dict) or not override.get("reason"):
-                        errors.append(f"examples[{index}]: reviewed_override requires override reason")
-                if bool(semantic_mapping.get("ambiguous")):
-                    ambiguous_example_mappings += 1
-                correction = semantic_mapping.get("wording_correction")
-                if isinstance(correction, dict):
-                    corrected_wording_examples += 1
-            if int(example.get("example_number") or 0) == 21:
-                correction = (example.get("semantic_mapping") or {}).get("wording_correction")
-                if not isinstance(correction, dict) or correction.get("corrected") != CORRECTED_SAMPLE_WORDING:
-                    errors.append(f"examples[{index}]: corrected sample wording must be recorded")
-            for field in ["principle_text", "phenomenon_explanation", "safety_note"]:
-                if not str(example.get(field) or "").strip():
-                    errors.append(f"examples[{index}]: {field} is required")
-        example_counts = {
-            "point_content_examples": len(examples),
+                if semantic_mapping.get("method") != "normalized_three_element_semantic_node_mapping":
+                    errors.append(f"{record_label}: unsupported semantic mapping method")
+                if semantic_mapping.get("mapping_status") != "matched":
+                    errors.append(f"{record_label}: semantic mapping must be matched")
+                target_report = semantic_mapping.get("target")
+                if not isinstance(target_report, dict) or target_report.get("seed_key") != target_seed_key:
+                    errors.append(f"{record_label}: semantic mapping target must match target_seed_key")
+                semantic_mapped_records += 1
+            mode = str(record.get("principle_mode") or "").strip()
+            if mode not in {"equation", "text"}:
+                errors.append(f"{record_label}: principle_mode must be equation or text")
+            elif mode == "equation":
+                equation_content_records += 1
+                equations = record.get("reaction_equations")
+                if not isinstance(equations, list) or not equations:
+                    errors.append(f"{record_label}: equation mode requires reaction_equations")
+                else:
+                    for row_index, equation in enumerate(equations, start=1):
+                        if not isinstance(equation, dict) or not str(equation.get("raw_text") or "").strip():
+                            errors.append(f"{record_label}: reaction_equations[{row_index}] raw_text is required")
+                    reaction_equation_rows += len(equations)
+                if str(record.get("principle_text") or "").strip():
+                    errors.append(f"{record_label}: equation mode must not put equations in principle_text")
+            elif mode == "text":
+                text_content_records += 1
+                if not str(record.get("principle_text") or "").strip():
+                    errors.append(f"{record_label}: text mode requires principle_text")
+            for field in ["phenomenon_explanation", "safety_note"]:
+                if not str(record.get(field) or "").strip():
+                    errors.append(f"{record_label}: {field} is required")
+            notes = str(record.get("normalization_notes") or "")
+            if "user_kept_source" in notes:
+                user_kept_source_records += 1
+            if "researched_update" in notes:
+                researched_update_records += 1
+        content_counts = {
+            "point_content_records": len(point_content),
+            "equation_content_records": equation_content_records,
+            "text_content_records": text_content_records,
+            "reaction_equation_rows": reaction_equation_rows,
             "unique_target_seed_keys": len(set(target_seed_keys)),
             "unique_target_canonical_point_ids": len(set(target_canonical_point_ids)),
-            "semantic_mapped_examples": semantic_mapped_examples,
-            "reviewed_override_examples": reviewed_override_examples,
-            "ambiguous_example_mappings": ambiguous_example_mappings,
-            "corrected_wording_examples": corrected_wording_examples,
+            "semantic_mapped_records": semantic_mapped_records,
+            "user_kept_source_records": user_kept_source_records,
+            "researched_update_records": researched_update_records,
         }
-        if len(examples) != EXPECTED_CATALOG_COUNTS["point_content_examples"]:
-            errors.append(
-                f"point_content_examples: expected {EXPECTED_CATALOG_COUNTS['point_content_examples']}, got {len(examples)}"
-            )
+        for key in ["point_content_records", "equation_content_records", "text_content_records", "reaction_equation_rows"]:
+            expected = EXPECTED_CATALOG_COUNTS[key]
+            if content_counts[key] != expected:
+                errors.append(f"{key}: expected {expected}, got {content_counts[key]}")
         if len(set(target_seed_keys)) != len(target_seed_keys):
-            errors.append("point content examples must target unique catalog point nodes")
+            errors.append("point content seed records must target unique catalog point nodes")
         if len(set(target_canonical_point_ids)) != len(target_canonical_point_ids):
-            errors.append("point content examples must target unique canonical point ids")
+            errors.append("point content seed records must target unique canonical point ids")
 
     return {
         "ok": not errors,
         "errors": errors,
-        "counts": {**counts, **example_counts},
+        "counts": {**counts, **content_counts},
         "corrected_hypochlorite_points": sorted(hypochlorite_titles & CORRECTED_HYPOCHLORITE_POINTS),
         "corrected_sample_wording": CORRECTED_SAMPLE_WORDING,
     }
@@ -306,15 +324,15 @@ def validate_catalog_seed(
 def validate_catalog_seed_files(
     *,
     catalog_path: Path = CATALOG_TREE_SEED_PATH,
-    examples_path: Path = POINT_CONTENT_EXAMPLES_SEED_PATH,
+    content_path: Path = POINT_CONTENT_SEED_PATH,
 ) -> dict[str, Any]:
     nodes = load_catalog_seed(catalog_path)
-    examples = load_point_content_examples(examples_path)
-    result = validate_catalog_seed(nodes, examples)
+    point_content = load_point_content_seed(content_path)
+    result = validate_catalog_seed(nodes, point_content)
     return {
         **result,
         "catalog_seed": str(catalog_path.relative_to(ROOT).as_posix()),
-        "point_content_examples_seed": str(examples_path.relative_to(ROOT).as_posix()),
+        "point_content_seed": str(content_path.relative_to(ROOT).as_posix()),
     }
 
 
@@ -373,20 +391,21 @@ def import_catalog_seed(
     *,
     nodes: list[dict[str, Any]] | None = None,
     canonical_points: list[dict[str, Any]] | None = None,
-    examples: list[dict[str, Any]] | None = None,
+    point_content: list[dict[str, Any]] | None = None,
     reset: bool = True,
 ) -> dict[str, Any]:
     nodes = nodes or load_catalog_seed()
     canonical_points = canonical_points or load_canonical_point_seed()
-    examples = examples or load_point_content_examples()
-    validation = validate_catalog_seed(nodes, examples)
+    point_content = point_content or load_point_content_seed()
+    validation = validate_catalog_seed(nodes, point_content)
     if not validation["ok"]:
         raise ValueError("Catalog outline seed validation failed:\n" + "\n".join(validation["errors"][:80]))
 
     reset_report = reset_legacy_experiment_seed_data(session) if reset else {}
     imported_nodes = 0
     imported_canonical_points = 0
-    imported_examples = 0
+    imported_point_content = 0
+    imported_equation_rows = 0
     queued_search_documents = 0
     now = datetime.now(timezone.utc).isoformat()
 
@@ -476,16 +495,26 @@ def import_catalog_seed(
         )
         imported_nodes += 1
 
-    for example in examples:
+    for content_record in point_content:
+        mode = str(content_record.get("principle_mode") or "text").strip()
+        reaction_inputs = (
+            content_record.get("reaction_equations")
+            if isinstance(content_record.get("reaction_equations"), list)
+            else []
+        )
+        normalized_equations = normalize_reaction_equations(reaction_inputs) if mode == "equation" else []
+        principle_equation = "\n".join(row["raw_text"] for row in normalized_equations if str(row.get("raw_text") or "").strip())
+        principle_text = str(content_record.get("principle_text") or "").strip() if mode == "text" else ""
         metadata = {
-            "catalog_outline_point_content_seed": True,
-            "example_number": example.get("example_number"),
-            "target_seed_key": example.get("target_seed_key"),
-            "target_canonical_point_id": example.get("target_canonical_point_id"),
-            "source_doc": example.get("source_doc"),
-            "source_line_start": example.get("source_line_start"),
-            "source_line_end": example.get("source_line_end"),
-            "target_path_titles": example.get("target_path_titles") or [],
+            "catalog_point_content_seed": True,
+            "record_id": content_record.get("record_id"),
+            "normalized_title": content_record.get("normalized_title"),
+            "target_seed_key": content_record.get("target_seed_key"),
+            "target_canonical_point_id": content_record.get("target_canonical_point_id"),
+            "target_path_titles": content_record.get("target_path_titles") or [],
+            "sources": content_record.get("sources") or [],
+            "normalization_notes": content_record.get("normalization_notes"),
+            "semantic_mapping": content_record.get("semantic_mapping") if isinstance(content_record.get("semantic_mapping"), dict) else {},
             "imported_at": now,
         }
         session.execute(
@@ -496,7 +525,7 @@ def import_catalog_seed(
                   phenomenon_explanation, safety_note, content_status, published_at, metadata, updated_at
                 )
                 VALUES (
-                  :node_id, :canonical_point_id, :point_title, '', 'text', NULL, :principle_text,
+                  :node_id, :canonical_point_id, :point_title, '', :principle_mode, :principle_equation, :principle_text,
                   :phenomenon_explanation, :safety_note, 'published', now(),
                   CAST(:metadata AS jsonb), now()
                 )
@@ -516,16 +545,26 @@ def import_catalog_seed(
                 """
             ),
             {
-                "node_id": example["target_seed_key"],
-                "canonical_point_id": example["target_canonical_point_id"],
-                "point_title": (example.get("target_path_titles") or [example.get("example_title")])[-1],
-                "principle_text": example["principle_text"],
-                "phenomenon_explanation": example["phenomenon_explanation"],
-                "safety_note": example["safety_note"],
+                "node_id": content_record["target_seed_key"],
+                "canonical_point_id": content_record["target_canonical_point_id"],
+                "point_title": content_record.get("point_title") or (content_record.get("target_path_titles") or [""])[-1],
+                "principle_mode": mode,
+                "principle_equation": principle_equation or None,
+                "principle_text": principle_text or None,
+                "phenomenon_explanation": content_record["phenomenon_explanation"],
+                "safety_note": content_record["safety_note"],
                 "metadata": _json(metadata),
             },
         )
-        imported_examples += 1
+        if mode == "equation":
+            replace_reaction_equations(
+                session,
+                node_id=content_record["target_seed_key"],
+                canonical_point_id=content_record["target_canonical_point_id"],
+                equations=normalized_equations,
+            )
+            imported_equation_rows += len(normalized_equations)
+        imported_point_content += 1
         session.execute(
             text(
                 """
@@ -544,7 +583,7 @@ def import_catalog_seed(
                   updated_at = now()
                 """
             ),
-            {"node_id": example["target_seed_key"], "canonical_point_id": example["target_canonical_point_id"]},
+            {"node_id": content_record["target_seed_key"], "canonical_point_id": content_record["target_canonical_point_id"]},
         )
         queued_search_documents += 1
 
@@ -561,7 +600,8 @@ def import_catalog_seed(
         "duplicate_group_count": validation["counts"]["duplicate_group_count"],
         "duplicate_placement_surplus": validation["counts"]["duplicate_placement_surplus"],
         "ambiguous_duplicate_count": 0,
-        "point_content_examples": imported_examples,
+        "point_content_records": imported_point_content,
+        "reaction_equation_rows": imported_equation_rows,
         "queued_search_documents": queued_search_documents,
         "validation": validation,
         "preserved_resources": [

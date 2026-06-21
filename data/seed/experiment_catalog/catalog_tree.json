@@ -12,7 +12,10 @@
       "duplicate_group_count": 32,
       "duplicate_placement_surplus": 36,
       "chapter_21_nodes": 0,
-      "point_content_examples": 30
+      "point_content_records": 76,
+      "equation_content_records": 71,
+      "text_content_records": 5,
+      "reaction_equation_rows": 122
     },
     "classification": "## headings and non-leaf bullets are directories; leaf bullets are point placements targeting canonical experiment points.",
     "canonical_grouping_seed": "data/seed/experiment_catalog/canonical_point_groups.json"

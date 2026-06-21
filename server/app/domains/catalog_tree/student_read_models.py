@@ -101,7 +101,6 @@ def student_point_detail(*, node_id: str) -> dict[str, Any]:
             "chapter_id": node["chapter_id"],
             "title": (published_content or {}).get("point_title") or node["title"],
             "summary": node.get("summary") or "",
-            "point_card_presentation": node.get("point_card_presentation") or {},
             "breadcrumbs": path,
             "principle_mode": (published_content or {}).get("principle_mode") or "text",
             "principle_equation": (published_content or {}).get("principle_equation"),

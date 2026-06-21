@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import logoUrl from "./assets/sysu-logo.svg";
-import { StudentRouterProvider } from "./app/router/StudentRouterProvider";
+import { StudentPreviewRouterProvider, StudentRouterProvider } from "./app/router/StudentRouterProvider";
 import type { ViewState } from "./app/router/routeTypes";
 import { LoginPanel } from "./features/auth/LoginPanel";
 import { PasswordPanel } from "./features/auth/PasswordPanel";
@@ -28,8 +28,13 @@ function App() {
   const [pretestLoading, setPretestLoading] = useState(false);
   const [pretestError, setPretestError] = useState("");
   const [pretestSkipped, setPretestSkipped] = useState(false);
+  const previewRoute = typeof window !== "undefined" && window.location.pathname.startsWith("/preview/catalog/points/");
 
   useEffect(() => {
+    if (previewRoute) {
+      setChecking(false);
+      return;
+    }
     if (!getAuthToken()) {
       setChecking(false);
       return;
@@ -47,7 +52,7 @@ function App() {
         setAuthToken("");
       })
       .finally(() => setChecking(false));
-  }, []);
+  }, [previewRoute]);
 
   useEffect(() => {
     if (!user || user.must_change_password) {
@@ -134,6 +139,14 @@ function App() {
       setPretestLoading(false);
     }
   };
+
+  if (previewRoute) {
+    return (
+      <main className="app-shell learning-shell preview-shell">
+        <StudentPreviewRouterProvider />
+      </main>
+    );
+  }
 
   return (
     <main className={view === "pretest" ? "app-shell assessment-shell" : view === "home" ? "app-shell learning-shell" : "app-shell"}>

@@ -5,6 +5,7 @@ import aiContextPanelSource from "./CatalogAiContextPanel.tsx?raw";
 import editorHeaderSource from "./CatalogEditorHeader.tsx?raw";
 import contentPanelSource from "./CatalogNodeContentPanel.tsx?raw";
 import nodeStatusPanelSource from "./CatalogNodeStatusPanel.tsx?raw";
+import previewWindowSource from "./CatalogPointPreviewWindow.tsx?raw";
 import editorSource from "./CatalogTreeEditor.tsx?raw";
 import rowSource from "./CatalogTreeRow.tsx?raw";
 import treeDataSource from "./catalogTreeData.ts?raw";
@@ -12,20 +13,26 @@ import treeSource from "./CatalogTreeNodeList.tsx?raw";
 import workspaceSource from "./CatalogTreeWorkspacePage.tsx?raw";
 import videoPanelSource from "./CatalogVideoPanel.tsx?raw";
 import relatedPanelSource from "./CatalogRelatedLinksPanel.tsx?raw";
-import studentCardPanelSource from "./CatalogStudentCardPanel.tsx?raw";
 
 describe("catalog tree UI contracts", () => {
-  it("keeps directory and point editor panels separate", () => {
+  it("keeps primary authoring tabs focused and diagnostics secondary", () => {
     expect(editorSource).toContain("directoryCatalogEditorTabKeys");
     expect(editorSource).toContain("pointCatalogEditorTabKeys");
     expect(editorSource).toContain('key: "content"');
     expect(editorSource).toContain('key: "video"');
     expect(editorSource).toContain('key: "related"');
-    expect(editorSource).toContain('key: "student-card"');
-    expect(editorSource).toContain('key: "ai-context"');
-    expect(editorSource).toContain('key: "node-status"');
+    expect(editorSource).not.toContain('key: "student-card"');
+    expect(editorSource).not.toContain('label: "学生卡片"');
+    expect(editorSource).toContain("setDiagnosticsPanel");
+    expect(editorSource).toContain("CatalogNodeStatusPanel");
+    expect(editorSource).toContain("CatalogAiContextPanel");
+    expect(editorSource).toContain("CatalogAdvancedPanel");
     expect(editorSource).not.toContain('key: "publish"');
-    expect(editorSource).toContain('key: "advanced"');
+    expect(editorHeaderSource).toContain("预览学习卡片");
+    expect(editorHeaderSource).toContain("高级");
+    expect(previewWindowSource).toContain("react-device-mockup");
+    expect(previewWindowSource).toContain("iPhone 15 Pro");
+    expect(previewWindowSource).toContain("iframe");
     expect(aiContextPanelSource).toContain("静态兜底证据");
     expect(aiContextPanelSource).toContain("静态证据状态流");
     expect(aiContextPanelSource).toContain("真实 RAG 搜索");
@@ -37,17 +44,16 @@ describe("catalog tree UI contracts", () => {
     expect(contentPanelSource).toContain('label="教学备注"');
     expect(contentPanelSource).not.toContain("管理摘要");
     expect(workspaceSource).not.toContain('label="摘要"');
-    expect(studentCardPanelSource).toContain('name="student_description"');
-    expect(studentCardPanelSource).toContain('name="card_image_asset_id"');
-    expect(studentCardPanelSource).toContain('name="point_card_short_description"');
+    expect(workspaceSource).not.toContain('name="student_description"');
+    expect(catalogTreeApiSource).not.toContain("student_description?:");
     expect(videoPanelSource).toContain("isPointCapable");
-    expect([editorSource, contentPanelSource, studentCardPanelSource, videoPanelSource, relatedPanelSource, advancedPanelSource].join("\n")).not.toContain(
+    expect([editorSource, contentPanelSource, videoPanelSource, relatedPanelSource, advancedPanelSource].join("\n")).not.toContain(
       "shortcut_target_node_id",
     );
-    expect([editorSource, contentPanelSource, studentCardPanelSource, videoPanelSource, relatedPanelSource, advancedPanelSource].join("\n")).not.toContain(
+    expect([editorSource, contentPanelSource, videoPanelSource, relatedPanelSource, advancedPanelSource].join("\n")).not.toContain(
       "uploadCatalogPointMedia",
     );
-    expect([editorSource, contentPanelSource, studentCardPanelSource, videoPanelSource, relatedPanelSource, advancedPanelSource].join("\n")).not.toContain(
+    expect([editorSource, contentPanelSource, videoPanelSource, relatedPanelSource, advancedPanelSource].join("\n")).not.toContain(
       'type="file"',
     );
   });
@@ -203,6 +209,9 @@ describe("catalog tree UI contracts", () => {
     expect(catalogTreeCssSource).toMatch(/\.catalog-sidebar-row\s*\{[\s\S]*box-sizing: border-box;[\s\S]*width: 100%;[\s\S]*max-width: 100%;[\s\S]*min-width: 0;/);
     expect(catalogTreeCssSource).toMatch(/\.catalog-sidebar-copy\s*\{[\s\S]*box-sizing: border-box;[\s\S]*min-width: 0;[\s\S]*overflow: hidden;/);
     expect(catalogTreeCssSource).toMatch(/\.catalog-sidebar-trailing\s*\{[\s\S]*box-sizing: border-box;[\s\S]*width: var\(--catalog-sidebar-trailing-width\);/);
+    expect(catalogTreeCssSource).toContain(".catalog-sidebar-status-dot.is-error");
+    expect(catalogTreeCssSource).toContain(".catalog-sidebar-point-status.is-error");
+    expect(catalogTreeCssSource).toContain(".catalog-editor-title-status.is-error");
     expect(rowSource).toContain('boxSizing: "border-box"');
   });
 
@@ -264,8 +273,8 @@ describe("catalog tree UI contracts", () => {
   });
 
   it("gates directory-only editor queries and tabs", () => {
-    expect(editorSource).toContain('["content", "student-card", "node-status", "advanced"]');
-    expect(editorSource).toContain('["content", "video", "related", "student-card", "ai-context", "node-status", "advanced"]');
+    expect(editorSource).toContain('["content"]');
+    expect(editorSource).toContain('["content", "video", "related"]');
     expect(editorSource).toContain("useCatalogMediaAssets(pointCapable)");
     expect(editorSource).toContain("pointCapable && relatedQuery.trim().length >= 2");
   });

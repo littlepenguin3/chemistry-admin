@@ -176,21 +176,17 @@ def _load_published_point_rows(session: Any) -> list[dict[str, Any]]:
                   ), '[]'::jsonb) AS catalog_path,
                   COALESCE((
                     WITH RECURSIVE path AS (
-                      SELECT id, parent_id, node_kind, title, student_description, card_icon_key, card_accent, 0 AS depth
+                      SELECT id, parent_id, node_kind, title, 0 AS depth
                       FROM experiment_catalog_nodes
                       WHERE id = n.id
                       UNION ALL
-                      SELECT parent.id, parent.parent_id, parent.node_kind, parent.title,
-                             parent.student_description, parent.card_icon_key, parent.card_accent, path.depth + 1
+                      SELECT parent.id, parent.parent_id, parent.node_kind, parent.title, path.depth + 1
                       FROM experiment_catalog_nodes parent
                       JOIN path ON path.parent_id = parent.id
                     )
                     SELECT jsonb_agg(
                       jsonb_build_object(
-                        'title', title,
-                        'student_description', student_description,
-                        'card_icon_key', card_icon_key,
-                        'card_accent', card_accent
+                        'title', title
                       )
                       ORDER BY depth DESC
                     )
@@ -311,9 +307,6 @@ def _point_document(row: dict[str, Any], profiles: list[dict[str, Any]]) -> Vide
             if isinstance(directory, dict)
             for value in (
                 directory.get("title"),
-                directory.get("student_description"),
-                directory.get("card_icon_key"),
-                directory.get("card_accent"),
             )
         ]
     )

@@ -4,10 +4,10 @@ import { catalogEditorTabKeysForNode } from "./CatalogTreeEditor";
 
 describe("catalog editor tab filtering", () => {
   it("hides point-only panels for directories", () => {
-    expect(catalogEditorTabKeysForNode("directory")).toEqual(["content", "student-card", "node-status", "advanced"]);
+    expect(catalogEditorTabKeysForNode("directory")).toEqual(["content"]);
   });
 
   it("keeps video and related panels for points", () => {
-    expect(catalogEditorTabKeysForNode("point")).toEqual(["content", "video", "related", "student-card", "ai-context", "node-status", "advanced"]);
+    expect(catalogEditorTabKeysForNode("point")).toEqual(["content", "video", "related"]);
   });
 });

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { Button, Popconfirm, Space, Typography } from "antd";
-import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, StopOutlined } from "@ant-design/icons";
-import { AlertTriangle, CircleCheck, CircleDashed, FlaskConical, Folder, Image, Link2, ListTree, Video } from "lucide-react";
+import { Button, Dropdown, Popconfirm, Space, Typography } from "antd";
+import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, MoreOutlined, StopOutlined } from "@ant-design/icons";
+import { AlertTriangle, CircleCheck, CircleDashed, FlaskConical, Folder, Link2, ListTree, Video } from "lucide-react";
 
 import type { CatalogNodeDetail } from "../../api/catalogTree";
 import {
@@ -17,7 +17,7 @@ import type { CatalogMutations } from "./catalogTreeHooks";
 
 const { Text, Title } = Typography;
 
-type SummaryTone = "ok" | "warning" | "muted" | "published" | "draft" | "archived";
+type SummaryTone = "ok" | "warning" | "error" | "muted" | "published" | "draft" | "archived";
 
 type SummaryItem = {
   key: string;
@@ -28,6 +28,8 @@ type SummaryItem = {
   tone?: SummaryTone;
   emphasis?: boolean;
 };
+
+export type CatalogHeaderDiagnosticsKey = "node-status" | "ai-context" | "advanced";
 
 function pointContentStatusLabel(status?: string | null): string {
   if (status === "published") return "已发布";
@@ -55,42 +57,17 @@ function statusNote(status: string): string {
   return "可继续维护";
 }
 
-function hasText(value: unknown): boolean {
-  return typeof value === "string" ? value.trim().length > 0 : Boolean(value);
-}
-
-function hasStudentCard(detail: CatalogNodeDetail, pointCapable: boolean): boolean {
-  const { node } = detail;
-  if (!pointCapable) {
-    return Boolean(
-      hasText(node.student_description) ||
-        hasText(node.card_image_asset_id) ||
-        hasText(node.card_icon_key) ||
-        hasText(node.card_accent) ||
-        node.card_layout !== "default",
-    );
-  }
-
-  const pointCard = node.point_card_presentation || {};
-  return Boolean(
-    hasText(pointCard.cover_image_asset_id) ||
-      hasText(pointCard.short_description) ||
-      hasText(pointCard.icon_key) ||
-      hasText(pointCard.accent) ||
-      Boolean(pointCard.emphasis),
-  );
-}
-
 function nodeStatusSummary(detail: CatalogNodeDetail): SummaryItem {
   const status = resolveCatalogNodeStatus(detail);
-  const isAttention = ["blocked", "needs_content", "needs_video", "sync_attention"].includes(status.primary_state);
+  const isError = status.primary_state === "blocked";
+  const isAttention = isError || ["needs_content", "needs_video", "sync_attention"].includes(status.primary_state);
   return {
     key: "node-status",
     icon: isAttention ? <AlertTriangle size={16} /> : <CircleCheck size={16} />,
     label: "节点状态",
     value: status.primary_label || status.primary_state,
     note: status.primary_reason || catalogNodeStatusTooltip(detail),
-    tone: isAttention ? "warning" : status.primary_state === "archived" ? "archived" : status.primary_state === "draft" ? "draft" : "ok",
+    tone: isError ? "error" : isAttention ? "warning" : status.primary_state === "archived" ? "archived" : status.primary_state === "draft" ? "draft" : "ok",
     emphasis: isAttention,
   };
 }
@@ -128,9 +105,7 @@ function buildDirectorySummaryItems(detail: CatalogNodeDetail): SummaryItem[] {
 }
 
 function buildPointSummaryItems(detail: CatalogNodeDetail): SummaryItem[] {
-  const { node } = detail;
   const contentStatus = detail.point_content?.content_status;
-  const hasCard = hasStudentCard(detail, true);
   const hasVideo = resolveCatalogNodeStatus(detail).core_readiness.video === "present";
   const relatedCount = detail.related_links.filter((link) => !link.hidden).length;
 
@@ -154,15 +129,6 @@ function buildPointSummaryItems(detail: CatalogNodeDetail): SummaryItem[] {
       emphasis: !hasVideo,
     },
     {
-      key: "student-card",
-      icon: <Image size={16} />,
-      label: "学生卡片",
-      value: hasCard ? "已配置" : "待配置",
-      note: hasCard ? "学生端有展示素材" : "补充描述或封面",
-      tone: hasCard ? "ok" : "warning",
-      emphasis: !hasCard,
-    },
-    {
       key: "related",
       icon: <Link2 size={16} />,
       label: "相关实验",
@@ -174,12 +140,29 @@ function buildPointSummaryItems(detail: CatalogNodeDetail): SummaryItem[] {
   ];
 }
 
-export function CatalogEditorHeader({ detail, mutations }: { detail: CatalogNodeDetail; mutations: CatalogMutations }) {
+export function CatalogEditorHeader({
+  detail,
+  mutations,
+  onPreviewLearningCard,
+  previewLoading,
+  onOpenDiagnostics,
+}: {
+  detail: CatalogNodeDetail;
+  mutations: CatalogMutations;
+  onPreviewLearningCard?: () => void;
+  previewLoading?: boolean;
+  onOpenDiagnostics?: (key: CatalogHeaderDiagnosticsKey) => void;
+}) {
   const { node } = detail;
   const pointCapable = isPointCapable(node.node_kind);
   const title = pointCapable ? displayCatalogPointTitle(detail) : node.title;
   const nodeStatus = resolveCatalogNodeStatus(detail);
   const summaryItems = pointCapable ? buildPointSummaryItems(detail) : buildDirectorySummaryItems(detail);
+  const diagnosticsItems = [
+    { key: "node-status", label: "节点状态" },
+    ...(pointCapable ? [{ key: "ai-context", label: "AI 上下文" }] : []),
+    { key: "advanced", label: "高级调试" },
+  ];
 
   return (
     <div className="catalog-editor-header">
@@ -201,10 +184,19 @@ export function CatalogEditorHeader({ detail, mutations }: { detail: CatalogNode
         </div>
         <Space wrap className="catalog-editor-header-actions">
           {pointCapable ? (
-            <Button icon={<EyeOutlined />} disabled title="学生端预览入口待接入">
-              预览学生端
+            <Button icon={<EyeOutlined />} onClick={onPreviewLearningCard} loading={previewLoading}>
+              预览学习卡片
             </Button>
           ) : null}
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: diagnosticsItems,
+              onClick: ({ key }) => onOpenDiagnostics?.(key as CatalogHeaderDiagnosticsKey),
+            }}
+          >
+            <Button icon={<MoreOutlined />}>高级</Button>
+          </Dropdown>
           {node.status === "archived" ? (
             <Button onClick={() => mutations.changeNodeStatus.mutate({ nodeId: node.node_id, action: "restore" })}>恢复</Button>
           ) : (

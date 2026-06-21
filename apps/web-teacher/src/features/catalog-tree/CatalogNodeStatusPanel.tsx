@@ -15,8 +15,23 @@ const { Text, Title } = Typography;
 function statusTagColor(status?: string | null): string {
   if (!status || status === "idle" || status === "not_applicable") return "default";
   if (["published", "complete", "present", "synced", "available"].includes(status)) return "green";
-  if (["blocked", "missing", "absent", "failed", "unavailable", "needs_content", "needs_video", "sync_attention"].includes(status)) return "red";
-  if (["pending", "running", "stale", "draft", "ready"].includes(status)) return "gold";
+  if (["blocked", "failed", "unavailable"].includes(status)) return "red";
+  if (
+    [
+      "missing",
+      "absent",
+      "needs_content",
+      "needs_video",
+      "sync_attention",
+      "pending",
+      "running",
+      "stale",
+      "draft",
+      "ready",
+    ].includes(status)
+  ) {
+    return "gold";
+  }
   return "default";
 }
 
@@ -30,7 +45,7 @@ function valueLabel(value?: string | null): string {
     published: "已发布",
     draft: "草稿",
     archived: "已归档",
-    blocked: "阻断",
+    blocked: "异常",
     needs_content: "缺内容",
     needs_video: "缺视频",
     sync_attention: "同步异常",
@@ -46,6 +61,13 @@ function valueLabel(value?: string | null): string {
     unavailable: "不可用",
   };
   return labels[value || ""] || value || "-";
+}
+
+function primaryAlertType(primaryState: string): "success" | "info" | "warning" | "error" {
+  if (primaryState === "blocked") return "error";
+  if (primaryState === "published") return "success";
+  if (primaryState === "sync_attention") return "warning";
+  return "info";
 }
 
 function StatusTag({ value }: { value?: string | null }) {
@@ -88,7 +110,7 @@ function CoreReadinessSection({ detail }: { detail: CatalogNodeDetail }) {
           <Descriptions.Item label="待处理点位">{core.descendant_action_count ?? 0}</Descriptions.Item>
           <Descriptions.Item label="缺内容">{counts.needs_content ?? 0}</Descriptions.Item>
           <Descriptions.Item label="缺视频">{counts.needs_video ?? 0}</Descriptions.Item>
-          <Descriptions.Item label="阻断">{counts.blocked ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="异常">{counts.blocked ?? 0}</Descriptions.Item>
         </Descriptions>
       ) : (
         <Descriptions size="small" column={2}>
@@ -209,7 +231,7 @@ export function CatalogNodeStatusPanel({
         </div>
         {validation.isFetching ? <Spin size="small" /> : null}
       </div>
-      <Alert type={status.primary_state === "published" ? "success" : status.primary_state === "sync_attention" ? "warning" : "info"} showIcon title={primaryLabel} description={summary} />
+      <Alert type={primaryAlertType(status.primary_state)} showIcon title={primaryLabel} description={summary} />
       <CoreReadinessSection detail={detail} />
       <VisibilitySection detail={detail} />
       <SyncDiagnosticsSection detail={detail} mutations={mutations} />

@@ -94,16 +94,15 @@ def _ancestor_directory_context(session: Any, node_id: str) -> list[dict[str, An
             text(
                 """
                 WITH RECURSIVE path AS (
-                  SELECT id, parent_id, node_kind, title, student_description, card_icon_key, card_accent, 0 AS depth
+                  SELECT id, parent_id, node_kind, title, 0 AS depth
                   FROM experiment_catalog_nodes
                   WHERE id = :node_id
                   UNION ALL
-                  SELECT parent.id, parent.parent_id, parent.node_kind, parent.title,
-                         parent.student_description, parent.card_icon_key, parent.card_accent, path.depth + 1
+                  SELECT parent.id, parent.parent_id, parent.node_kind, parent.title, path.depth + 1
                   FROM experiment_catalog_nodes parent
                   JOIN path ON path.parent_id = parent.id
                 )
-                SELECT title, student_description, card_icon_key, card_accent
+                SELECT title
                 FROM path
                 WHERE node_kind = 'directory'
                 ORDER BY depth DESC
@@ -148,9 +147,6 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
         for directory in directory_context
         for value in (
             directory.get("title"),
-            directory.get("student_description"),
-            directory.get("card_icon_key"),
-            directory.get("card_accent"),
         )
         if clean(value)
     )

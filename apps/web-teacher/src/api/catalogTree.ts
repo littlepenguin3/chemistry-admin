@@ -78,13 +78,6 @@ export type CatalogNodeCard = {
   status: CatalogNodeStatus;
   display_order: number;
   teacher_note?: string | null;
-  student_description: string;
-  card_image_asset_id?: string | null;
-  card_icon_key?: string | null;
-  card_accent?: string | null;
-  card_layout: "default" | "compact" | "image" | "hero" | string;
-  card_presentation: Record<string, unknown>;
-  point_card_presentation: Record<string, unknown>;
   actions: string[];
   has_children: boolean;
   descendant_point_count: number;
@@ -426,6 +419,12 @@ export type CatalogSearchResponse = {
   items: CatalogNodeCard[];
 };
 
+export type CatalogPreviewTokenResponse = {
+  preview_url: string;
+  token: string;
+  expires_at: string;
+};
+
 export type CatalogNodeCreatePayload = {
   chapter_id: string;
   parent_id?: string | null;
@@ -434,13 +433,6 @@ export type CatalogNodeCreatePayload = {
   title: string;
   summary?: string | null;
   teacher_note?: string | null;
-  student_description?: string | null;
-  card_image_asset_id?: string | null;
-  card_icon_key?: string | null;
-  card_accent?: string | null;
-  card_layout?: string | null;
-  card_presentation?: Record<string, unknown>;
-  point_card_presentation?: Record<string, unknown>;
   canonical_point_id?: string | null;
   metadata?: Record<string, unknown>;
 };
@@ -450,13 +442,6 @@ export type CatalogNodeUpdatePayload = {
   summary?: string | null;
   node_kind?: CatalogNodeKind;
   teacher_note?: string | null;
-  student_description?: string | null;
-  card_image_asset_id?: string | null;
-  card_icon_key?: string | null;
-  card_accent?: string | null;
-  card_layout?: string | null;
-  card_presentation?: Record<string, unknown>;
-  point_card_presentation?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 };
 
@@ -534,6 +519,10 @@ export function changeCatalogNodeStatus(
   payload: { action: "archive" | "restore" | "publish" | "unpublish"; include_subtree?: boolean },
 ): Promise<CatalogNodeDetail> {
   return postJson<CatalogNodeDetail>(`/api/admin/catalog/nodes/${encodeURIComponent(nodeId)}/status`, payload);
+}
+
+export function createCatalogPointPreviewToken(nodeId: string): Promise<CatalogPreviewTokenResponse> {
+  return postJson<CatalogPreviewTokenResponse>(`/api/admin/catalog/nodes/${encodeURIComponent(nodeId)}/preview-token`, {});
 }
 
 export function saveCatalogPointContent(nodeId: string, payload: CatalogPointContentPayload): Promise<CatalogNodeDetail> {

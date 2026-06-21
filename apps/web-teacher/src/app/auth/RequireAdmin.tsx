@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import type { ReactNode } from "react";
 import { Spin } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
@@ -7,7 +8,7 @@ import { getAuthToken, setAuthToken } from "../../api/auth";
 import { AdminShell } from "../shell/AdminShell";
 import { useAdminSession } from "./useAdminSession";
 
-export function RequireAdmin() {
+export function RequireAdmin({ children }: { children?: ReactNode }) {
   const token = getAuthToken();
   const navigate = useNavigate();
   const location = useLocation();
@@ -40,6 +41,8 @@ export function RequireAdmin() {
     queryClient.clear();
     navigate("/login", { replace: true });
   };
+
+  if (children) return <>{children}</>;
 
   return <AdminShell user={meQuery.data} onLogout={logout} />;
 }

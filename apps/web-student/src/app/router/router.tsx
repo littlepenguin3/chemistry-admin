@@ -6,6 +6,7 @@ import { ChapterStudyPage } from "../../routes/learn/ChapterStudyPage";
 import { CatalogDirectoryPage } from "../../routes/learn/CatalogDirectoryPage";
 import { ElementDetailPage } from "../../routes/learn/ElementDetailPage";
 import { ExperimentPointPage } from "../../routes/learn/ExperimentPointPage";
+import { PreviewCatalogPointPage } from "../../routes/learn/PreviewCatalogPointPage";
 import { AiRootPage } from "../../routes/ai/AiRootPage";
 import { AiChatPage } from "../../routes/ai/AiChatPage";
 import { AssessmentRootPage } from "../../routes/assessment/AssessmentRootPage";
@@ -75,6 +76,12 @@ const catalogNodeRoute = createRoute({
   component: CatalogDirectoryPage,
 });
 
+const previewPointRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/preview/catalog/points/$nodeId",
+  component: PreviewCatalogPointPage,
+});
+
 const videoLibraryRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/video-library",
@@ -129,6 +136,7 @@ const feedbackRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
+  previewPointRoute,
   authenticatedRoute.addChildren([
     indexRoute,
     homeRoute,

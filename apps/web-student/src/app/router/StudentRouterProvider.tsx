@@ -13,3 +13,8 @@ export function StudentRouterProvider({ user, onLogout }: { user: AuthUser; onLo
     </StudentShellBaseProvider>
   );
 }
+
+export function StudentPreviewRouterProvider() {
+  const router = useMemo(() => createStudentRouter(), []);
+  return <RouterProvider router={router} />;
+}

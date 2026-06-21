@@ -83,7 +83,7 @@ Alternative considered: keep `validation.errors/warnings` as the only status sou
 For point nodes, primary state is derived in this order:
 
 1. `archived`: placement or canonical point is archived.
-2. `blocked`: the point has a structural/catalog identity problem, such as an invalid node kind or missing canonical experiment identity. Normal empty learning content is not blocked.
+2. `blocked`: the point has a structural/catalog identity problem, such as an invalid node kind or missing canonical experiment identity. Normal empty learning content is not blocked. Teacher-facing UI labels this state as `异常` and uses the red error treatment.
 3. `needs_content`: the shared learning content is absent or one or more of the three learning fields is missing. This outranks video.
 4. `needs_video`: the three learning fields are complete and the point has no experiment video.
 5. `draft`: the directory itself is not published, or a non-point node is still draft.
@@ -101,7 +101,7 @@ Directory rows should not show ES/RAG details. A directory status should answer:
 
 - Is the directory itself archived/draft/published?
 - How many descendant points need teacher action?
-- Is any descendant structurally blocked?
+- Is any descendant structurally blocked, shown to teachers as an `异常` count rather than a normal authoring warning?
 
 Directory aggregation should group descendant problems into compact counts:
 

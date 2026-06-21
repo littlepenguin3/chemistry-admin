@@ -22,13 +22,13 @@ EXPECTED_DATABASE_COUNTS = {
     "experiment_catalog_nodes": 569,
     "experiment_catalog_directory_nodes": 176,
     "experiment_catalog_point_nodes": 393,
-    "experiment_catalog_point_content_examples": 30,
+    "experiment_catalog_point_content_records": 76,
     "experiment_question_banks": 0,
     "experiment_questions": 0,
     "source_documents": 2,
     "source_chunks": 3637,
     "chunk_embeddings": 3637,
-    "published_catalog_point_content_min": 30,
+    "published_catalog_point_content_min": 76,
     "catalog_point_related_links_min": 0,
     "point_evidence_bindings_with_node": 0,
 }
@@ -97,22 +97,21 @@ def _catalog_tree_count(path: Path) -> dict[str, int]:
     }
 
 
-def _catalog_examples_count(path: Path) -> dict[str, int]:
+def _catalog_point_content_seed_count(path: Path) -> dict[str, int]:
     data = _json(path)
-    examples = data.get("examples") or []
-    if not isinstance(examples, list):
-        raise ValueError(f"{path} examples is not a JSON list")
+    records = data.get("records") or []
+    if not isinstance(records, list):
+        raise ValueError(f"{path} records is not a JSON list")
     return {
-        "examples": len(examples),
-        "unique_target_seed_keys": len({str(item.get("target_seed_key") or "") for item in examples if isinstance(item, dict)}),
-        "semantic_mapped_examples": sum(
-            1 for item in examples if isinstance(item, dict) and isinstance(item.get("semantic_mapping"), dict)
+        "records": len(records),
+        "equation_mode_records": sum(1 for item in records if isinstance(item, dict) and item.get("principle_mode") == "equation"),
+        "text_mode_records": sum(1 for item in records if isinstance(item, dict) and item.get("principle_mode") == "text"),
+        "reaction_equation_rows": sum(
+            len(item.get("reaction_equations") or []) for item in records if isinstance(item, dict)
         ),
-        "corrected_wording_examples": sum(
-            1
-            for item in examples
-            if isinstance(item, dict)
-            and isinstance((item.get("semantic_mapping") or {}).get("wording_correction"), dict)
+        "unique_target_seed_keys": len({str(item.get("target_seed_key") or "") for item in records if isinstance(item, dict)}),
+        "semantic_mapped_records": sum(
+            1 for item in records if isinstance(item, dict) and isinstance(item.get("semantic_mapping"), dict)
         ),
     }
 
@@ -125,9 +124,11 @@ def _catalog_validation_report_count(path: Path) -> dict[str, int | bool]:
         "total_nodes": int(counts.get("total_nodes") or 0),
         "directory_nodes": int(counts.get("directory_nodes") or 0),
         "point_nodes": int(counts.get("point_nodes") or 0),
-        "point_content_examples": int(counts.get("point_content_examples") or 0),
-        "semantic_mapped_examples": int(counts.get("semantic_mapped_examples") or 0),
-        "corrected_wording_examples": int(counts.get("corrected_wording_examples") or 0),
+        "point_content_records": int(counts.get("point_content_records") or 0),
+        "equation_content_records": int(counts.get("equation_content_records") or 0),
+        "text_content_records": int(counts.get("text_content_records") or 0),
+        "reaction_equation_rows": int(counts.get("reaction_equation_rows") or 0),
+        "semantic_mapped_records": int(counts.get("semantic_mapped_records") or 0),
     }
 
 
@@ -357,18 +358,20 @@ RESOURCE_SPECS: list[dict[str, Any]] = [
         "source_path": "docs/实验目录_整理版.md",
     },
     {
-        "id": "experiment_catalog_point_content_examples",
-        "role": "Thirty mapped catalog point-content examples for ES/search smoke tests",
-        "path": "data/seed/experiment_catalog/point_content_examples.json",
+        "id": "experiment_catalog_point_content_seed",
+        "role": "Reviewed catalog point-content seed with structured reaction equations for ES/search tests",
+        "path": "data/seed/experiment_catalog/point_content_seed.json",
         "kind": "json",
-        "count": _catalog_examples_count,
+        "count": _catalog_point_content_seed_count,
         "expected_counts": {
-            "examples": 30,
-            "unique_target_seed_keys": 30,
-            "semantic_mapped_examples": 30,
-            "corrected_wording_examples": 1,
+            "records": 76,
+            "equation_mode_records": 71,
+            "text_mode_records": 5,
+            "reaction_equation_rows": 122,
+            "unique_target_seed_keys": 76,
+            "semantic_mapped_records": 76,
         },
-        "source_path": "docs/30点位例子.txt",
+        "source_path": "data/seed/experiment_catalog/normalized_three_element_candidates.md",
     },
     {
         "id": "chemical_search_aliases",
@@ -530,9 +533,11 @@ RESOURCE_SPECS: list[dict[str, Any]] = [
             "total_nodes": 569,
             "directory_nodes": 176,
             "point_nodes": 393,
-            "point_content_examples": 30,
-            "semantic_mapped_examples": 30,
-            "corrected_wording_examples": 1,
+            "point_content_records": 76,
+            "equation_content_records": 71,
+            "text_content_records": 5,
+            "reaction_equation_rows": 122,
+            "semantic_mapped_records": 76,
         },
         "source_path": "data/seed/experiment_catalog/catalog_tree.json",
     },

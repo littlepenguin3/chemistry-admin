@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
 from server.app.domains.catalog_tree.catalog_seed import (
     CATALOG_SEED_VALIDATION_REPORT_PATH,
     CATALOG_TREE_SEED_PATH,
-    POINT_CONTENT_EXAMPLES_SEED_PATH,
+    POINT_CONTENT_SEED_PATH,
     validate_catalog_seed_files,
 )
 
@@ -20,12 +20,12 @@ from server.app.domains.catalog_tree.catalog_seed import (
 def main() -> None:
     parser = argparse.ArgumentParser(description="Validate the committed experiment catalog outline seed.")
     parser.add_argument("--catalog", type=Path, default=CATALOG_TREE_SEED_PATH)
-    parser.add_argument("--examples", type=Path, default=POINT_CONTENT_EXAMPLES_SEED_PATH)
+    parser.add_argument("--content", type=Path, default=POINT_CONTENT_SEED_PATH)
     parser.add_argument("--report", type=Path, default=CATALOG_SEED_VALIDATION_REPORT_PATH)
     parser.add_argument("--write-report", action="store_true")
     args = parser.parse_args()
 
-    result = validate_catalog_seed_files(catalog_path=args.catalog, examples_path=args.examples)
+    result = validate_catalog_seed_files(catalog_path=args.catalog, content_path=args.content)
     if args.write_report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

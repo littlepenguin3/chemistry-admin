@@ -8,6 +8,7 @@ SEPARATE_NODE_KIND_MIGRATION = Path("server/migrations/021_separate_catalog_dire
 REACTION_EQUATION_MIGRATION = Path("server/migrations/023_catalog_point_reaction_equations.sql")
 POINT_JOBS_MIGRATION = Path("server/migrations/024_catalog_point_jobs.sql")
 POINT_PLACEMENTS_MIGRATION = Path("server/migrations/025_catalog_point_placements.sql")
+DROP_STUDENT_CARD_FIELDS_MIGRATION = Path("server/migrations/026_drop_catalog_student_card_fields.sql")
 
 
 def _sql() -> str:
@@ -28,6 +29,10 @@ def _point_jobs_sql() -> str:
 
 def _point_placements_sql() -> str:
     return POINT_PLACEMENTS_MIGRATION.read_text(encoding="utf-8")
+
+
+def _drop_student_card_fields_sql() -> str:
+    return DROP_STUDENT_CARD_FIELDS_MIGRATION.read_text(encoding="utf-8")
 
 
 def test_catalog_tree_migration_uses_deterministic_legacy_identity_mapping() -> None:
@@ -68,7 +73,7 @@ def test_catalog_tree_migration_backfills_evidence_assessment_events_and_feedbac
     assert "idx_student_feedback_point_node" in sql
 
 
-def test_separate_catalog_node_kind_migration_adds_card_fields_and_tightens_kind_constraint() -> None:
+def test_separate_catalog_node_kind_migration_adds_legacy_card_fields_and_tightens_kind_constraint() -> None:
     sql = _separate_sql()
 
     assert "ADD COLUMN IF NOT EXISTS teacher_note text NOT NULL DEFAULT ''" in sql
@@ -77,6 +82,20 @@ def test_separate_catalog_node_kind_migration_adds_card_fields_and_tightens_kind
     assert "ADD COLUMN IF NOT EXISTS point_card_presentation jsonb NOT NULL DEFAULT '{}'::jsonb" in sql
     assert "DROP COLUMN IF EXISTS shortcut_target_node_id" in sql
     assert "CHECK (node_kind IN ('directory', 'point'))" in sql
+
+
+def test_drop_student_card_fields_migration_removes_obsolete_manual_card_columns() -> None:
+    sql = _drop_student_card_fields_sql()
+
+    assert "DROP CONSTRAINT IF EXISTS experiment_catalog_nodes_card_image_asset_id_fkey" in sql
+    assert "DROP INDEX IF EXISTS idx_experiment_catalog_nodes_card_image_asset" in sql
+    assert "DROP COLUMN IF EXISTS student_description" in sql
+    assert "DROP COLUMN IF EXISTS card_image_asset_id" in sql
+    assert "DROP COLUMN IF EXISTS card_icon_key" in sql
+    assert "DROP COLUMN IF EXISTS card_accent" in sql
+    assert "DROP COLUMN IF EXISTS card_layout" in sql
+    assert "DROP COLUMN IF EXISTS card_presentation" in sql
+    assert "DROP COLUMN IF EXISTS point_card_presentation" in sql
 
 
 def test_separate_catalog_node_kind_migration_splits_hybrid_refs_deterministically() -> None:

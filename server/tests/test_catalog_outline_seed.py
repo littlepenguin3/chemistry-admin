@@ -6,11 +6,13 @@ from typing import Any
 import pytest
 
 from server.app.domains.questions import bank as question_bank_domain
+from server.app.domains.catalog_tree import catalog_seed as catalog_seed_domain
 from server.app.domains.catalog_tree.catalog_seed import (
     CANONICAL_POINT_GROUPS_SEED_PATH,
+    import_catalog_seed,
     load_catalog_seed,
     load_canonical_point_seed,
-    load_point_content_examples,
+    load_point_content_seed,
     reset_legacy_experiment_seed_data,
     validate_catalog_seed,
 )
@@ -21,9 +23,9 @@ from scripts.generate_experiment_catalog_seed import ExampleMapping, _build_sema
 
 def test_catalog_outline_seed_matches_required_counts_and_corrected_siblings() -> None:
     nodes = load_catalog_seed()
-    examples = load_point_content_examples()
+    point_content = load_point_content_seed()
 
-    result = validate_catalog_seed(nodes, examples)
+    result = validate_catalog_seed(nodes, point_content)
 
     assert result["ok"] is True
     assert result["counts"]["total_nodes"] == 569
@@ -34,16 +36,20 @@ def test_catalog_outline_seed_matches_required_counts_and_corrected_siblings() -
     assert result["counts"]["duplicate_group_count"] == 32
     assert result["counts"]["duplicate_placement_surplus"] == 36
     assert result["counts"]["chapter_21_nodes"] == 0
-    assert result["counts"]["point_content_examples"] == 30
-    assert result["counts"]["unique_target_seed_keys"] == 30
-    assert result["counts"]["unique_target_canonical_point_ids"] == 30
-    assert result["counts"]["semantic_mapped_examples"] == 30
-    assert result["counts"]["corrected_wording_examples"] == 1
+    assert result["counts"]["point_content_records"] == 76
+    assert result["counts"]["equation_content_records"] == 71
+    assert result["counts"]["text_content_records"] == 5
+    assert result["counts"]["reaction_equation_rows"] == 122
+    assert result["counts"]["unique_target_seed_keys"] == 76
+    assert result["counts"]["unique_target_canonical_point_ids"] == 76
+    assert result["counts"]["semantic_mapped_records"] == 76
+    assert result["counts"]["user_kept_source_records"] == 3
+    assert result["counts"]["researched_update_records"] == 7
     assert result["corrected_hypochlorite_points"] == ["NaClO + MnSO₄", "NaClO + 品红溶液"]
     assert result["corrected_sample_wording"] == "NaClO + 品红溶液"
-    assert all(example.get("semantic_mapping", {}).get("top_candidates") for example in examples)
-    corrected = next(example for example in examples if example["example_number"] == 21)
-    assert corrected["semantic_mapping"]["wording_correction"]["corrected"] == "NaClO + 品红溶液"
+    assert all(record.get("semantic_mapping", {}).get("mapping_status") == "matched" for record in point_content)
+    assert all(record["reaction_equations"] for record in point_content if record["principle_mode"] == "equation")
+    assert all(not record["reaction_equations"] for record in point_content if record["principle_mode"] == "text")
 
 
 def test_catalog_seed_reviewed_duplicate_groups_share_canonical_points() -> None:
@@ -76,17 +82,58 @@ def test_catalog_seed_reviewed_duplicate_groups_share_canonical_points() -> None
 
 def test_catalog_seed_validation_rejects_legacy_identity_and_missing_mapping_report() -> None:
     nodes = load_catalog_seed()
-    examples = load_point_content_examples()
-    broken = dict(examples[0])
+    point_content = load_point_content_seed()
+    broken = dict(point_content[0])
     broken.pop("semantic_mapping", None)
     broken["experiment_id"] = "EXP_LEGACY"
     broken["point_key"] = "legacy-point"
 
-    result = validate_catalog_seed(nodes, [broken, *examples[1:]])
+    result = validate_catalog_seed(nodes, [broken, *point_content[1:]])
 
     assert result["ok"] is False
     assert any("legacy identity keys are not allowed" in error for error in result["errors"])
     assert any("semantic_mapping report is required" in error for error in result["errors"])
+
+
+def test_import_catalog_seed_preserves_equation_mode_and_writes_reaction_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResult:
+        rowcount = 1
+
+    class FakeSession:
+        def __init__(self) -> None:
+            self.point_content_params: list[dict[str, Any]] = []
+
+        def execute(self, statement: Any, params: dict[str, Any] | None = None) -> FakeResult:
+            sql = str(statement)
+            if "INSERT INTO experiment_catalog_point_content" in sql and params:
+                self.point_content_params.append(dict(params))
+            return FakeResult()
+
+    replace_calls: list[dict[str, Any]] = []
+
+    def fake_replace_reaction_equations(
+        session: Any,
+        *,
+        node_id: str,
+        canonical_point_id: str | None = None,
+        equations: list[dict[str, Any]],
+    ) -> None:
+        replace_calls.append({"node_id": node_id, "canonical_point_id": canonical_point_id, "equations": equations})
+
+    monkeypatch.setattr(catalog_seed_domain, "replace_reaction_equations", fake_replace_reaction_equations)
+    session = FakeSession()
+
+    result = import_catalog_seed(session, reset=False)
+
+    assert result["point_content_records"] == 76
+    assert result["reaction_equation_rows"] == 122
+    assert len(session.point_content_params) == 76
+    assert sum(1 for params in session.point_content_params if params["principle_mode"] == "equation") == 71
+    assert sum(1 for params in session.point_content_params if params["principle_mode"] == "text") == 5
+    assert all(params["principle_equation"] for params in session.point_content_params if params["principle_mode"] == "equation")
+    assert all(params["principle_text"] for params in session.point_content_params if params["principle_mode"] == "text")
+    assert len(replace_calls) == 71
+    assert sum(len(call["equations"]) for call in replace_calls) == 122
 
 
 def test_ambiguous_sample_mapping_requires_reviewed_override() -> None:
@@ -320,28 +367,29 @@ def test_question_bank_regeneration_audit_reports_catalog_node_coverage() -> Non
     assert audit["unresolved_points"][0]["point_node_id"] == "cat-point-2"
 
 
-def test_thirty_seed_examples_build_search_documents_without_legacy_ai_evidence() -> None:
+def test_point_content_seed_builds_search_documents_without_flattening_equations() -> None:
     nodes = {node["seed_key"]: node for node in load_catalog_seed()}
-    examples = load_point_content_examples()
+    point_content = load_point_content_seed()
     point_rows = []
-    for example in examples:
-        target = nodes[example["target_seed_key"]]
-        path_titles = list(example["target_path_titles"])
+    for record in point_content:
+        target = nodes[record["target_seed_key"]]
+        path_titles = list(record["target_path_titles"])
+        principle_equation = "\n".join(row["raw_text"] for row in record["reaction_equations"])
         point_rows.append(
             {
-                "node_id": example["target_seed_key"],
-                "placement_node_id": example["target_seed_key"],
-                "canonical_point_id": example["target_canonical_point_id"],
+                "node_id": record["target_seed_key"],
+                "placement_node_id": record["target_seed_key"],
+                "canonical_point_id": record["target_canonical_point_id"],
                 "chapter_id": target["chapter_id"],
                 "chapter_title": path_titles[0],
                 "node_title": path_titles[-1],
                 "catalog_path": path_titles,
-                "point_title": path_titles[-1],
-                "principle_mode": "text",
-                "principle_text": example["principle_text"],
-                "principle_equation": None,
-                "phenomenon_explanation": example["phenomenon_explanation"],
-                "safety_note": example["safety_note"],
+                "point_title": record["point_title"],
+                "principle_mode": record["principle_mode"],
+                "principle_text": record["principle_text"],
+                "principle_equation": principle_equation if record["principle_mode"] == "equation" else None,
+                "phenomenon_explanation": record["phenomenon_explanation"],
+                "safety_note": record["safety_note"],
                 "directory_context": [{"title": title} for title in path_titles[:-1]],
                 "videos": [],
                 "related_links": [],
@@ -352,10 +400,12 @@ def test_thirty_seed_examples_build_search_documents_without_legacy_ai_evidence(
     documents = _build_documents([], [], point_rows=point_rows)
     search_text = "\n".join(document.search_text for document in documents)
 
-    assert len(documents) == 30
+    assert len(documents) == 76
     assert all(document.target and document.target.node_id for document in documents)
     assert all(document.target and document.target.placement_node_id for document in documents)
     assert all(document.target and document.target.canonical_point_id for document in documents)
     assert "source_chunks" not in search_text
     assert "experiment_video_point_evidence" not in search_text
+    assert any(record["principle_mode"] == "equation" for record in point_content)
+    assert any("Cl2 + 2Br-" in document.search_text or "Cl2 + 2 Br-" in document.search_text for document in documents)
     assert any("焰色反应" in document.search_text for document in documents)
