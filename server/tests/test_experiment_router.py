@@ -15,6 +15,7 @@ def test_catalog_tree_routes_are_registered_once() -> None:
     assert_route("/api/admin/catalog/nodes/{node_id}", "GET")
     assert_route("/api/admin/catalog/nodes/{node_id}", "PATCH")
     assert_route("/api/admin/catalog/nodes/{node_id}/children", "GET")
+    assert_route("/api/admin/catalog/nodes/{node_id}/copy", "POST")
     assert_route("/api/admin/catalog/nodes/{node_id}/move", "POST")
     assert_route("/api/admin/catalog/nodes/reorder", "POST")
     assert_route("/api/admin/catalog/nodes/{node_id}/status", "POST")

@@ -33,12 +33,9 @@ export type CatalogEquationReviewModel = {
 
 export function equationCandidateSourceLabel(sources: string[]): string {
   const uniqueSources = Array.from(new Set(sources));
-  const hasSystem = uniqueSources.includes("deterministic");
   const hasAi = uniqueSources.includes("ai");
-  if (hasSystem && hasAi) return "系统 + AI";
   if (hasAi) return "AI 校对";
-  if (hasSystem) return "系统校对";
-  return uniqueSources.join(" + ") || "候选";
+  return uniqueSources.join(" + ") || "AI 建议";
 }
 
 function candidateKey(rowOrder: number | null | undefined, display: string): string {
@@ -69,37 +66,17 @@ function mergeCandidate(
   });
 }
 
-function deterministicCandidateFromEquation(equation: CatalogReactionEquationNormalized): CatalogEquationReviewCandidate | null {
-  const replacement = equation.suggested_display?.trim();
-  if (!replacement || replacement === equation.raw_text.trim()) return null;
-  return {
-    key: candidateKey(equation.row_order, replacement),
-    sources: ["deterministic"],
-    sourceLabel: equationCandidateSourceLabel(["deterministic"]),
-    row_order: equation.row_order,
-    supplemental: false,
-    draft_text: replacement,
-    replacement_text: replacement,
-    canonical_display: replacement,
-    canonical_mhchem: equation.suggested_mhchem,
-    validation_status: equation.validation_status,
-    warnings: equation.warnings,
-    errors: equation.errors,
-    formulae: equation.formulae,
-    rationale: equation.suggestion_reason || "",
-  };
-}
-
 function assistCandidateFromDraft(draft: CatalogEquationAssistDraft): CatalogEquationReviewCandidate | null {
   const replacement = (draft.replacement_text || draft.draft_text || draft.canonical_display || "").trim();
   const display = (draft.canonical_display || replacement).trim();
   const status = draft.validation_status || "warning";
   if (!replacement || !display || status === "invalid") return null;
   const source = draft.source || "ai";
+  if (source === "deterministic") return null;
   return {
     key: candidateKey(draft.row_order, display),
-    sources: [source],
-    sourceLabel: equationCandidateSourceLabel([source]),
+    sources: ["ai"],
+    sourceLabel: equationCandidateSourceLabel(["ai"]),
     row_order: draft.row_order,
     supplemental: Boolean(draft.supplemental || !draft.row_order),
     draft_text: draft.draft_text || replacement,
@@ -120,7 +97,7 @@ export function buildEquationReviewModel(
 ): CatalogEquationReviewModel {
   const rows: CatalogEquationReviewRow[] = (preview?.equations || []).map((equation) => ({
     equation,
-    candidates: mergeCandidate([], deterministicCandidateFromEquation(equation)),
+    candidates: [],
   }));
   const rowMap = new Map(rows.map((row) => [row.equation.row_order, row]));
   let supplementalCandidates: CatalogEquationReviewCandidate[] = [];

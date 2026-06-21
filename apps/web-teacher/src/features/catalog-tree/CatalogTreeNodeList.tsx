@@ -71,6 +71,7 @@ export function CatalogTreeNodeList({
   onAddRoot,
   onAddChild,
   onMove,
+  onCopyNode,
   onReorder,
   onRefreshRoots,
   onChangeStatus,
@@ -84,6 +85,7 @@ export function CatalogTreeNodeList({
   onAddRoot: (kind: CatalogNodeCard["node_kind"]) => void;
   onAddChild: (node: CatalogNodeCard, kind?: CatalogNodeCard["node_kind"]) => void;
   onMove: (nodeId: string, payload: CatalogNodeMovePayload) => Promise<unknown> | unknown;
+  onCopyNode: (node: CatalogNodeCard) => void;
   onReorder: (items: Array<{ node_id: string; display_order: number }>) => Promise<unknown> | unknown;
   onRefreshRoots?: () => Promise<unknown> | unknown;
   onChangeStatus: (node: CatalogNodeCard, action: "archive" | "restore" | "publish" | "unpublish") => void;
@@ -202,9 +204,8 @@ export function CatalogTreeNodeList({
         onAddChild(node, "point");
         return;
       }
-      if (action === "copy-id") {
-        void navigator.clipboard?.writeText(node.node_id);
-        message.success("Node ID 已复制");
+      if (action === "copy-node") {
+        onCopyNode(node);
         return;
       }
       if (action === "move-before" || action === "move-after") {
@@ -213,7 +214,7 @@ export function CatalogTreeNodeList({
       }
       onChangeStatus(node, action);
     },
-    [applyMoveResult, message, onAddChild, onChangeStatus, treeData],
+    [applyMoveResult, onAddChild, onChangeStatus, onCopyNode, treeData],
   );
 
   const dragPreviewNodesById = useMemo(() => collectCatalogTreeNodes(treeData), [treeData]);

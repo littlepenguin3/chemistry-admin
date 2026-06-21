@@ -245,6 +245,10 @@ def test_catalog_point_placement_backend_contracts_are_explicit() -> None:
     common_source = (CATALOG_DIR / "common.py").read_text(encoding="utf-8")
 
     assert "INSERT INTO experiment_catalog_points" in nodes_source
+    assert "def copy_node" in nodes_source
+    assert "copied_from_node_id" in nodes_source
+    assert "copy_root_source_node_id" in nodes_source
+    assert "Directory cannot be copied into itself or its descendants" in nodes_source
     assert 'canonical_point_id = clean(data.get("canonical_point_id")) or None' in nodes_source
     assert "Canonical experiment point not found" in nodes_source
     assert "active_placements_for_canonical_point" in nodes_source

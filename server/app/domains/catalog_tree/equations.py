@@ -563,10 +563,10 @@ def _assist_draft_from_normalized(
     row_order: int | None = None,
     supplemental: bool = False,
 ) -> dict[str, Any] | None:
-    replacement_text = _clean(row.get("suggested_display") or row.get("canonical_display") or row.get("raw_text"))
+    replacement_text = _clean(row.get("canonical_display") or row.get("raw_text"))
     if not replacement_text or row.get("validation_status") == "invalid":
         return None
-    canonical_mhchem = row.get("suggested_mhchem") or row.get("canonical_mhchem")
+    canonical_mhchem = row.get("canonical_mhchem")
     return {
         "draft_text": replacement_text,
         "replacement_text": replacement_text,
@@ -583,38 +583,15 @@ def _assist_draft_from_normalized(
     }
 
 
-def reaction_equation_drafts(rows: list[Any]) -> list[dict[str, Any]]:
-    drafts: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for row in normalize_reaction_equations(rows):
-        candidate = row.get("suggested_display") or row.get("canonical_display")
-        if not candidate or candidate in seen or row.get("validation_status") == "invalid":
-            continue
-        seen.add(candidate)
-        reason = row.get("suggestion_reason") or "系统根据当前输入整理出的候选反应式"
-        if row.get("suggested_display"):
-            reason = f"{reason}，采用前请确认。"
-        draft = _assist_draft_from_normalized(
-            row,
-            source="deterministic",
-            rationale=reason,
-            row_order=row.get("row_order"),
-            supplemental=False,
-        )
-        if draft:
-            drafts.append(draft)
-    return drafts
-
-
 def _ai_settings_ready() -> tuple[Any | None, str | None]:
     settings = effective_ai_settings(get_settings())
     provider = settings.agent_llm_provider
     api_key = settings.agent_llm_api_key or os.getenv("OPENAI_API_KEY", "")
     model = settings.agent_llm_model or os.getenv("OPENAI_MODEL", "")
     if provider not in {"openai", "openai_compatible"}:
-        return None, "AI 反应式建议尚未接入；已保留系统自动识别和配平建议。"
+        return None, "AI 反应式校对尚未接入；暂时无法生成 AI 建议。"
     if not api_key or not model:
-        return None, "AI 接入缺少模型或密钥；已保留系统自动识别和配平建议。"
+        return None, "AI 接入缺少模型或密钥；暂时无法生成 AI 建议。"
     return settings, None
 
 
@@ -634,8 +611,6 @@ def _equation_ai_prompt(payload: Any, normalized_rows: list[dict[str, Any]]) -> 
             "warnings": row.get("warnings") or [],
             "errors": row.get("errors") or [],
             "formulae": row.get("formulae") or [],
-            "suggested_display": row.get("suggested_display"),
-            "suggestion_reason": row.get("suggestion_reason"),
         }
         for row in normalized_rows
     ]
@@ -643,9 +618,10 @@ def _equation_ai_prompt(payload: Any, normalized_rows: list[dict[str, Any]]) -> 
         {
             "role": "system",
             "content": (
-                "你是高中化学实验反应式助手。先参考系统 parser 的识别结果，再给教师可采用的反应式建议。"
+                "你是高中化学实验反应式助手。请基于教师当前输入、点位上下文和 parser_preview 给出 AI 校对建议。"
                 "只返回 JSON，不要 Markdown。格式：{\"drafts\":[{\"row_order\":1,\"draft_text\":\"...\",\"rationale\":\"...\"}]}。"
                 "draft_text 必须是单行反应式，可使用 →、⇌、↑、↓，不要直接保存，不要编造危险操作步骤。"
+                "不要把 parser 的自动规范化或配平猜测直接当作候选；只有你确信应替换或补全时才返回 draft。"
                 "如果原始输入为空，可根据点位上下文生成候选反应式；如果不确定，请少给或不给。"
             ),
         },
@@ -690,7 +666,7 @@ def _sanitize_ai_drafts(raw_drafts: Any, normalized_rows: list[dict[str, Any]]) 
         normalized_candidate = _assist_draft_from_normalized(
             normalized,
             source="ai",
-            rationale=_clean(item.get("rationale"))[:220] or "AI 已根据点位内容和系统解析结果给出候选反应式，采用前请核对。",
+            rationale=_clean(item.get("rationale"))[:220] or "AI 已根据点位内容和当前输入给出候选反应式，采用前请核对。",
             row_order=row_order,
             supplemental=row_order is None,
         )
@@ -701,19 +677,6 @@ def _sanitize_ai_drafts(raw_drafts: Any, normalized_rows: list[dict[str, Any]]) 
             continue
         seen.add(key)
         drafts.append(normalized_candidate)
-        continue
-        key = (row_order, draft_text)
-        if key in seen:
-            continue
-        seen.add(key)
-        drafts.append(
-            {
-                "draft_text": draft_text,
-                "source": "ai",
-                "rationale": _clean(item.get("rationale"))[:220] or "AI 根据系统理解给出的建议，采用前请核对。",
-                "row_order": row_order,
-            }
-        )
     return drafts
 
 
@@ -734,10 +697,10 @@ def _try_ai_equation_drafts(payload: Any, normalized_rows: list[dict[str, Any]])
         data = json.loads(content)
         drafts = _sanitize_ai_drafts(data.get("drafts"), normalized_rows)
         if drafts:
-            return drafts, "AI 已根据系统理解生成建议；采用后仍会重新检查。"
-        return [], "AI 没有生成可采用的反应式；可继续使用系统自动建议。"
+            return drafts, "AI 已根据当前输入生成建议；采用后会重新渲染预览。"
+        return [], "AI 没有发现需要替换的反应式。"
     except Exception as exc:
-        return [], f"AI 建议暂时失败：{str(exc)[:160]}。已保留系统自动建议。"
+        return [], f"AI 校对暂时失败：{str(exc)[:160]}。"
 
 
 def assist_reaction_equations(payload: Any) -> dict[str, Any]:
@@ -746,13 +709,6 @@ def assist_reaction_equations(payload: Any) -> dict[str, Any]:
     ai_drafts, ai_reason = _try_ai_equation_drafts(payload, normalized_rows)
     if ai_drafts:
         return {"available": True, "reason": ai_reason, "drafts": ai_drafts}
-    fallback_drafts = reaction_equation_drafts(rows)
-    if fallback_drafts:
-        return {
-            "available": False,
-            "reason": ai_reason or "AI 暂不可用，已基于系统理解给出可采用建议。",
-            "drafts": fallback_drafts,
-        }
     return {
         "available": False,
         "reason": ai_reason or "AI 暂不可用；请先输入反应式，或补充点位现象后再试。",

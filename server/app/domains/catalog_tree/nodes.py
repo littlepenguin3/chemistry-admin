@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import text
 
 from server.app.catalog_tree_schemas import (
+    CatalogNodeCopyRequest,
     CatalogNodeCreateRequest,
     CatalogNodeMoveRequest,
     CatalogNodeReorderRequest,
@@ -262,6 +263,428 @@ def create_node(*, payload: CatalogNodeCreateRequest, user: Any) -> dict[str, An
             },
         )
     return get_node_detail(node_id=node_id)
+
+
+def _parent_matches(left: str | None, right: str | None) -> bool:
+    return (left or None) == (right or None)
+
+
+def _target_chapter_for_copy(session: Any, *, source: dict[str, Any], data: dict[str, Any]) -> tuple[str, str | None]:
+    parent_id = clean(data.get("parent_id")) or None
+    chapter_id = clean(data.get("chapter_id")) or None
+    if parent_id:
+        parent = get_node(session, parent_id, include_archived=False)
+        if parent["node_kind"] != "directory":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Copy target parent must be a directory")
+        if chapter_id and chapter_id != parent["chapter_id"]:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Copy target chapter must match target parent")
+        return str(parent["chapter_id"]), parent_id
+    target_chapter_id = chapter_id or str(source["chapter_id"])
+    if not session.execute(text("SELECT 1 FROM chapters WHERE id = :chapter_id"), {"chapter_id": target_chapter_id}).first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Copy target chapter not found")
+    return target_chapter_id, None
+
+
+def _copy_display_order(
+    session: Any,
+    *,
+    source: dict[str, Any],
+    target_chapter_id: str,
+    target_parent_id: str | None,
+) -> int:
+    same_parent = source["chapter_id"] == target_chapter_id and _parent_matches(source.get("parent_id"), target_parent_id)
+    if not same_parent:
+        return max_child_order(session, chapter_id=target_chapter_id, parent_id=target_parent_id) + 1
+    after_order = int(source.get("display_order") or 0)
+    session.execute(
+        text(
+            """
+            UPDATE experiment_catalog_nodes
+            SET display_order = display_order + 1,
+                updated_at = now()
+            WHERE chapter_id = :chapter_id
+              AND ((:parent_id IS NULL AND parent_id IS NULL) OR parent_id = :parent_id)
+              AND display_order > :after_order
+            """
+        ),
+        {"chapter_id": target_chapter_id, "parent_id": target_parent_id, "after_order": after_order},
+    )
+    return after_order + 1
+
+
+def _assert_copy_target_outside_source(session: Any, *, source: dict[str, Any], target_parent_id: str | None) -> None:
+    if source["node_kind"] != "directory" or not target_parent_id:
+        return
+    ancestor_ids = {
+        str(row)
+        for row in session.execute(
+            text(
+                """
+                WITH RECURSIVE ancestors AS (
+                  SELECT id, parent_id
+                  FROM experiment_catalog_nodes
+                  WHERE id = :target_parent_id
+                  UNION ALL
+                  SELECT parent.id, parent.parent_id
+                  FROM experiment_catalog_nodes parent
+                  JOIN ancestors ON ancestors.parent_id = parent.id
+                )
+                SELECT id FROM ancestors
+                """
+            ),
+            {"target_parent_id": target_parent_id},
+        ).scalars().all()
+    }
+    if source["node_id"] in ancestor_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Directory cannot be copied into itself or its descendants")
+
+
+def _insert_copied_node(
+    session: Any,
+    *,
+    source: dict[str, Any],
+    target_chapter_id: str,
+    target_parent_id: str | None,
+    display_order: int,
+    title: str,
+    root_source_node_id: str,
+    user: Any,
+) -> str:
+    canonical_point_id = None
+    if point_capable(source):
+        source_canonical_point_id = clean(source.get("canonical_point_id"))
+        if not source_canonical_point_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Point placement has no canonical experiment point to copy")
+        if clean(source.get("canonical_point_status")) == "archived":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Archived canonical experiment points cannot be copied")
+        canonical_point_id = new_canonical_point_id()
+        source_canonical = session.execute(
+            text(
+                """
+                SELECT id, summary, metadata
+                FROM experiment_catalog_points
+                WHERE id = :canonical_point_id
+                """
+            ),
+            {"canonical_point_id": source_canonical_point_id},
+        ).mappings().first()
+        source_metadata = source_canonical.get("metadata") if source_canonical and isinstance(source_canonical.get("metadata"), dict) else {}
+        session.execute(
+            text(
+                """
+                INSERT INTO experiment_catalog_points (
+                  id, title, summary, status, metadata, created_by, updated_by, updated_at
+                )
+                VALUES (
+                  :id, :title, :summary, 'draft', CAST(:metadata AS jsonb),
+                  CAST(:user_id AS uuid), CAST(:user_id AS uuid), now()
+                )
+                """
+            ),
+            {
+                "id": canonical_point_id,
+                "title": title,
+                "summary": source_canonical.get("summary") if source_canonical else source.get("summary") or "",
+                "metadata": json_dump(
+                    {
+                        **source_metadata,
+                        "copied_from_canonical_point_id": source_canonical_point_id,
+                        "copied_from_placement_node_id": source["node_id"],
+                    }
+                ),
+                "user_id": user.id,
+            },
+        )
+    node_id = new_node_id()
+    metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
+    metadata = {
+        **metadata,
+        "copied_from_node_id": source["node_id"],
+        "copy_root_source_node_id": root_source_node_id,
+    }
+    session.execute(
+        text(
+            """
+            INSERT INTO experiment_catalog_nodes (
+              id, chapter_id, parent_id, node_kind, title, summary, teacher_note,
+              student_description, card_image_asset_id, card_icon_key, card_accent,
+              card_layout, card_presentation, point_card_presentation, status,
+              display_order, canonical_point_id, metadata, created_by, updated_by, updated_at
+            )
+            VALUES (
+              :id, :chapter_id, :parent_id, :node_kind, :title, :summary, :teacher_note,
+              :student_description, CAST(:card_image_asset_id AS uuid), :card_icon_key, :card_accent,
+              :card_layout, CAST(:card_presentation AS jsonb), CAST(:point_card_presentation AS jsonb), 'draft',
+              :display_order, :canonical_point_id, CAST(:metadata AS jsonb), CAST(:user_id AS uuid), CAST(:user_id AS uuid), now()
+            )
+            """
+        ),
+        {
+            "id": node_id,
+            "chapter_id": target_chapter_id,
+            "parent_id": target_parent_id,
+            "node_kind": source["node_kind"],
+            "title": title,
+            "summary": source.get("summary") or "",
+            "teacher_note": source.get("teacher_note") or "",
+            "student_description": source.get("student_description") or "",
+            "card_image_asset_id": str(source["card_image_asset_id"]) if source.get("card_image_asset_id") else None,
+            "card_icon_key": source.get("card_icon_key"),
+            "card_accent": source.get("card_accent"),
+            "card_layout": source.get("card_layout") or "default",
+            "card_presentation": json_dump(source.get("card_presentation") if isinstance(source.get("card_presentation"), dict) else {}),
+            "point_card_presentation": json_dump(
+                source.get("point_card_presentation") if isinstance(source.get("point_card_presentation"), dict) else {}
+            ),
+            "display_order": display_order,
+            "canonical_point_id": canonical_point_id,
+            "metadata": json_dump(metadata),
+            "user_id": user.id,
+        },
+    )
+    if canonical_point_id:
+        _copy_point_resources(
+            session,
+            source=source,
+            copied_node_id=node_id,
+            copied_canonical_point_id=canonical_point_id,
+            copied_title=title,
+            user=user,
+        )
+    return node_id
+
+
+def _copy_point_resources(
+    session: Any,
+    *,
+    source: dict[str, Any],
+    copied_node_id: str,
+    copied_canonical_point_id: str,
+    copied_title: str,
+    user: Any,
+) -> None:
+    source_canonical_point_id = clean(source.get("canonical_point_id"))
+    content_result = session.execute(
+        text(
+            """
+            INSERT INTO experiment_catalog_point_content (
+              node_id, canonical_point_id, point_title, teacher_note, principle_mode, principle_equation, principle_text,
+              phenomenon_explanation, safety_note, content_status, created_by, updated_by, metadata, updated_at
+            )
+            SELECT
+              :copied_node_id,
+              :copied_canonical_point_id,
+              :copied_title,
+              pc.teacher_note,
+              pc.principle_mode,
+              pc.principle_equation,
+              pc.principle_text,
+              pc.phenomenon_explanation,
+              pc.safety_note,
+              'draft',
+              CAST(:user_id AS uuid),
+              CAST(:user_id AS uuid),
+              COALESCE(pc.metadata, '{}'::jsonb) || jsonb_build_object(
+                'copied_from_node_id', pc.node_id,
+                'copied_from_canonical_point_id', pc.canonical_point_id
+              ),
+              now()
+            FROM experiment_catalog_point_content pc
+            WHERE pc.canonical_point_id = :source_canonical_point_id
+               OR pc.node_id = :source_node_id
+            ORDER BY
+              CASE WHEN pc.canonical_point_id = :source_canonical_point_id THEN 0 ELSE 1 END,
+              CASE pc.content_status WHEN 'published' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
+              pc.updated_at DESC
+            LIMIT 1
+            ON CONFLICT (node_id) DO UPDATE SET
+              canonical_point_id = EXCLUDED.canonical_point_id,
+              point_title = EXCLUDED.point_title,
+              teacher_note = EXCLUDED.teacher_note,
+              principle_mode = EXCLUDED.principle_mode,
+              principle_equation = EXCLUDED.principle_equation,
+              principle_text = EXCLUDED.principle_text,
+              phenomenon_explanation = EXCLUDED.phenomenon_explanation,
+              safety_note = EXCLUDED.safety_note,
+              content_status = 'draft',
+              metadata = experiment_catalog_point_content.metadata || EXCLUDED.metadata,
+              updated_by = EXCLUDED.updated_by,
+              updated_at = now()
+            """
+        ),
+        {
+            "copied_node_id": copied_node_id,
+            "copied_canonical_point_id": copied_canonical_point_id,
+            "copied_title": copied_title,
+            "source_canonical_point_id": source_canonical_point_id,
+            "source_node_id": source["node_id"],
+            "user_id": user.id,
+        },
+    )
+    if int(content_result.rowcount or 0) > 0:
+        session.execute(
+            text(
+                """
+                INSERT INTO experiment_catalog_point_reaction_equations (
+                  node_id, canonical_point_id, row_order, raw_text, canonical_display, canonical_mhchem, plain_search_text,
+                  formulae, aliases, reactants, products, participants, reaction_features, validation_status,
+                  warnings, errors, parser_version, migrated_from_principle_equation, metadata, updated_at
+                )
+                SELECT
+                  :copied_node_id,
+                  :copied_canonical_point_id,
+                  eq.row_order,
+                  eq.raw_text,
+                  eq.canonical_display,
+                  eq.canonical_mhchem,
+                  eq.plain_search_text,
+                  eq.formulae,
+                  eq.aliases,
+                  eq.reactants,
+                  eq.products,
+                  eq.participants,
+                  eq.reaction_features,
+                  eq.validation_status,
+                  eq.warnings,
+                  eq.errors,
+                  eq.parser_version,
+                  eq.migrated_from_principle_equation,
+                  COALESCE(eq.metadata, '{}'::jsonb) || jsonb_build_object(
+                    'copied_from_node_id', eq.node_id,
+                    'copied_from_canonical_point_id', eq.canonical_point_id
+                  ),
+                  now()
+                FROM experiment_catalog_point_reaction_equations eq
+                WHERE eq.canonical_point_id = :source_canonical_point_id
+                   OR eq.node_id = :source_node_id
+                ORDER BY eq.row_order, eq.created_at
+                ON CONFLICT (node_id, row_order) DO NOTHING
+                """
+            ),
+            {
+                "copied_node_id": copied_node_id,
+                "copied_canonical_point_id": copied_canonical_point_id,
+                "source_canonical_point_id": source_canonical_point_id,
+                "source_node_id": source["node_id"],
+            },
+        )
+    session.execute(
+        text(
+            """
+            INSERT INTO experiment_catalog_point_media_bindings (
+              node_id, canonical_point_id, source_placement_node_id, media_asset_id, title, binding_status, display_order,
+              metadata, created_by, updated_by, updated_at
+            )
+            SELECT
+              :copied_node_id,
+              :copied_canonical_point_id,
+              :copied_node_id,
+              mb.media_asset_id,
+              mb.title,
+              'draft',
+              mb.display_order,
+              COALESCE(mb.metadata, '{}'::jsonb) || jsonb_build_object(
+                'copied_from_node_id', mb.node_id,
+                'copied_from_canonical_point_id', mb.canonical_point_id
+              ),
+              CAST(:user_id AS uuid),
+              CAST(:user_id AS uuid),
+              now()
+            FROM experiment_catalog_point_media_bindings mb
+            WHERE (mb.canonical_point_id = :source_canonical_point_id OR mb.node_id = :source_node_id)
+              AND mb.binding_status <> 'archived'
+            ORDER BY mb.display_order, mb.created_at
+            ON CONFLICT (node_id, media_asset_id) DO NOTHING
+            """
+        ),
+        {
+            "copied_node_id": copied_node_id,
+            "copied_canonical_point_id": copied_canonical_point_id,
+            "source_canonical_point_id": source_canonical_point_id,
+            "source_node_id": source["node_id"],
+            "user_id": user.id,
+        },
+    )
+
+
+def _copy_node_tree(
+    session: Any,
+    *,
+    source_node_id: str,
+    target_chapter_id: str,
+    target_parent_id: str | None,
+    display_order: int,
+    title_override: str | None,
+    include_subtree: bool,
+    root_source_node_id: str,
+    user: Any,
+) -> str:
+    source = get_node(session, source_node_id, include_archived=False)
+    title = clean(title_override) or clean(source.get("title"))
+    copied_node_id = _insert_copied_node(
+        session,
+        source=source,
+        target_chapter_id=target_chapter_id,
+        target_parent_id=target_parent_id,
+        display_order=display_order,
+        title=title,
+        root_source_node_id=root_source_node_id,
+        user=user,
+    )
+    if include_subtree and source["node_kind"] == "directory":
+        child_ids = session.execute(
+            text(
+                """
+                SELECT id
+                FROM experiment_catalog_nodes
+                WHERE parent_id = :source_node_id
+                  AND status <> 'archived'
+                ORDER BY display_order, id
+                """
+            ),
+            {"source_node_id": source_node_id},
+        ).scalars().all()
+        for child_index, child_id in enumerate(child_ids, start=1):
+            _copy_node_tree(
+                session,
+                source_node_id=str(child_id),
+                target_chapter_id=target_chapter_id,
+                target_parent_id=copied_node_id,
+                display_order=child_index,
+                title_override=None,
+                include_subtree=True,
+                root_source_node_id=root_source_node_id,
+                user=user,
+            )
+    return copied_node_id
+
+
+def copy_node(*, node_id: str, payload: CatalogNodeCopyRequest, user: Any) -> dict[str, Any]:
+    data = dump_model(payload)
+    with db_session() as session:
+        source = get_node(session, node_id, include_archived=False)
+        target_chapter_id, target_parent_id = _target_chapter_for_copy(session, source=source, data=data)
+        assert_parent_valid(session, chapter_id=target_chapter_id, parent_id=target_parent_id)
+        _assert_copy_target_outside_source(session, source=source, target_parent_id=target_parent_id)
+        display_order = _copy_display_order(
+            session,
+            source=source,
+            target_chapter_id=target_chapter_id,
+            target_parent_id=target_parent_id,
+        )
+        copied_node_id = _copy_node_tree(
+            session,
+            source_node_id=node_id,
+            target_chapter_id=target_chapter_id,
+            target_parent_id=target_parent_id,
+            display_order=display_order,
+            title_override=clean(data.get("title")) or None,
+            include_subtree=bool(data.get("include_subtree", True)),
+            root_source_node_id=node_id,
+            user=user,
+        )
+        _normalize_sibling_orders(session, chapter_id=target_chapter_id, parent_id=target_parent_id)
+    return get_node_detail(node_id=copied_node_id)
 
 
 def update_node(*, node_id: str, payload: CatalogNodeUpdateRequest, user: Any) -> dict[str, Any]:

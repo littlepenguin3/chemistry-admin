@@ -5,6 +5,7 @@ import {
   changeCatalogMediaBindingStatus,
   changeCatalogNodeStatus,
   changeCatalogPointContentPublication,
+  copyCatalogNode,
   createCatalogNode,
   getCatalogNode,
   getCatalogPointAiContext,
@@ -23,6 +24,7 @@ import {
 } from "../../api/catalogTree";
 import type {
   CatalogNodeCreatePayload,
+  CatalogNodeCopyPayload,
   CatalogNodeDetail,
   CatalogNodeMovePayload,
   CatalogPointJobAction,
@@ -128,6 +130,15 @@ export function useCatalogMutations(message: MessageApi) {
     mutationFn: (payload: CatalogNodeCreatePayload) => createCatalogNode(payload),
     onSuccess: (detail) => {
       message.success("目录节点已创建");
+      invalidateCatalog(detail);
+    },
+    onError: (error) => message.error(errorMessage(error)),
+  });
+
+  const copyNode = useMutation({
+    mutationFn: ({ nodeId, payload }: { nodeId: string; payload: CatalogNodeCopyPayload }) => copyCatalogNode(nodeId, payload),
+    onSuccess: (detail) => {
+      message.success("节点已复制为草稿");
       invalidateCatalog(detail);
     },
     onError: (error) => message.error(errorMessage(error)),
@@ -269,6 +280,7 @@ export function useCatalogMutations(message: MessageApi) {
 
   return {
     createNode,
+    copyNode,
     updateNode,
     moveNode,
     reorderNodes,

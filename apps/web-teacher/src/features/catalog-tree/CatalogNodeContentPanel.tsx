@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type UIEvent } from "react";
 import { Alert, Button, Flex, Form, Input, Radio, Space, Tag, Typography, type FormInstance } from "antd";
-import { CheckCircleOutlined, ReloadOutlined, RobotOutlined, SaveOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, RobotOutlined, SaveOutlined } from "@ant-design/icons";
 
 import {
   assistCatalogReactionEquations,
@@ -22,12 +22,6 @@ import {
 } from "./catalogEquationReview";
 
 const { Text } = Typography;
-
-const equationStatusMeta: Record<CatalogEquationPreviewResponse["equations"][number]["validation_status"], { label: string; color: string }> = {
-  valid: { label: "已识别", color: "green" },
-  warning: { label: "需确认", color: "gold" },
-  invalid: { label: "需修改", color: "red" },
-};
 
 function pointContentStatusLabel(status?: string | null): string {
   if (status === "published") return "已发布";
@@ -56,6 +50,46 @@ function replaceEquationLine(value: string, rowOrder: number, replacement: strin
   const next = [...lines];
   next[targetIndex] = replacement;
   return next.join("\n");
+}
+
+function CatalogEquationCodeEditor({
+  value = "",
+  onChange,
+  placeholder,
+}: {
+  value?: string;
+  onChange?: (event: ChangeEvent<HTMLTextAreaElement>) => void;
+  placeholder?: string;
+}) {
+  const [scrollTop, setScrollTop] = useState(0);
+  const lineCount = value ? value.split(/\r?\n/).length : 1;
+  const visibleLineCount = Math.max(4, lineCount);
+  const rows = Math.min(12, visibleLineCount);
+  const lineNumbers = Array.from({ length: visibleLineCount }, (_, index) => index + 1);
+
+  return (
+    <div className="catalog-equation-code-editor">
+      <div className="catalog-equation-code-gutter" aria-hidden="true">
+        <div className="catalog-equation-code-gutter-inner" style={{ transform: `translateY(-${scrollTop}px)` }}>
+          {lineNumbers.map((lineNumber) => (
+            <span key={lineNumber}>{lineNumber}</span>
+          ))}
+        </div>
+      </div>
+      <textarea
+        className="catalog-equation-code-input"
+        value={value}
+        onChange={onChange}
+        onScroll={(event: UIEvent<HTMLTextAreaElement>) => setScrollTop(event.currentTarget.scrollTop)}
+        placeholder={placeholder}
+        rows={rows}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        aria-label="实验反应式输入"
+      />
+    </div>
+  );
 }
 
 export function CatalogNodeContentPanel({
@@ -135,12 +169,6 @@ export function CatalogNodeContentPanel({
     setAssistMessage("");
     setAssistDrafts([]);
   }, [equationText]);
-
-  const refreshPreview = () => {
-    const seq = previewSeq.current + 1;
-    previewSeq.current = seq;
-    void requestPreview(equationText.trim(), seq);
-  };
 
   const applyCandidate = (candidate: CatalogEquationReviewCandidate) => {
     const replacement = candidate.replacement_text || candidate.draft_text || candidate.canonical_display;
@@ -288,157 +316,145 @@ export function CatalogNodeContentPanel({
             <div className="catalog-equation-natural-header">
               <div className="catalog-equation-natural-copy">
                 <Text strong>实验反应式</Text>
-                <Text type="secondary">直接输入或粘贴反应式，一行一个；系统会自动识别、纠错并提示配平建议。</Text>
+                <Text type="secondary">直接输入或粘贴反应式，一行一个；左侧按当前输入渲染，需要时再让 AI 校对。</Text>
               </div>
             </div>
-            <Form.Item name="reaction_equations_text" rules={[{ required: true, message: "请输入实验反应式，或切换为文字描述" }]}>
-              <Input.TextArea
-                className="catalog-equation-natural-input"
-                autoSize={{ minRows: 4, maxRows: 10 }}
-                placeholder={"例如：CL2+H2=HCL\nCl2 + 2KBr -> 2KCl + Br2\n氯气 + 氢气 = 氯化氢"}
-              />
-            </Form.Item>
-            <div className="catalog-equation-natural-actions">
-              <div className="catalog-equation-natural-action-copy">
-                <Text type="secondary">先看系统理解；需要进一步修正或补全时，再让 AI 基于这些结果给建议。</Text>
-              </div>
-              <Space wrap>
-                <Button type="primary" icon={<RobotOutlined />} loading={assistLoading} onClick={() => void runEquationAssist()}>
-                  AI 建议
-                  {/*
-                  {hasEquationInput ? "AI 校对全部" : "AI 生成候选"}
-                  */}
-                </Button>
-                <Button icon={<ReloadOutlined />} loading={previewLoading} onClick={refreshPreview}>
-                  重新检查
-                </Button>
-              </Space>
-            </div>
-            {previewError ? <div className="catalog-equation-natural-feedback is-error">{previewError}</div> : null}
-            {previewLoading ? <div className="catalog-equation-natural-feedback">正在识别反应式...</div> : null}
-            {reviewModel.rows.length || reviewModel.supplementalCandidates.length ? (
-              <div className="catalog-equation-natural-preview">
-                <div className="catalog-equation-natural-preview-title">
-                  <Text strong>系统理解为</Text>
-                  <Space wrap>
-                    <Text type="secondary">保存时仍以当前输入为准，后端会重新规范化。</Text>
-                    {reviewModel.rows.some((row) => row.candidates.length) ? (
-                      <Button size="small" type="primary" onClick={() => reviewModel.rows.forEach((row) => row.candidates[0] && applyCandidate(row.candidates[0]))}>
-                        采用全部
-                      </Button>
+            <div className="catalog-equation-workbench">
+              <section className="catalog-equation-pane catalog-equation-preview-pane">
+                <div className="catalog-equation-pane-heading">
+                  <div>
+                    <Text strong>反应式预览</Text>
+                    <Text type="secondary">默认只按右侧输入渲染，不展示脚本建议。</Text>
+                  </div>
+                </div>
+                {previewError ? <div className="catalog-equation-natural-feedback is-error">{previewError}</div> : null}
+                {previewLoading ? <div className="catalog-equation-natural-feedback">正在渲染预览...</div> : null}
+                {reviewModel.rows.length || reviewModel.supplementalCandidates.length ? (
+                  <div className="catalog-equation-natural-preview">
+                    <div className="catalog-equation-natural-preview-title">
+                      <Text strong>按输入渲染</Text>
+                      <Space wrap>
+                        <Text type="secondary">保存时以右侧输入为准，后端会生成 AI/检索可用的规范结构。</Text>
+                        {reviewModel.rows.some((row) => row.candidates.length) ? (
+                          <Button size="small" type="primary" onClick={() => reviewModel.rows.forEach((row) => row.candidates[0] && applyCandidate(row.candidates[0]))}>
+                            采用全部 AI 建议
+                          </Button>
+                        ) : null}
+                      </Space>
+                    </div>
+                    {reviewModel.rows.map(({ equation, candidates }) => {
+                      return (
+                        <div className="catalog-equation-natural-row" key={`${equation.row_order}-${equation.raw_text}`}>
+                          <span className="catalog-equation-natural-index">{equation.row_order}</span>
+                          <div className="catalog-equation-natural-result">
+                            <div className="catalog-equation-natural-result-line">
+                              <div className="catalog-equation-natural-rendered">
+                                {equation.canonical_mhchem ? (
+                                  <AssistantMarkdownContent text={`$${equation.canonical_mhchem}$`} inline />
+                                ) : (
+                                  equation.canonical_display || equation.raw_text
+                                )}
+                              </div>
+                              <Space wrap size={8}>
+                                <Button
+                                  size="small"
+                                  icon={<RobotOutlined />}
+                                  loading={assistLoadingRow === equation.row_order}
+                                  onClick={() => void runEquationAssist(equation.row_order)}
+                                >
+                                  AI 校对本行
+                                </Button>
+                              </Space>
+                            </div>
+                            {candidates.length ? (
+                              <div className="catalog-equation-natural-candidates">
+                                <Text className="catalog-equation-natural-candidates-title" type="secondary">AI 建议</Text>
+                                {candidates.map((candidate) => (
+                                  <div className="catalog-equation-natural-candidate" key={candidate.key}>
+                                    <div className="catalog-equation-natural-candidate-main">
+                                      <Tag color={candidate.sources.includes("ai") ? "green" : "blue"}>{candidate.sourceLabel}</Tag>
+                                      <div className="catalog-equation-natural-rendered">
+                                        {candidate.canonical_mhchem ? (
+                                          <AssistantMarkdownContent text={`$${candidate.canonical_mhchem}$`} inline />
+                                        ) : (
+                                          candidate.canonical_display
+                                        )}
+                                      </div>
+                                      <Button size="small" type="primary" onClick={() => applyCandidate(candidate)}>
+                                        采用这个反应式
+                                      </Button>
+                                    </div>
+                                    {candidate.rationale ? (
+                                      <details className="catalog-equation-natural-details">
+                                        <summary>查看 AI 分析</summary>
+                                        <Text type="secondary">{candidate.rationale}</Text>
+                                      </details>
+                                    ) : null}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {reviewModel.supplementalCandidates.length ? (
+                      <div className="catalog-equation-natural-supplemental">
+                        <Text strong>AI 补充建议</Text>
+                        {reviewModel.supplementalCandidates.map((candidate) => (
+                          <div className="catalog-equation-natural-candidate" key={candidate.key}>
+                            <div className="catalog-equation-natural-candidate-main">
+                              <Tag color="green">{candidate.sourceLabel}</Tag>
+                              <div className="catalog-equation-natural-rendered">
+                                {candidate.canonical_mhchem ? <AssistantMarkdownContent text={`$${candidate.canonical_mhchem}$`} inline /> : candidate.canonical_display}
+                              </div>
+                              <Button size="small" type="primary" onClick={() => applyCandidate(candidate)}>
+                                采用这个反应式
+                              </Button>
+                            </div>
+                            {candidate.rationale ? (
+                              <details className="catalog-equation-natural-details">
+                                <summary>查看 AI 分析</summary>
+                                <Text type="secondary">{candidate.rationale}</Text>
+                              </details>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
                     ) : null}
+                  </div>
+                ) : (
+                  <div className="catalog-equation-natural-empty">
+                    <Text strong>{hasEquationInput ? "等待预览" : "还没有预览"}</Text>
+                    <Text type="secondary">
+                      {hasEquationInput ? "输入稳定后会自动刷新左侧渲染。" : "右侧输入反应式后，这里会显示规范化渲染。"}
+                    </Text>
+                  </div>
+                )}
+                {assistMessage ? <div className="catalog-equation-natural-feedback">{assistMessage}</div> : null}
+              </section>
+              <section className="catalog-equation-pane catalog-equation-input-pane">
+                <div className="catalog-equation-pane-heading">
+                  <div>
+                    <Text strong>输入反应式</Text>
+                    <Text type="secondary">像代码编辑器一样按行维护；每一行对应左侧一个预览序号。</Text>
+                  </div>
+                </div>
+                <Form.Item name="reaction_equations_text" rules={[{ required: true, message: "请输入实验反应式，或切换为文字描述" }]}>
+                  <CatalogEquationCodeEditor placeholder={"例如：CL2+H2=HCL\nCl2 + 2KBr -> 2KCl + Br2\n氯气 + 氢气 = 氯化氢"} />
+                </Form.Item>
+                <div className="catalog-equation-natural-actions">
+                  <div className="catalog-equation-natural-action-copy">
+                    <Text type="secondary">默认采用右侧输入；需要进一步校对或补全时，再让 AI 基于当前内容给建议。</Text>
+                  </div>
+                  <Space wrap>
+                    <Button type="primary" icon={<RobotOutlined />} loading={assistLoading} onClick={() => void runEquationAssist()}>
+                      {hasEquationInput ? "AI 校对全部" : "AI 根据点位建议"}
+                    </Button>
                   </Space>
                 </div>
-                {reviewModel.rows.map(({ equation, candidates }) => {
-                  const status = equationStatusMeta[equation.validation_status];
-                  const messages = [...(equation.corrections || []), ...equation.warnings, ...equation.errors];
-                  const hasDetails = Boolean(messages.length || equation.formulae.length);
-                  return (
-                    <div className={`catalog-equation-natural-row is-${equation.validation_status}`} key={`${equation.row_order}-${equation.raw_text}`}>
-                      <span className="catalog-equation-natural-index">{equation.row_order}</span>
-                      <div className="catalog-equation-natural-result">
-                        <div className="catalog-equation-natural-result-line">
-                          <div className="catalog-equation-natural-rendered">
-                            {equation.canonical_mhchem ? (
-                              <AssistantMarkdownContent text={`$${equation.canonical_mhchem}$`} inline />
-                            ) : (
-                              equation.canonical_display || equation.raw_text
-                            )}
-                          </div>
-                          <Space wrap size={8}>
-                            <Tag color={status.color}>{status.label}</Tag>
-                            {equation.validation_status !== "valid" ? (
-                              <Button
-                                size="small"
-                                icon={<RobotOutlined />}
-                                loading={assistLoadingRow === equation.row_order}
-                                onClick={() => void runEquationAssist(equation.row_order)}
-                              >
-                                让 AI 修这行
-                              </Button>
-                            ) : null}
-                          </Space>
-                        </div>
-                        {candidates.length ? (
-                          <div className="catalog-equation-natural-candidates">
-                            <Text className="catalog-equation-natural-candidates-title" type="secondary">推荐采用</Text>
-                            {candidates.map((candidate) => (
-                              <div className="catalog-equation-natural-candidate" key={candidate.key}>
-                                <Tag color={candidate.sources.includes("ai") ? "green" : "blue"}>{candidate.sourceLabel}</Tag>
-                                <div className="catalog-equation-natural-candidate-body">
-                                  <div className="catalog-equation-natural-rendered">
-                                    {candidate.canonical_mhchem ? (
-                                      <AssistantMarkdownContent text={`$${candidate.canonical_mhchem}$`} inline />
-                                    ) : (
-                                      candidate.canonical_display
-                                    )}
-                                  </div>
-                                  {candidate.rationale || candidate.formulae.length || candidate.warnings.length || candidate.errors.length ? (
-                                    <details className="catalog-equation-natural-details">
-                                      <summary>查看详情</summary>
-                                      {candidate.rationale ? <Text type="secondary">{candidate.rationale}</Text> : null}
-                                      {candidate.formulae.length ? <Text type="secondary">识别到：{candidate.formulae.join("、")}</Text> : null}
-                                      {[...candidate.warnings, ...candidate.errors].map((item) => (
-                                        <Text key={item} type={candidate.errors.includes(item) ? "danger" : "secondary"}>
-                                          {item}
-                                        </Text>
-                                      ))}
-                                      <Text type="secondary">替换文本：{candidate.replacement_text}</Text>
-                                    </details>
-                                  ) : null}
-                                </div>
-                                <Button size="small" type="primary" onClick={() => applyCandidate(candidate)}>
-                                  采用这个反应式
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                        {hasDetails ? (
-                          <details className="catalog-equation-natural-details">
-                            <summary>查看识别详情</summary>
-                            {equation.formulae.length ? <Text type="secondary">识别到：{equation.formulae.join("、")}</Text> : null}
-                            {messages.map((item) => (
-                              <Text key={item} type={equation.errors.includes(item) ? "danger" : "secondary"}>
-                                {item}
-                              </Text>
-                            ))}
-                          </details>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
-                {reviewModel.supplementalCandidates.length ? (
-                  <div className="catalog-equation-natural-supplemental">
-                    <Text strong>候选补充反应式</Text>
-                    {reviewModel.supplementalCandidates.map((candidate) => (
-                      <div className="catalog-equation-natural-candidate" key={candidate.key}>
-                        <Tag color="green">{candidate.sourceLabel}</Tag>
-                        <div className="catalog-equation-natural-candidate-body">
-                          <div className="catalog-equation-natural-rendered">
-                            {candidate.canonical_mhchem ? <AssistantMarkdownContent text={`$${candidate.canonical_mhchem}$`} inline /> : candidate.canonical_display}
-                          </div>
-                          {candidate.rationale ? <Text type="secondary">{candidate.rationale}</Text> : null}
-                        </div>
-                        <Button size="small" type="primary" onClick={() => applyCandidate(candidate)}>
-                          采用这个反应式
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : !hasEquationInput ? (
-              <div className="catalog-equation-natural-empty">
-                <Text strong>还没有反应式</Text>
-                <Text type="secondary">AI 可以根据当前点位内容生成候选反应式，生成后仍需老师采纳。</Text>
-                <Button type="primary" icon={<RobotOutlined />} loading={assistLoading} onClick={() => void runEquationAssist()}>
-                  AI 生成候选
-                </Button>
-              </div>
-            ) : null}
-            {assistMessage ? <div className="catalog-equation-natural-feedback">{assistMessage}</div> : null}
+              </section>
+            </div>
           </div>
         ) : (
           <Form.Item name="principle_text" label="文字原理" rules={[{ required: true, message: "请输入文字原理" }]}>

@@ -33,6 +33,18 @@ function node(partial: Partial<CatalogNodeCard> & { node_id: string; title: stri
   };
 }
 
+function mockParentChain(level: number, ancestorGuideContinuations: boolean[]) {
+  let parent: { isRoot: boolean; nextSibling: unknown; parent: unknown } = { isRoot: true, nextSibling: null, parent: null };
+  for (let index = 0; index < Math.max(0, level - 1); index += 1) {
+    parent = {
+      isRoot: false,
+      nextSibling: (ancestorGuideContinuations[index] ?? true) ? { id: `ancestor-next-${index}` } : null,
+      parent,
+    };
+  }
+  return parent;
+}
+
 function renderRow({
   catalogNode,
   isInternal = catalogNode.node_kind === "directory",
@@ -41,6 +53,8 @@ function renderRow({
   isDragging = false,
   willReceiveDrop = false,
   level = 1,
+  hasNextSibling = true,
+  ancestorGuideContinuations = [],
 }: {
   catalogNode: CatalogNodeCard;
   isInternal?: boolean;
@@ -49,6 +63,8 @@ function renderRow({
   isDragging?: boolean;
   willReceiveDrop?: boolean;
   level?: number;
+  hasNextSibling?: boolean;
+  ancestorGuideContinuations?: boolean[];
 }) {
   const onAction = vi.fn<CatalogTreeActionHandler>();
   const onRequestLoad = vi.fn();
@@ -75,6 +91,8 @@ function renderRow({
       isSelected,
       isDragging,
       willReceiveDrop,
+      parent: mockParentChain(level, ancestorGuideContinuations),
+      nextSibling: hasNextSibling ? { id: `${catalogNode.node_id}-next` } : null,
       open,
       toggle,
       handleClick,
@@ -194,6 +212,42 @@ describe("CatalogTreeRow drag and drop interaction states", () => {
       "--catalog-elbow-left": "57px",
       "--catalog-elbow-width": "10px",
     });
+  });
+
+  it("marks the current branch as terminal when the node is the last sibling", () => {
+    const { container } = renderRow({
+      catalogNode: node({ node_id: "last-child", title: "Last child", node_kind: "point" }),
+      level: 2,
+      hasNextSibling: false,
+      ancestorGuideContinuations: [true],
+    });
+
+    const row = container.querySelector(".catalog-sidebar-item");
+    const guides = container.querySelectorAll(".catalog-sidebar-guide");
+    expect(row).toHaveClass("is-last-sibling");
+    expect(guides).toHaveLength(2);
+    expect(guides[0]).toHaveClass("is-continuing");
+    expect(guides[0]).not.toHaveClass("is-current");
+    expect(guides[1]).toHaveClass("is-current");
+    expect(guides[1]).toHaveClass("is-terminal");
+    expect(guides[1]).not.toHaveClass("is-continuing");
+  });
+
+  it("continues ancestor guides only when that ancestor has following siblings", () => {
+    const { container } = renderRow({
+      catalogNode: node({ node_id: "middle-child", title: "Middle child", node_kind: "point" }),
+      level: 3,
+      hasNextSibling: true,
+      ancestorGuideContinuations: [true, false],
+    });
+
+    const guides = container.querySelectorAll(".catalog-sidebar-guide");
+    expect(guides).toHaveLength(3);
+    expect(guides[0]).toHaveClass("is-continuing");
+    expect(guides[1]).not.toHaveClass("is-continuing");
+    expect(guides[2]).toHaveClass("is-current");
+    expect(guides[2]).toHaveClass("is-continuing");
+    expect(guides[2]).not.toHaveClass("is-terminal");
   });
 
   it("auto-expands valid collapsed directory drop targets after the hover delay", () => {

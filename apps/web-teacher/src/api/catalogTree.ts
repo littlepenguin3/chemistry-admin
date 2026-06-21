@@ -411,6 +411,13 @@ export type CatalogNodeMovePayload = {
   display_order?: number | null;
 };
 
+export type CatalogNodeCopyPayload = {
+  chapter_id?: string | null;
+  parent_id?: string | null;
+  title?: string | null;
+  include_subtree?: boolean;
+};
+
 export type CatalogPointContentPayload = {
   point_title: string;
   teacher_note?: string | null;
@@ -458,6 +465,10 @@ export function updateCatalogNode(nodeId: string, payload: CatalogNodeUpdatePayl
 
 export function moveCatalogNode(nodeId: string, payload: CatalogNodeMovePayload): Promise<CatalogNodeDetail> {
   return postJson<CatalogNodeDetail>(`/api/admin/catalog/nodes/${encodeURIComponent(nodeId)}/move`, payload);
+}
+
+export function copyCatalogNode(nodeId: string, payload: CatalogNodeCopyPayload): Promise<CatalogNodeDetail> {
+  return postJson<CatalogNodeDetail>(`/api/admin/catalog/nodes/${encodeURIComponent(nodeId)}/copy`, payload);
 }
 
 export function reorderCatalogNodes(items: Array<{ node_id: string; display_order: number }>): Promise<{ updated: number }> {

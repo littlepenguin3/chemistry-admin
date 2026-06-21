@@ -33,7 +33,7 @@ export type CatalogTreeRowAction =
   | "restore"
   | "publish"
   | "unpublish"
-  | "copy-id"
+  | "copy-node"
   | "move-before"
   | "move-after";
 
@@ -66,7 +66,7 @@ function actionIcon(action: CatalogTreeRowAction): ReactNode {
     restore: <RotateCcw size={14} />,
     publish: <CheckCircle2 size={14} />,
     unpublish: <Ban size={14} />,
-    "copy-id": <Copy size={14} />,
+    "copy-node": <Copy size={14} />,
     "move-before": <MoveUp size={14} />,
     "move-after": <MoveDown size={14} />,
   };
@@ -84,7 +84,7 @@ function buildMenuItems(node: CatalogNodeCard): MenuProps["items"] {
     { key: "move-before", icon: actionIcon("move-before"), label: "上移一位" },
     { key: "move-after", icon: actionIcon("move-after"), label: "下移一位" },
     { type: "divider" },
-    { key: "copy-id", icon: actionIcon("copy-id"), label: "复制 Node ID" },
+    { key: "copy-node", icon: actionIcon("copy-node"), label: "复制节点" },
     node.status === "archived"
       ? { key: "restore", icon: actionIcon("restore"), label: "恢复节点" }
       : {
@@ -96,11 +96,57 @@ function buildMenuItems(node: CatalogNodeCard): MenuProps["items"] {
   ].filter(Boolean) as MenuProps["items"];
 }
 
-function CatalogTreeGuides({ level }: { level: number }) {
+type CatalogTreeGuide = {
+  current: boolean;
+  continuing: boolean;
+  terminal: boolean;
+};
+
+type CatalogTreeNodeApi = NodeRendererProps<CatalogArboristNode>["node"];
+
+function buildCatalogTreeGuides(node: CatalogTreeNodeApi): CatalogTreeGuide[] {
+  const level = Math.max(0, node.level);
+  if (level === 0) return [];
+
+  const guides: CatalogTreeGuide[] = Array.from({ length: level }, () => ({
+    current: false,
+    continuing: true,
+    terminal: false,
+  }));
+  const currentIndex = level - 1;
+  const currentContinues = Boolean(node.nextSibling);
+  guides[currentIndex] = {
+    current: true,
+    continuing: currentContinues,
+    terminal: !currentContinues,
+  };
+
+  let ancestor = node.parent;
+  for (let index = currentIndex - 1; index >= 0; index -= 1) {
+    if (ancestor && !ancestor.isRoot) {
+      guides[index].continuing = Boolean(ancestor.nextSibling);
+      ancestor = ancestor.parent;
+    }
+  }
+  return guides;
+}
+
+function CatalogTreeGuides({ node }: { node: CatalogTreeNodeApi }) {
+  const guides = buildCatalogTreeGuides(node);
   return (
     <span className="catalog-sidebar-guides" aria-hidden="true">
-      {Array.from({ length: Math.max(0, level) }).map((_, index) => (
-        <span key={index} />
+      {guides.map((guide, index) => (
+        <span
+          className={[
+            "catalog-sidebar-guide",
+            guide.current ? "is-current" : "",
+            guide.continuing ? "is-continuing" : "",
+            guide.terminal ? "is-terminal" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          key={index}
+        />
       ))}
     </span>
   );
@@ -174,6 +220,7 @@ export function CatalogTreeRow({
         node.level > 0 ? "is-nested" : "",
         node.isSelected ? "is-selected" : "",
         node.isOpen ? "is-open" : "",
+        node.level > 0 && !node.nextSibling ? "is-last-sibling" : "",
         node.isDragging ? "is-dragging" : "",
         isDirectoryDropHover ? "will-receive-drop" : "",
       ]
@@ -185,6 +232,7 @@ export function CatalogTreeRow({
           ...style,
           "--catalog-elbow-left": `${13 + Math.max(0, node.level - 1) * 22}px`,
           "--catalog-elbow-width": "10px",
+          "--catalog-tree-half-row": "19px",
         } as CSSProperties & Record<string, string>
       }
       onMouseEnter={() => setIsPointerDragHover(true)}
@@ -192,7 +240,7 @@ export function CatalogTreeRow({
       onDragEnter={() => setIsPointerDragHover(true)}
       onDragLeave={() => setIsPointerDragHover(false)}
     >
-      <CatalogTreeGuides level={node.level} />
+      <CatalogTreeGuides node={node} />
       <div
         role="button"
         tabIndex={0}

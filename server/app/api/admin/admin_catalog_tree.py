@@ -8,6 +8,7 @@ from server.app.auth import AuthUser, require_teacher_console_user
 from server.app.catalog_tree_schemas import (
     CatalogEquationAssistRequest,
     CatalogEquationAssistResponse,
+    CatalogNodeCopyRequest,
     CatalogEquationPreviewRequest,
     CatalogEquationPreviewResponse,
     CatalogNodeCreateRequest,
@@ -25,6 +26,7 @@ from server.app.domains.catalog_tree.ai_context import catalog_point_ai_context,
 from server.app.domains.catalog_tree.jobs import catalog_point_job_state, trigger_catalog_point_job
 from server.app.domains.catalog_tree.tree import (
     bind_existing_media,
+    copy_node,
     create_node,
     get_node_detail,
     list_chapter_roots,
@@ -96,6 +98,15 @@ async def admin_catalog_move_node(
     user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return move_node(node_id=node_id, payload=payload, user=user)
+
+
+@router.post("/nodes/{node_id}/copy")
+async def admin_catalog_copy_node(
+    payload: CatalogNodeCopyRequest,
+    node_id: str = Path(min_length=1),
+    user: AuthUser = Depends(require_teacher_console_user),
+) -> dict[str, Any]:
+    return copy_node(node_id=node_id, payload=payload, user=user)
 
 
 @router.post("/nodes/reorder")

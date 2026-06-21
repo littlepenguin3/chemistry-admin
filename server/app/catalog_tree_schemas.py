@@ -24,6 +24,13 @@ class CatalogNodeCreateRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class CatalogNodeCopyRequest(BaseModel):
+    chapter_id: str | None = None
+    parent_id: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    include_subtree: bool = True
+
+
 class CatalogNodeUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     summary: str | None = None
@@ -114,7 +121,7 @@ class CatalogEquationAssistRequest(BaseModel):
 
 class CatalogEquationAssistDraft(BaseModel):
     draft_text: str
-    source: str = "deterministic"
+    source: str = "ai"
     rationale: str = ""
     row_order: int | None = None
     replacement_text: str | None = None

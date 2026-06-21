@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-
 import catalogTreeApiSource from "../../api/catalogTree.ts?raw";
 import advancedPanelSource from "./CatalogAdvancedPanel.tsx?raw";
 import aiContextPanelSource from "./CatalogAiContextPanel.tsx?raw";
@@ -57,7 +56,7 @@ describe("catalog tree UI contracts", () => {
     expect(workspaceSource).toContain("}, [chapterId]);");
     expect(workspaceSource).toContain('treeScopeKey={chapterId || ""}');
     expect(workspaceSource).not.toContain("chapter-select");
-    expect(workspaceSource).not.toMatch(/import\s*\{[^}]*\bSelect\b[^}]*\}\s*from\s*"antd"/);
+    expect(workspaceSource).toContain("<Dropdown");
     expect(editorSource).toContain("catalog-editor-empty-state");
     expect(editorSource).toContain("<CatalogEditorHeader");
     expect(editorSource).toContain('className="catalog-editor-tabs"');
@@ -87,6 +86,12 @@ describe("catalog tree UI contracts", () => {
     expect(contentPanelSource).toContain("catalog-equation-natural-candidate");
     expect(contentPanelSource).toContain("catalog-equation-natural-supplemental");
     expect(contentPanelSource).toContain("catalog-equation-natural-empty");
+    expect(contentPanelSource).toContain("CatalogEquationCodeEditor");
+    expect(contentPanelSource).toContain("catalog-equation-workbench");
+    expect(contentPanelSource).toContain("catalog-equation-preview-pane");
+    expect(contentPanelSource).toContain("catalog-equation-input-pane");
+    expect(contentPanelSource).toContain("catalog-equation-code-editor");
+    expect(contentPanelSource).toContain("catalog-equation-code-gutter");
     expect(contentPanelSource).toContain("applyCandidate(candidate)");
     expect(contentPanelSource).toContain("runEquationAssist(equation.row_order)");
     expect(contentPanelSource).toContain('mode: "suggest"');
@@ -96,6 +101,14 @@ describe("catalog tree UI contracts", () => {
     expect(contentPanelSource).toContain("previewCatalogReactionEquations(rows, textValue)");
     expect(contentPanelSource).toContain("assistCatalogReactionEquations");
     expect(contentPanelSource).toContain("catalog-equation-natural-editor");
+    expect(contentPanelSource).toContain("AI 校对本行");
+    expect(contentPanelSource).toContain("AI 校对全部");
+    expect(contentPanelSource).toContain("查看 AI 分析");
+    expect(contentPanelSource).not.toContain("系统理解为");
+    expect(contentPanelSource).not.toContain("系统校对");
+    expect(contentPanelSource).not.toContain("推荐采用");
+    expect(contentPanelSource).not.toContain("查看识别详情");
+    expect(contentPanelSource).not.toContain("重新检查");
     expect(contentPanelSource).not.toContain("assistAvailable");
     expect(contentPanelSource).not.toContain("applyDrafts");
     expect(contentPanelSource).not.toContain("assistDrafts.length ?");
@@ -160,6 +173,13 @@ describe("catalog tree UI contracts", () => {
     expect([treeSource, rowSource].join("\n")).not.toContain("ArrowDownOutlined");
   });
 
+  it("extends sidebar guide lines across Arborist rows while keeping terminal branches L-shaped", () => {
+    expect(treeSource).toContain("rowHeight={38}");
+    expect(rowSource).toContain('"--catalog-tree-half-row": "19px"');
+    expect(rowSource).toContain("is-terminal");
+    expect(rowSource).toContain("is-continuing");
+  });
+
   it("keeps add wording chapter-oriented instead of root-node oriented", () => {
     expect(workspaceSource).not.toContain("PlusOutlined");
     expect(workspaceSource).not.toContain("<Space.Compact>");
@@ -172,6 +192,18 @@ describe("catalog tree UI contracts", () => {
     expect(workspaceSource).toContain("复用已有实验");
     expect(workspaceSource).toContain("同步添加到当前目录");
     expect(workspaceSource).toContain("canonical_point_id");
+  });
+
+  it("uses a copy-node dialog instead of exposing Node ID copying in the tree menu", () => {
+    expect(rowSource).toContain('"copy-node"');
+    expect(rowSource).toContain("复制节点");
+    expect(rowSource).not.toContain('"copy-id"');
+    expect(rowSource).not.toContain("复制 Node ID");
+    expect(treeSource).toContain("onCopyNode");
+    expect(workspaceSource).toContain("copyIntent");
+    expect(workspaceSource).toContain("CatalogCopyDestinationTree");
+    expect(catalogTreeApiSource).toContain("copyCatalogNode");
+    expect(catalogTreeApiSource).toContain("/copy");
   });
 
   it("renders editor status labels in Chinese instead of backend enum text", () => {

@@ -53,7 +53,7 @@ describe("catalog equation review model", () => {
     expect(model.rows).toHaveLength(1);
     expect(model.rows[0].candidates).toHaveLength(1);
     expect(model.rows[0].candidates[0]).toMatchObject({
-      sourceLabel: "系统 + AI",
+      sourceLabel: "AI 校对",
       replacement_text: "2 H2 + O2 → 2 H2O",
       supplemental: false,
     });
@@ -97,7 +97,15 @@ describe("catalog equation review model", () => {
       },
     ]);
 
-    expect(model.rows[0].candidates).toHaveLength(1);
-    expect(model.rows[0].candidates[0].sourceLabel).toBe("系统校对");
+    expect(model.rows[0].candidates).toHaveLength(0);
+  });
+
+  it("does not turn parser suggestions into adoptable system candidates", () => {
+    const model = buildEquationReviewModel(previewResponse(), []);
+
+    expect(model.rows).toHaveLength(1);
+    expect(model.rows[0].equation.suggested_display).toBe("2 H2 + O2 → 2 H2O");
+    expect(model.rows[0].candidates).toEqual([]);
+    expect(model.supplementalCandidates).toEqual([]);
   });
 });

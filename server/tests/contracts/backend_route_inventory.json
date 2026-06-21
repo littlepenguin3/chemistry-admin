@@ -94,6 +94,12 @@
     },
     {
       "method": "POST",
+      "path": "/api/admin/catalog/nodes/{node_id}/copy",
+      "name": "admin_catalog_copy_node",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
       "path": "/api/admin/catalog/nodes/{node_id}/media-bindings",
       "name": "admin_catalog_bind_media",
       "owner": "admin-api"

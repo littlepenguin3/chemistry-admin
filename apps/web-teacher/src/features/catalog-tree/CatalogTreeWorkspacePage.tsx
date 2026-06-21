@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { App as AntApp, Button, Dropdown, Flex, Form, Input, Modal, Radio, Space, Tag, Typography } from "antd";
+import { App as AntApp, Button, Dropdown, Flex, Form, Input, Modal, Radio, Select, Space, Tag, Typography } from "antd";
 import { DownOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { FlaskConical, Folder } from "lucide-react";
+import { ChevronDown, ChevronRight, FlaskConical, Folder, FolderOpen } from "lucide-react";
 
-import type { CatalogNodeCard, CatalogNodeKind } from "../../api/catalogTree";
+import { listCatalogChildren, type CatalogNodeCard, type CatalogNodeKind } from "../../api/catalogTree";
 import { PageTitle } from "../../components/PageTitle";
 import { QueryState } from "../../components/QueryState";
 import { formatChapterTitle } from "../../lib/resourceUtils";
@@ -22,9 +22,146 @@ type CreateIntent = {
   kind: CatalogNodeKind;
 };
 
+type CopyIntent = {
+  node: CatalogNodeCard;
+};
+
+type CopyFormValues = {
+  title: string;
+};
+
+type CopyDestinationNode = {
+  node: CatalogNodeCard;
+  children: CopyDestinationNode[];
+  loaded: boolean;
+  open: boolean;
+  loading: boolean;
+};
+
 function kindIcon(kind: CatalogNodeKind) {
   if (kind === "point") return <FlaskConical size={14} />;
   return <Folder size={14} />;
+}
+
+function copyTitle(title: string) {
+  return `${title || "未命名节点"} 副本`;
+}
+
+function toCopyDestinationNodes(nodes: CatalogNodeCard[]): CopyDestinationNode[] {
+  return nodes
+    .filter((node) => node.node_kind === "directory")
+    .map((node) => ({
+      node,
+      children: [],
+      loaded: false,
+      open: false,
+      loading: false,
+    }));
+}
+
+function updateCopyDestinationNode(
+  nodes: CopyDestinationNode[],
+  nodeId: string,
+  updater: (node: CopyDestinationNode) => CopyDestinationNode,
+): CopyDestinationNode[] {
+  return nodes.map((node) => {
+    if (node.node.node_id === nodeId) return updater(node);
+    return { ...node, children: updateCopyDestinationNode(node.children, nodeId, updater) };
+  });
+}
+
+function CatalogCopyDestinationTree({
+  chapterId,
+  roots,
+  selectedParentId,
+  onSelectParent,
+}: {
+  chapterId?: string;
+  roots: CatalogNodeCard[];
+  selectedParentId: string | null;
+  onSelectParent: (parentId: string | null) => void;
+}) {
+  const { message } = AntApp.useApp();
+  const [tree, setTree] = useState<CopyDestinationNode[]>([]);
+
+  useEffect(() => {
+    setTree(toCopyDestinationNodes(roots));
+  }, [chapterId, roots]);
+
+  const toggleDirectory = async (target: CopyDestinationNode) => {
+    if (target.loaded) {
+      setTree((existing) =>
+        updateCopyDestinationNode(existing, target.node.node_id, (node) => ({
+          ...node,
+          open: !node.open,
+        })),
+      );
+      return;
+    }
+    setTree((existing) =>
+      updateCopyDestinationNode(existing, target.node.node_id, (node) => ({
+        ...node,
+        loading: true,
+        open: true,
+      })),
+    );
+    try {
+      const response = await listCatalogChildren(target.node.node_id);
+      setTree((existing) =>
+        updateCopyDestinationNode(existing, target.node.node_id, (node) => ({
+          ...node,
+          children: toCopyDestinationNodes(response.children),
+          loaded: true,
+          loading: false,
+          open: true,
+        })),
+      );
+    } catch {
+      message.error("目标目录加载失败");
+      setTree((existing) =>
+        updateCopyDestinationNode(existing, target.node.node_id, (node) => ({
+          ...node,
+          loading: false,
+        })),
+      );
+    }
+  };
+
+  const renderNodes = (items: CopyDestinationNode[], depth = 0) =>
+    items.map((item) => (
+      <div key={item.node.node_id}>
+        <div className={`catalog-copy-target-row ${selectedParentId === item.node.node_id ? "is-selected" : ""}`} style={{ paddingLeft: 10 + depth * 18 }}>
+          <Button
+            type="text"
+            size="small"
+            className="catalog-copy-target-toggle"
+            icon={item.open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            loading={item.loading}
+            onClick={() => void toggleDirectory(item)}
+            aria-label={item.open ? "收起目录" : "展开目录"}
+          />
+          <button type="button" className="catalog-copy-target-button" onClick={() => onSelectParent(item.node.node_id)}>
+            <span className="catalog-copy-target-icon">{item.open ? <FolderOpen size={16} /> : <Folder size={16} />}</span>
+            <span>{item.node.title}</span>
+          </button>
+        </div>
+        {item.open && item.children.length ? renderNodes(item.children, depth + 1) : null}
+      </div>
+    ));
+
+  return (
+    <div className="catalog-copy-target-tree">
+      <button
+        type="button"
+        className={`catalog-copy-root-target ${selectedParentId === null ? "is-selected" : ""}`}
+        onClick={() => onSelectParent(null)}
+      >
+        <Folder size={16} />
+        <span>章节根目录</span>
+      </button>
+      {tree.length ? renderNodes(tree) : <Text type="secondary">当前章节还没有可选目录，可以复制到章节根目录。</Text>}
+    </div>
+  );
 }
 
 export function CatalogTreeWorkspacePage() {
@@ -34,9 +171,14 @@ export function CatalogTreeWorkspacePage() {
   const [searchText, setSearchText] = useState("");
   const [reuseSearchText, setReuseSearchText] = useState("");
   const [createIntent, setCreateIntent] = useState<CreateIntent | null>(null);
+  const [copyIntent, setCopyIntent] = useState<CopyIntent | null>(null);
+  const [copyChapterId, setCopyChapterId] = useState<string>();
+  const [copyParentId, setCopyParentId] = useState<string | null>(null);
   const [createForm] = Form.useForm<CatalogNodeFormValues>();
+  const [copyForm] = Form.useForm<CopyFormValues>();
   const chapters = useCatalogChapters();
   const roots = useCatalogRoots(chapterId);
+  const copyRoots = useCatalogRoots(copyChapterId);
   const selectedDetail = useCatalogNodeDetail(selectedNodeId || undefined);
   const selectedParentId = selectedDetail.data?.node.parent_id || undefined;
   const selectedSiblingChildren = useCatalogChildren(selectedParentId, Boolean(selectedParentId));
@@ -73,6 +215,13 @@ export function CatalogTreeWorkspacePage() {
     }
   }, [createForm, createIntent]);
 
+  useEffect(() => {
+    if (!copyIntent) return;
+    setCopyChapterId(copyIntent.node.chapter_id);
+    setCopyParentId(copyIntent.node.parent_id || null);
+    copyForm.setFieldsValue({ title: copyTitle(copyIntent.node.title) });
+  }, [copyForm, copyIntent]);
+
   const chapterOptions = (chapters.data || []).map((chapter) => ({
     value: chapter.chapter_id,
     label: formatChapterTitle(chapter.chapter_title, chapter.chapter_id),
@@ -99,6 +248,10 @@ export function CatalogTreeWorkspacePage() {
     setCreateIntent({ chapterId, parentId: parentId || null, kind });
   };
 
+  const openCopy = (node: CatalogNodeCard) => {
+    setCopyIntent({ node });
+  };
+
   const submitCreate = async () => {
     if (!createIntent) return;
     const values = await createForm.validateFields();
@@ -108,6 +261,27 @@ export function CatalogTreeWorkspacePage() {
         setCreateIntent(null);
       },
     });
+  };
+
+  const submitCopy = async () => {
+    if (!copyIntent || !copyChapterId) return;
+    const values = await copyForm.validateFields();
+    try {
+      const detail = await mutations.copyNode.mutateAsync({
+        nodeId: copyIntent.node.node_id,
+        payload: {
+          chapter_id: copyChapterId,
+          parent_id: copyParentId,
+          title: values.title,
+          include_subtree: true,
+        },
+      });
+      setCopyIntent(null);
+      setChapterId(detail.node.chapter_id);
+      setSelectedNodeId(detail.node.node_id);
+    } catch {
+      // Mutation already reports the user-facing error.
+    }
   };
 
   const selectNode = (node: CatalogNodeCard) => {
@@ -200,6 +374,7 @@ export function CatalogTreeWorkspacePage() {
             onSelect={selectNode}
             onAddRoot={(kind) => openCreate(kind)}
             onAddChild={(node, kind = "directory") => openCreate(kind, node.node_id)}
+            onCopyNode={openCopy}
             onMove={(nodeId, payload) => mutations.moveNode.mutateAsync({ nodeId, payload })}
             onReorder={(items) => mutations.reorderNodes.mutateAsync(items)}
             onRefreshRoots={() => roots.refetch()}
@@ -296,6 +471,42 @@ export function CatalogTreeWorkspacePage() {
           </Form.Item>
           <Form.Item name="student_description" label="学生端卡片描述">
             <Input.TextArea autoSize={{ minRows: 2, maxRows: 3 }} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="复制节点"
+        open={Boolean(copyIntent)}
+        onCancel={() => setCopyIntent(null)}
+        onOk={submitCopy}
+        okButtonProps={{ loading: mutations.copyNode.isPending, disabled: !copyChapterId }}
+        destroyOnHidden
+        width={760}
+      >
+        <Form form={copyForm} layout="vertical">
+          <Form.Item name="title" label="副本名称" rules={[{ required: true, message: "请输入副本名称" }]}>
+            <Input autoFocus />
+          </Form.Item>
+          <Form.Item label="目标章节">
+            <Select
+              value={copyChapterId}
+              options={chapterOptions}
+              onChange={(value) => {
+                setCopyChapterId(value);
+                setCopyParentId(null);
+              }}
+            />
+          </Form.Item>
+          <Form.Item label="目标目录">
+            <QueryState loading={copyRoots.isLoading} error={copyRoots.error} empty={false}>
+              <CatalogCopyDestinationTree
+                chapterId={copyChapterId}
+                roots={copyRoots.data?.nodes || []}
+                selectedParentId={copyParentId}
+                onSelectParent={setCopyParentId}
+              />
+            </QueryState>
           </Form.Item>
         </Form>
       </Modal>

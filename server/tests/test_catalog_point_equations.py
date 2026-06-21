@@ -10,7 +10,6 @@ from server.app.domains.catalog_tree.equations import (
     _sanitize_ai_drafts,
     equation_rows_from_inputs,
     normalize_reaction_equations,
-    reaction_equation_drafts,
     reaction_derived_terms,
     reaction_principle_text,
 )
@@ -101,19 +100,6 @@ def test_multiline_preview_splits_non_empty_lines_in_order() -> None:
     ]
 
 
-def test_equation_drafts_are_candidates_only() -> None:
-    drafts = reaction_equation_drafts([{"raw_text": "H2 + O2 = H2O"}])
-
-    assert len(drafts) == 1
-    assert drafts[0]["draft_text"] == "2 H2 + O2 \u2192 2 H2O"
-    assert drafts[0]["replacement_text"] == "2 H2 + O2 \u2192 2 H2O"
-    assert drafts[0]["canonical_display"] == "2 H2 + O2 \u2192 2 H2O"
-    assert drafts[0]["canonical_mhchem"] == "\\ce{2 H2 + O2 -> 2 H2O}"
-    assert drafts[0]["source"] == "deterministic"
-    assert drafts[0]["row_order"] == 1
-    assert drafts[0]["supplemental"] is False
-
-
 def test_ai_drafts_are_normalized_before_becoming_adoptable() -> None:
     normalized_rows = normalize_reaction_equations([{"raw_text": "H2 + O2 = H2O"}])
     drafts = _sanitize_ai_drafts(
@@ -124,8 +110,8 @@ def test_ai_drafts_are_normalized_before_becoming_adoptable() -> None:
     assert len(drafts) == 1
     assert drafts[0]["source"] == "ai"
     assert drafts[0]["row_order"] == 1
-    assert drafts[0]["replacement_text"] == "2 H2 + O2 \u2192 2 H2O"
-    assert drafts[0]["canonical_mhchem"] == "\\ce{2 H2 + O2 -> 2 H2O}"
+    assert drafts[0]["replacement_text"] == "H2 + O2 \u2192 H2O"
+    assert drafts[0]["canonical_mhchem"] == "\\ce{H2 + O2 -> H2O}"
     assert drafts[0]["validation_status"] == "warning"
     assert drafts[0]["supplemental"] is False
 
@@ -207,7 +193,7 @@ def test_preview_route_prefers_multiline_text_and_keeps_response_authoritative()
 def test_assist_route_returns_drafts_or_unavailable_without_saving(monkeypatch) -> None:
     monkeypatch.setattr(
         "server.app.domains.catalog_tree.equations._try_ai_equation_drafts",
-        lambda payload, normalized_rows: ([], "AI 未配置，使用系统建议。"),
+        lambda payload, normalized_rows: ([], "AI 未配置，无法校对。"),
     )
     draft_response = asyncio.run(
         admin_catalog_assist_equations(
@@ -223,8 +209,8 @@ def test_assist_route_returns_drafts_or_unavailable_without_saving(monkeypatch) 
     )
 
     assert draft_response.available is False
-    assert draft_response.drafts[0].draft_text == "2 H2 + O2 → 2 H2O"
-    assert draft_response.drafts[0].row_order == 1
+    assert draft_response.drafts == []
+    assert "AI 未配置" in (draft_response.reason or "")
     assert unavailable_response.available is False
     assert unavailable_response.drafts == []
     assert "AI 未配置" in (unavailable_response.reason or "")
@@ -235,7 +221,7 @@ def test_assist_route_prefers_ai_candidates_after_parser_preview(monkeypatch) ->
         assert normalized_rows[0]["canonical_display"] == "H2 + O2 → H2O"
         return (
             [{"draft_text": "2 H2 + O2 → 2 H2O", "source": "ai", "rationale": "已补齐配平。", "row_order": 1}],
-            "AI 已根据系统理解生成建议；采用后仍会重新检查。",
+            "AI 已根据当前输入生成建议；采用后会重新渲染预览。",
         )
 
     monkeypatch.setattr("server.app.domains.catalog_tree.equations._try_ai_equation_drafts", fake_ai)
