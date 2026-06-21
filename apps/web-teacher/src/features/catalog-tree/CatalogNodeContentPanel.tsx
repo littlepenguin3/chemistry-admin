@@ -273,8 +273,8 @@ export function CatalogNodeContentPanel({
       </Flex>
       <Form form={pointForm} layout="vertical" onFinish={onSavePointContent}>
         <div className="catalog-field-scope-note">
-          <Tag color="green">共享实验字段</Tag>
-          <Text type="secondary">点位名、原理、现象、安全说明、视频和相关实验按同一个实验保存。</Text>
+          <Tag color="green">多目录共享实验</Tag>
+          <Text type="secondary">点位名、原理、现象、安全说明、视频和相关实验属于同一个多目录共享实验。</Text>
         </div>
         {activePlacementCount > 1 ? (
           <Alert
@@ -284,7 +284,7 @@ export function CatalogNodeContentPanel({
             message={`此实验已同步到 ${activePlacementCount} 个目录位置`}
             description={
               <div className="catalog-shared-content-copy">
-                <span>实验内容、视频、AI 证据和相关实验会在所有位置同步更新。</span>
+                <span>这个多目录共享实验的内容、视频、AI 证据和相关实验会在所有复用位置同步更新。</span>
                 {reusedPlacements.length ? (
                   <div className="catalog-shared-placement-list">
                     {reusedPlacements.slice(0, 5).map((placement) => (
@@ -314,7 +314,7 @@ export function CatalogNodeContentPanel({
         {principleMode === "equation" ? (
           <div className="catalog-equation-natural-editor">
             <div className="catalog-equation-inline-help">
-              条件、过量、酸碱环境或说明请写在同一行的 <code>//</code> 后面；一行仍然只代表一个方程式。
+              条件、过量、酸碱环境或补充说明请写在同一行的 <code>//</code> 后面；一行仍然只代表一个方程式。
             </div>
             <div className="catalog-equation-natural-header">
               <div className="catalog-equation-natural-copy">
@@ -362,7 +362,7 @@ export function CatalogNodeContentPanel({
                                   equation.canonical_display || equation.raw_text
                                 )}
                                 {equation.annotation_text ? (
-                                  <div className="catalog-equation-inline-note">说明：{equation.annotation_text}</div>
+                                  <div className="catalog-equation-inline-note">补充说明：{equation.annotation_text}</div>
                                 ) : null}
                               </div>
                             </div>
@@ -380,7 +380,7 @@ export function CatalogNodeContentPanel({
                                           candidate.canonical_display
                                         )}
                                         {candidate.annotation_text ? (
-                                          <div className="catalog-equation-inline-note">说明：{candidate.annotation_text}</div>
+                                          <div className="catalog-equation-inline-note">补充说明：{candidate.annotation_text}</div>
                                         ) : null}
                                       </div>
                                       <Button className="catalog-equation-apply-button" size="small" onClick={() => applyCandidate(candidate)}>
@@ -411,7 +411,7 @@ export function CatalogNodeContentPanel({
                               <div className="catalog-equation-natural-rendered">
                                 {candidate.canonical_mhchem ? <AssistantMarkdownContent text={`$${candidate.canonical_mhchem}$`} inline /> : candidate.canonical_display}
                                 {candidate.annotation_text ? (
-                                  <div className="catalog-equation-inline-note">说明：{candidate.annotation_text}</div>
+                                  <div className="catalog-equation-inline-note">补充说明：{candidate.annotation_text}</div>
                                 ) : null}
                               </div>
                               <Button className="catalog-equation-apply-button" size="small" onClick={() => applyCandidate(candidate)}>

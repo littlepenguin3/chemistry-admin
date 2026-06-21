@@ -31,13 +31,11 @@ def student_media_asset_file(asset_id: str) -> tuple[Path, str, str]:
                 FROM media_assets ma
                 JOIN experiment_catalog_point_media_bindings mb ON mb.media_asset_id = ma.id
                 JOIN experiment_catalog_nodes n ON n.id = mb.node_id
-                JOIN experiment_catalog_point_content pc ON pc.node_id = n.id
                 WHERE ma.id = CAST(:asset_id AS uuid)
                   AND ma.upload_status = 'ready'
                   AND mb.binding_status = 'published'
                   AND n.node_kind = 'point'
                   AND n.status = 'published'
-                  AND pc.content_status = 'published'
                 LIMIT 1
                 """
             ),
@@ -60,13 +58,11 @@ def student_media_thumbnail_file(asset_id: str) -> tuple[Path, str, str]:
                 FROM media_assets ma
                 JOIN experiment_catalog_point_media_bindings mb ON mb.media_asset_id = ma.id
                 JOIN experiment_catalog_nodes n ON n.id = mb.node_id
-                JOIN experiment_catalog_point_content pc ON pc.node_id = n.id
                 WHERE ma.id = CAST(:asset_id AS uuid)
                   AND ma.upload_status = 'ready'
                   AND mb.binding_status = 'published'
                   AND n.node_kind = 'point'
                   AND n.status = 'published'
-                  AND pc.content_status = 'published'
                   AND ma.thumbnail_relative_path IS NOT NULL
                 LIMIT 1
                 """

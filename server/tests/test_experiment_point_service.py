@@ -37,7 +37,7 @@ class _FakeSession:
         return _Result()
 
 
-def test_catalog_point_validation_requires_title_and_saved_content() -> None:
+def test_catalog_point_validation_requires_title_but_not_saved_content() -> None:
     invalid = validate_node_payload(
         {
             "node_id": "cat-point-1",
@@ -50,7 +50,7 @@ def test_catalog_point_validation_requires_title_and_saved_content() -> None:
 
     assert invalid["ok"] is False
     assert "Title is required" in invalid["errors"]
-    assert "Canonical point content has not been saved" in invalid["warnings"]
+    assert invalid["warnings"] == []
 
 
 def test_catalog_directory_validation_rejects_point_resources() -> None:

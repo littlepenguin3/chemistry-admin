@@ -40,7 +40,7 @@ Each saved or previewed reaction row may contain one annotation delimiter. Text 
 Example:
 
 ```text
-Mn^2+ + ClO- + 2OH- -> MnO2↓ + Cl- + H2O // condition: alkaline; note: NaClO solution provides OH-
+Mn^2+ + ClO- + 2OH- -> MnO2↓ + Cl- + H2O // NaClO溶液本身呈碱性，提供OH-
 ```
 
 This remains one reaction row. The note is not a second equation candidate.
@@ -72,10 +72,10 @@ They MUST NOT be merged into `reactants`, `products`, core `formulae`, balancing
 
 When AI imports or repairs experiment principle text, it SHOULD place explanatory prose on the same reaction line after `//`. If the teacher already has an annotation suffix and accepts an AI correction for only the equation core, the suffix MUST be preserved unless the teacher explicitly accepts annotation edits.
 
-AI SHOULD convert ambiguous bracket or prose notes into the explicit delimiter:
+AI SHOULD convert ambiguous bracket or prose notes into the explicit delimiter. The annotation suffix is a human-facing Chinese supplemental explanation, not a machine-label field, so AI MUST NOT emit labels such as `note:`, `condition:`, `amount:`, or `medium:`:
 
 ```text
-Mn^2+ + ClO- + 2OH- -> MnO2↓ + Cl- + H2O // condition: alkaline; note: NaClO solution itself is alkaline
+Mn^2+ + ClO- + 2OH- -> MnO2↓ + Cl- + H2O // NaClO溶液本身呈碱性，提供OH-
 ```
 
 ### Decision 5: Unicode ion normalization is part of the parsing contract
@@ -98,5 +98,5 @@ This applies to both equation core parsing and annotation formula extraction.
 
 ## Open Questions
 
-- Whether to display annotation text inline after the rendered equation or as a smaller "说明" line under the equation should be decided in implementation, as long as it remains visibly attached to the same reaction row.
+- Annotation text is displayed as a smaller "补充说明" line under the equation so teachers and students see Chinese prose instead of internal labels.
 - Whether `condition_tags` should use English enum keys, Chinese display labels, or both should follow the existing search/AI metadata conventions in the codebase.

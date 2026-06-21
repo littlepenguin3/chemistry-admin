@@ -88,8 +88,7 @@ def student_point_detail(*, node_id: str) -> dict[str, Any]:
         if node.get("canonical_point_status") == "archived":
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Point node not available")
         content = get_content(session, node["node_id"])
-        if not content or content.get("content_status") != "published":
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Point content not available")
+        published_content = content if content and content.get("content_status") == "published" else None
         path = breadcrumbs(session, node["node_id"])
         videos = student_videos(session, node["node_id"])
         related = related_links(session, node["node_id"], include_hidden=False, include_defaults=True)
@@ -100,16 +99,16 @@ def student_point_detail(*, node_id: str) -> dict[str, Any]:
             "placement_node_id": node["node_id"],
             "canonical_point_id": node.get("canonical_point_id") or node["node_id"],
             "chapter_id": node["chapter_id"],
-            "title": content.get("point_title") or node["title"],
+            "title": (published_content or {}).get("point_title") or node["title"],
             "summary": node.get("summary") or "",
             "point_card_presentation": node.get("point_card_presentation") or {},
             "breadcrumbs": path,
-            "principle_mode": content.get("principle_mode") or "text",
-            "principle_equation": content.get("principle_equation"),
-            "principle_text": content.get("principle_text"),
-            "reaction_equations": content.get("reaction_equations") if content.get("principle_mode") == "equation" else [],
-            "phenomenon_explanation": content.get("phenomenon_explanation"),
-            "safety_note": content.get("safety_note"),
+            "principle_mode": (published_content or {}).get("principle_mode") or "text",
+            "principle_equation": (published_content or {}).get("principle_equation"),
+            "principle_text": (published_content or {}).get("principle_text"),
+            "reaction_equations": published_content.get("reaction_equations") if published_content and published_content.get("principle_mode") == "equation" else [],
+            "phenomenon_explanation": (published_content or {}).get("phenomenon_explanation"),
+            "safety_note": (published_content or {}).get("safety_note"),
             "videos": videos,
             "has_video": bool(videos),
             "no_video_reason": None if videos else "No published video is bound to this point yet.",

@@ -5,14 +5,19 @@ import {
   buildCatalogNodeCreatePayload,
   buildCatalogPointContentPayload,
   buildCatalogRelatedLinksPayload,
+  catalogNodeActionCount,
   catalogStatusColor,
   catalogStatusDotClass,
+  catalogNodePrimaryStateClass,
+  catalogNodeStatusTooltip,
   catalogStatusLabel,
   displayCatalogPointTitle,
   hasDivergentPointTitle,
   hydrateCatalogNodeForm,
   hydrateCatalogPointContentForm,
   hydrateCatalogRelatedLinksForm,
+  matchesCatalogNodeStatusFilter,
+  resolveCatalogNodeStatus,
   siblingReorderItems,
 } from "./catalogTreeMappers";
 
@@ -134,7 +139,7 @@ describe("catalog tree mappers", () => {
     const detail = {
       node: { title: "Fallback title", node_kind: "point" },
       point_content: null,
-    } as CatalogNodeDetail;
+    } as unknown as CatalogNodeDetail;
 
     expect(hydrateCatalogPointContentForm(detail)).toMatchObject({
       point_title: "Fallback title",
@@ -179,11 +184,33 @@ describe("catalog tree mappers", () => {
     expect(hydrateCatalogPointContentForm(detail).reaction_equations_text).toBe("Cl2 + H2 = HCl\nCl2 + 2KBr = 2KCl + Br2");
   });
 
+  it("hydrates equation rows with normalized inline supplemental text", () => {
+    const detail = {
+      node: { title: "Annotated equation point", node_kind: "point" },
+      point_content: {
+        point_title: "Annotated equation point",
+        principle_mode: "equation",
+        principle_equation: "",
+        reaction_equations: [
+          {
+            raw_text: "H2 + O2 = H2O // note: heat gently",
+            equation_core: "H2 + O2 = H2O",
+            annotation_text: "需微热",
+            canonical_display: "H2 + O2 → H2O",
+            row_order: 1,
+          },
+        ],
+      },
+    } as unknown as CatalogNodeDetail;
+
+    expect(hydrateCatalogPointContentForm(detail).reaction_equations_text).toBe("H2 + O2 = H2O // 需微热");
+  });
+
   it("uses one visible point title and detects divergent stored titles", () => {
     const aligned = {
       node: { title: "氯水 + KBr", node_kind: "point" },
       point_content: { point_title: "氯水 + KBr" },
-    } as CatalogNodeDetail;
+    } as unknown as CatalogNodeDetail;
     const divergent = {
       node: { title: "Tree title", node_kind: "point" },
       point_content: { point_title: "Point title" },
@@ -195,7 +222,7 @@ describe("catalog tree mappers", () => {
     expect(hasDivergentPointTitle(divergent)).toBe(true);
   });
 
-  it("uses point node ids for editable related links", () => {
+  it("keeps generated related experiments readable and saves retained defaults as overrides", () => {
     const detail = {
       related_links: [
         {
@@ -207,16 +234,23 @@ describe("catalog tree mappers", () => {
           sort_order: 3,
           label: null,
           source: "generated_default",
+          metadata: { default_scope_label: "同目录默认" },
         },
       ],
-    } as CatalogNodeDetail;
+    } as unknown as CatalogNodeDetail;
 
     const form = hydrateCatalogRelatedLinksForm(detail);
-    expect(form.links?.[0]).toMatchObject({ target_node_id: "cat-target-a", relation_type: "manual" });
+    expect(form.links?.[0]).toMatchObject({
+      target_node_id: "cat-target-a",
+      target_title: "Generated neighbor",
+      relation_type: "generated_default",
+      source: "generated_default",
+      metadata: { default_scope_label: "同目录默认" },
+    });
     expect(
       buildCatalogRelatedLinksPayload({
         links: [
-          { target_node_id: "cat-target-a", relation_type: "manual", sort_order: 2, label: "Neighbor" },
+          { target_node_id: "cat-target-a", relation_type: "generated_default", sort_order: 2, label: "Neighbor" },
           { target_node_id: "cat-target-a", relation_type: "manual", sort_order: 3 },
           { target_node_id: "" },
         ],
@@ -225,10 +259,11 @@ describe("catalog tree mappers", () => {
       links: [
         {
           target_node_id: "cat-target-a",
-          relation_type: "manual",
+          relation_type: "default_override",
           hidden: false,
-          sort_order: 2,
+          sort_order: 1,
           label: "Neighbor",
+          metadata: {},
         },
       ],
     });
@@ -260,5 +295,97 @@ describe("catalog tree mappers", () => {
     expect(catalogStatusDotClass("draft")).toBe("is-draft");
     expect(catalogStatusDotClass("archived")).toBe("is-archived");
     expect(catalogStatusColor("draft")).toBe("default");
+  });
+
+  it("uses backend node status as the authoritative tree status", () => {
+    const detail = {
+      node: {
+        node_id: "cat-point-1",
+        title: "氯水 + KBr",
+        node_kind: "point",
+        status: "published",
+        has_point_content: true,
+        media_count: 1,
+        node_status: {
+          primary_state: "sync_attention",
+          primary_label: "同步异常",
+          primary_reason: "搜索或 AI 同步异常",
+          core_readiness: { content_fields: "complete", video: "present", missing_fields: [] },
+          visibility: { placement: "published", shared_content: "published", student_available: true },
+          async_consumption: { search_index: "failed", ai_evidence: "available" },
+          conditions: [],
+        },
+      },
+    } as unknown as CatalogNodeDetail;
+
+    expect(resolveCatalogNodeStatus(detail).primary_state).toBe("sync_attention");
+    expect(catalogNodePrimaryStateClass("sync_attention")).toBe("is-warning");
+    expect(catalogNodeStatusTooltip(detail)).toBe("同步异常：搜索或 AI 同步异常");
+  });
+
+  it("falls back to binary video readiness when node_status is absent", () => {
+    const point = {
+      node_id: "cat-point-no-video",
+      title: "Missing video",
+      node_kind: "point",
+      status: "published",
+      has_point_content: true,
+      media_count: 0,
+      validation: { ok: true, errors: [], warnings: [] },
+    } as never;
+
+    const status = resolveCatalogNodeStatus(point);
+
+    expect(status.primary_state).toBe("needs_video");
+    expect(status.core_readiness.video_label).toBe("无视频");
+    expect(status.visibility.student_available).toBe(true);
+  });
+
+  it("falls back to missing content before missing video", () => {
+    const point = {
+      node_id: "cat-point-no-content",
+      title: "Missing content",
+      node_kind: "point",
+      status: "published",
+      has_point_content: false,
+      media_count: 0,
+      validation: { ok: true, errors: [], warnings: [] },
+    } as never;
+
+    const status = resolveCatalogNodeStatus(point);
+
+    expect(status.primary_state).toBe("needs_content");
+    expect(status.primary_reason).toBe("三要素尚未填写");
+    expect(status.visibility.student_available).toBe(true);
+  });
+
+  it("matches focused status filters from primary and aggregate state", () => {
+    const directory = {
+      node_id: "cat-dir",
+      title: "Directory",
+      node_kind: "directory",
+      status: "published",
+      descendant_point_count: 6,
+      node_status: {
+        primary_state: "needs_content",
+        primary_label: "缺内容",
+        primary_reason: "2 个后代点位缺内容",
+        core_readiness: {
+          content_fields: "not_applicable",
+          video: "not_applicable",
+          missing_fields: [],
+          descendant_action_count: 2,
+          descendant_status_counts: { needs_content: 2, needs_video: 0, sync_attention: 1 },
+        },
+        visibility: { placement: "published", shared_content: "not_applicable", student_available: true },
+        async_consumption: { search_index: "not_applicable", ai_evidence: "not_applicable" },
+        conditions: [],
+      },
+    } as never;
+
+    expect(matchesCatalogNodeStatusFilter(directory, "needs_content")).toBe(true);
+    expect(matchesCatalogNodeStatusFilter(directory, "needs_video")).toBe(false);
+    expect(matchesCatalogNodeStatusFilter(directory, "sync_attention")).toBe(true);
+    expect(catalogNodeActionCount(directory)).toBe(3);
   });
 });

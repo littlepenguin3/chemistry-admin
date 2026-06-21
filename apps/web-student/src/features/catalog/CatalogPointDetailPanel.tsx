@@ -16,7 +16,7 @@ import { catalogPathLabel } from "./CatalogNodeCards";
 function studentEquationDisplayText(equation: NonNullable<StudentPointDetailResponse["reaction_equations"]>[number]): string {
   const core = equation.canonical_display || equation.equation_core || equation.raw_text;
   const annotation = equation.annotation_text?.trim();
-  return [core, annotation ? `说明：${annotation}` : ""].filter(Boolean).join("\n");
+  return [core, annotation ? `补充说明：${annotation}` : ""].filter(Boolean).join("\n");
 }
 
 export function CatalogPointDetailPanel({

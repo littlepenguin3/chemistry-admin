@@ -117,16 +117,16 @@ def test_multiline_preview_splits_non_empty_lines_in_order() -> None:
 def test_inline_annotation_stays_on_one_reaction_row_without_polluting_core_terms() -> None:
     raw = (
         "Mn\u00b2\u207a + ClO\u207b + 2OH\u207b -> MnO\u2082\u2193 + Cl\u207b + H\u2082O"
-        " // condition: alkaline; note: NaClO solution provides OH\u207b"
+        " // 碱性条件；NaClO溶液本身呈碱性，提供OH\u207b"
     )
     rows = equation_rows_from_inputs(multiline_text=raw)
     [row] = normalize_reaction_equations(rows)
 
     assert row["raw_text"] == raw
     assert row["equation_core"].startswith("Mn\u00b2\u207a + ClO\u207b")
-    assert row["annotation_text"] == "condition: alkaline; note: NaClO solution provides OH\u207b"
+    assert row["annotation_text"] == "碱性条件；NaClO溶液本身呈碱性，提供OH\u207b"
     assert row["canonical_display"]
-    assert "condition:" not in row["canonical_display"]
+    assert "碱性条件" not in row["canonical_display"]
     assert "NACLO" in row["annotation_formulae"]
     assert "OH" in row["annotation_formulae"]
     assert row["condition_tags"] == ["alkaline"]
@@ -136,8 +136,8 @@ def test_inline_annotation_stays_on_one_reaction_row_without_polluting_core_term
     assert "NACLO" not in row["products"]
 
     content = {"principle_mode": "equation", "reaction_equations": [row]}
-    assert "// condition: alkaline" in reaction_principle_text(content)
-    assert "// condition: alkaline" not in reaction_principle_text(content, include_annotations=False)
+    assert "// 碱性条件" in reaction_principle_text(content)
+    assert "// 碱性条件" not in reaction_principle_text(content, include_annotations=False)
     terms = reaction_derived_terms(content)
     assert "NACLO" not in terms["formulae"]
     assert "NACLO" in terms["annotation_formulae"]
@@ -149,7 +149,7 @@ def test_unparseable_annotated_core_preserves_annotation_without_local_errors() 
 
     assert row["validation_status"] == "valid"
     assert row["equation_core"] == "not a reaction"
-    assert row["annotation_text"] == "note: NaClO provides OH-"
+    assert row["annotation_text"] == "NaClO provides OH-"
     assert "NACLO" in row["annotation_formulae"]
     assert row["formulae"] == []
     assert row["reactants"] == []
@@ -181,8 +181,8 @@ def test_ai_core_correction_preserves_existing_inline_annotation_suffix() -> Non
 
     assert len(drafts) == 1
     assert drafts[0]["canonical_display"] == "2 H2 + O2 \u2192 2 H2O"
-    assert drafts[0]["replacement_text"] == "2 H2 + O2 \u2192 2 H2O // note: keep this condition"
-    assert drafts[0]["annotation_text"] == "note: keep this condition"
+    assert drafts[0]["replacement_text"] == "2 H2 + O2 \u2192 2 H2O // keep this condition"
+    assert drafts[0]["annotation_text"] == "keep this condition"
 
 
 def test_ai_drafts_are_not_rejected_by_local_parser_and_unmatched_rows_are_supplemental() -> None:
@@ -247,7 +247,7 @@ def test_reaction_context_helpers_keep_teacher_rows_without_formula_pollution() 
 
 def test_rag_queries_include_annotation_terms_without_core_participant_pollution() -> None:
     rows = normalize_reaction_equations(
-        [{"raw_text": "Mn^2+ + ClO- + 2OH- -> MnO2 + Cl- + H2O // condition: alkaline; note: NaClO solution provides OH-"}]
+        [{"raw_text": "Mn^2+ + ClO- + 2OH- -> MnO2 + Cl- + H2O // 碱性条件；NaClO solution provides OH-"}]
     )
     content = {"principle_mode": "equation", "reaction_equations": rows}
     terms = reaction_derived_terms(content)
@@ -300,7 +300,7 @@ def test_preview_route_round_trips_inline_annotation_fields() -> None:
     response = asyncio.run(
         admin_catalog_preview_equations(
             CatalogEquationPreviewRequest(
-                multiline_text="Mn^2+ + ClO- + 2OH- -> MnO2 + Cl- + H2O // condition: alkaline; note: NaClO solution provides OH-",
+                multiline_text="Mn^2+ + ClO- + 2OH- -> MnO2 + Cl- + H2O // note: NaClO solution provides OH-",
             ),
             user=_teacher_user(),
         )
@@ -309,14 +309,14 @@ def test_preview_route_round_trips_inline_annotation_fields() -> None:
     assert response.ok is True
     assert len(response.equations) == 1
     assert response.equations[0].equation_core == "Mn^2+ + ClO- + 2OH- -> MnO2 + Cl- + H2O"
-    assert response.equations[0].annotation_text == "condition: alkaline; note: NaClO solution provides OH-"
+    assert response.equations[0].annotation_text == "NaClO solution provides OH-"
     assert "NACLO" in response.equations[0].annotation_formulae
     assert "NACLO" not in response.equations[0].formulae
 
 
 def test_equation_ai_prompt_uses_single_leading_system_message() -> None:
     normalized_rows = normalize_reaction_equations(
-        [{"raw_text": "Mn^2+ + ClO- + 2OH- -> MnO2 + Cl- + H2O // condition: alkaline"}]
+        [{"raw_text": "Mn^2+ + ClO- + 2OH- -> MnO2 + Cl- + H2O // 碱性条件"}]
     )
     messages = _equation_ai_prompt(
         CatalogEquationAssistRequest(mode="suggest", multiline_text="Mn^2+ + ClO- -> MnO2"),
@@ -346,7 +346,7 @@ def test_equation_ai_prompt_teaches_annotation_only_rewrite_skill() -> None:
     user_payload = messages[1]["content"]
     assert "Return an AI draft for annotation-only rewrites too" in system_prompt
     assert "Never treat formula-internal parentheses as annotations" in system_prompt
-    assert "Draft: Mn2+ + ClO- + 2OH- -> MnO2↓ + Cl- + H2O // condition: alkaline" in system_prompt
+    assert "Draft: Mn2+ + ClO- + 2OH- -> MnO2↓ + Cl- + H2O // NaClO溶液本身呈碱性，提供OH-" in system_prompt
     assert raw in user_payload
 
 

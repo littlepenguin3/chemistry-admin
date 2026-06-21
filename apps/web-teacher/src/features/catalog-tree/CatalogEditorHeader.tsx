@@ -7,8 +7,11 @@ import type { CatalogNodeDetail } from "../../api/catalogTree";
 import {
   catalogStatusDotClass,
   catalogStatusLabel,
+  catalogNodePrimaryStateClass,
+  catalogNodeStatusTooltip,
   displayCatalogPointTitle,
   isPointCapable,
+  resolveCatalogNodeStatus,
 } from "./catalogTreeMappers";
 import type { CatalogMutations } from "./catalogTreeHooks";
 
@@ -78,19 +81,21 @@ function hasStudentCard(detail: CatalogNodeDetail, pointCapable: boolean): boole
   );
 }
 
-function validationSummary(validationIssues: number): SummaryItem {
+function nodeStatusSummary(detail: CatalogNodeDetail): SummaryItem {
+  const status = resolveCatalogNodeStatus(detail);
+  const isAttention = ["blocked", "needs_content", "needs_video", "sync_attention"].includes(status.primary_state);
   return {
-    key: "validation",
-    icon: validationIssues > 0 ? <AlertTriangle size={16} /> : <CircleCheck size={16} />,
-    label: "发布检查",
-    value: validationIssues > 0 ? `${validationIssues} 项待处理` : "通过",
-    note: validationIssues > 0 ? "发布前需修正" : "暂无阻断",
-    tone: validationIssues > 0 ? "warning" : "ok",
-    emphasis: validationIssues > 0,
+    key: "node-status",
+    icon: isAttention ? <AlertTriangle size={16} /> : <CircleCheck size={16} />,
+    label: "节点状态",
+    value: status.primary_label || status.primary_state,
+    note: status.primary_reason || catalogNodeStatusTooltip(detail),
+    tone: isAttention ? "warning" : status.primary_state === "archived" ? "archived" : status.primary_state === "draft" ? "draft" : "ok",
+    emphasis: isAttention,
   };
 }
 
-function buildDirectorySummaryItems(detail: CatalogNodeDetail, validationIssues: number): SummaryItem[] {
+function buildDirectorySummaryItems(detail: CatalogNodeDetail): SummaryItem[] {
   const { node } = detail;
   const directChildren = detail.children.length;
   const pointCount = node.descendant_point_count;
@@ -109,7 +114,7 @@ function buildDirectorySummaryItems(detail: CatalogNodeDetail, validationIssues:
       tone: pointCount > 0 ? "muted" : "warning",
       emphasis: pointCount === 0,
     },
-    validationSummary(validationIssues),
+    nodeStatusSummary(detail),
     {
       key: "visibility",
       icon: publicationIcon(node.status),
@@ -122,11 +127,11 @@ function buildDirectorySummaryItems(detail: CatalogNodeDetail, validationIssues:
   ];
 }
 
-function buildPointSummaryItems(detail: CatalogNodeDetail, validationIssues: number): SummaryItem[] {
+function buildPointSummaryItems(detail: CatalogNodeDetail): SummaryItem[] {
   const { node } = detail;
   const contentStatus = detail.point_content?.content_status;
   const hasCard = hasStudentCard(detail, true);
-  const hasVideos = node.media_count > 0;
+  const hasVideo = resolveCatalogNodeStatus(detail).core_readiness.video === "present";
   const relatedCount = detail.related_links.filter((link) => !link.hidden).length;
 
   return [
@@ -143,10 +148,10 @@ function buildPointSummaryItems(detail: CatalogNodeDetail, validationIssues: num
       key: "video",
       icon: <Video size={16} />,
       label: "视频",
-      value: hasVideos ? `${node.published_media_count}/${node.media_count}` : "未绑定",
-      note: hasVideos ? "已发布 / 已绑定" : "建议补充实验资源",
-      tone: hasVideos ? (node.published_media_count > 0 ? "ok" : "warning") : "warning",
-      emphasis: !hasVideos || node.published_media_count === 0,
+      value: hasVideo ? "有视频" : "无视频",
+      note: hasVideo ? "已绑定实验视频" : "请绑定实验视频",
+      tone: hasVideo ? "ok" : "warning",
+      emphasis: !hasVideo,
     },
     {
       key: "student-card",
@@ -165,7 +170,7 @@ function buildPointSummaryItems(detail: CatalogNodeDetail, validationIssues: num
       note: relatedCount > 0 ? "可串联学习" : "可选补充",
       tone: relatedCount > 0 ? "muted" : "muted",
     },
-    validationSummary(validationIssues),
+    nodeStatusSummary(detail),
   ];
 }
 
@@ -173,14 +178,17 @@ export function CatalogEditorHeader({ detail, mutations }: { detail: CatalogNode
   const { node } = detail;
   const pointCapable = isPointCapable(node.node_kind);
   const title = pointCapable ? displayCatalogPointTitle(detail) : node.title;
-  const validationIssues = (detail.validation.errors?.length || 0) + (detail.validation.warnings?.length || 0);
-  const summaryItems = pointCapable ? buildPointSummaryItems(detail, validationIssues) : buildDirectorySummaryItems(detail, validationIssues);
+  const nodeStatus = resolveCatalogNodeStatus(detail);
+  const summaryItems = pointCapable ? buildPointSummaryItems(detail) : buildDirectorySummaryItems(detail);
 
   return (
     <div className="catalog-editor-header">
       <div className="catalog-editor-summary-top">
         <div className="catalog-editor-title-block">
-          <span className={`catalog-editor-title-status ${catalogStatusDotClass(node.status)}`} aria-hidden="true" />
+          <span
+            className={`catalog-editor-title-status ${catalogNodePrimaryStateClass(nodeStatus.primary_state) || catalogStatusDotClass(node.status)}`}
+            aria-hidden="true"
+          />
           <span className={`catalog-editor-kind-icon ${pointCapable ? "is-point" : "is-directory"}`} aria-hidden="true">
             {pointCapable ? <FlaskConical size={20} /> : <Folder size={20} />}
           </span>

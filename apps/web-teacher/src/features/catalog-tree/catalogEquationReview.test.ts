@@ -105,11 +105,11 @@ describe("catalog equation review model", () => {
       {
         source: "ai",
         row_order: 1,
-        draft_text: "2 H2 + O2 → 2 H2O // note: heat gently",
-        replacement_text: "2 H2 + O2 → 2 H2O // note: heat gently",
+        draft_text: "2 H2 + O2 → 2 H2O // 需微热",
+        replacement_text: "2 H2 + O2 → 2 H2O // 需微热",
         canonical_display: "2 H2 + O2 → 2 H2O",
         canonical_mhchem: "\\ce{2 H2 + O2 -> 2 H2O}",
-        annotation_text: "note: heat gently",
+        annotation_text: "需微热",
         annotation_formulae: [],
         condition_tags: ["heated"],
         validation_status: "valid",
@@ -118,8 +118,8 @@ describe("catalog equation review model", () => {
     ]);
 
     expect(model.rows[0].candidates[0]).toMatchObject({
-      replacement_text: "2 H2 + O2 → 2 H2O // note: heat gently",
-      annotation_text: "note: heat gently",
+      replacement_text: "2 H2 + O2 → 2 H2O // 需微热",
+      annotation_text: "需微热",
       condition_tags: ["heated"],
     });
   });

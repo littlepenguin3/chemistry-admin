@@ -88,8 +88,8 @@ export function CatalogAdvancedPanel({
         {node.node_kind === "point" ? (
           <>
             <Descriptions.Item label="位置节点">{node.placement_node_id || node.node_id}</Descriptions.Item>
-            <Descriptions.Item label="共享实验">{node.canonical_point_id || "-"}</Descriptions.Item>
-            <Descriptions.Item label="共享位置数">{detail.canonical_point?.active_placement_count ?? node.active_placement_count ?? 0}</Descriptions.Item>
+            <Descriptions.Item label="多目录共享实验">{node.canonical_point_id || "-"}</Descriptions.Item>
+            <Descriptions.Item label="共享目录数">{detail.canonical_point?.active_placement_count ?? node.active_placement_count ?? 0}</Descriptions.Item>
             <Descriptions.Item label="共享实验状态">{displayLabel(detail.canonical_point?.status || node.canonical_point_status)}</Descriptions.Item>
           </>
         ) : null}

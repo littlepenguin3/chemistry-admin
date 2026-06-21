@@ -26,6 +26,7 @@ import {
   CatalogTreeRow,
   type CatalogTreeRowAction,
 } from "./CatalogTreeRow";
+import { matchesCatalogNodeStatusFilter, type CatalogStatusFilter } from "./catalogTreeMappers";
 
 const { Text } = Typography;
 
@@ -61,6 +62,17 @@ function collectCatalogTreeNodes(nodes: CatalogTreeDataNode[], map = new Map<str
   return map;
 }
 
+function filterCatalogTreeNodes(nodes: CatalogTreeDataNode[], statusFilter: CatalogStatusFilter): CatalogTreeDataNode[] {
+  if (statusFilter === "all") return nodes;
+  return nodes.flatMap((node) => {
+    const children = node.children?.length ? filterCatalogTreeNodes(node.children, statusFilter) : [];
+    if (matchesCatalogNodeStatusFilter(node.catalogNode, statusFilter) || children.length) {
+      return [{ ...node, children: node.children ? children : node.children }];
+    }
+    return [];
+  });
+}
+
 export function CatalogTreeNodeList({
   nodes,
   treeScopeKey,
@@ -76,6 +88,7 @@ export function CatalogTreeNodeList({
   onReorder,
   onRefreshRoots,
   onChangeStatus,
+  statusFilter = "all",
 }: {
   nodes: CatalogNodeCard[];
   treeScopeKey: string;
@@ -91,6 +104,7 @@ export function CatalogTreeNodeList({
   onReorder: (items: Array<{ node_id: string; display_order: number }>) => Promise<unknown> | unknown;
   onRefreshRoots?: () => Promise<unknown> | unknown;
   onChangeStatus: (node: CatalogNodeCard, action: "archive" | "restore" | "publish" | "unpublish") => void;
+  statusFilter?: CatalogStatusFilter;
 }) {
   const { message } = AntApp.useApp();
   const [treeData, setTreeData] = useState<CatalogTreeDataNode[]>([]);
@@ -231,6 +245,7 @@ export function CatalogTreeNodeList({
   );
 
   const dragPreviewNodesById = useMemo(() => collectCatalogTreeNodes(treeData), [treeData]);
+  const visibleTreeData = useMemo(() => filterCatalogTreeNodes(treeData, statusFilter), [statusFilter, treeData]);
 
   const NodeRenderer = useMemo(
     () =>
@@ -281,14 +296,14 @@ export function CatalogTreeNodeList({
           <Button size="small" type="text" icon={<Plus size={17} />} aria-label="添加到本章" title="添加到本章" />
         </Dropdown>
       </Flex>
-      <QueryState loading={Boolean(loading)} error={error} empty={!nodes.length}>
+      <QueryState loading={Boolean(loading)} error={error} empty={!nodes.length || !visibleTreeData.length}>
         <div ref={treeBoxRef} className="catalog-arborist-shell">
           <Tree<CatalogArboristNode>
             key={treeScopeKey}
             ref={arboristRef}
             aria-label="章节目录树"
             className="catalog-arborist-tree"
-            data={treeData}
+            data={visibleTreeData}
             width={treeWidth}
             height={treeHeight}
             indent={22}

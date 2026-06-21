@@ -210,7 +210,7 @@ export function useCatalogMutations(message: MessageApi) {
   const saveRelatedLinks = useMutation({
     mutationFn: ({ nodeId, payload }: { nodeId: string; payload: CatalogRelatedLinksPayload }) => saveCatalogRelatedLinks(nodeId, payload),
     onSuccess: (detail) => {
-      message.success("相关实验链接已保存");
+      message.success("相关实验已保存");
       invalidateCatalog(detail);
     },
     onError: (error) => message.error(errorMessage(error)),

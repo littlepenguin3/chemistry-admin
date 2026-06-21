@@ -28,22 +28,22 @@ DSL:
 - Each non-empty line is exactly one reaction row.
 - A row has this shape: EQUATION_CORE [ // ANNOTATION ].
 - EQUATION_CORE contains only the chemical equation.
-- ANNOTATION contains conditions, amount notes, medium notes, observation constraints, reagent-source explanations, or teacher prose.
+- ANNOTATION is human-readable Chinese supplemental explanation. It may describe conditions, amount notes, medium notes, observation constraints, reagent-source explanations, or teacher prose.
 
 Rewrite rules:
 - Prefer preserving the teacher's equation core. Do not change the core merely to explain a condition or reagent source.
 - If the teacher wrote a trailing prose note with parentheses, Chinese brackets, "注:", "备注:", "说明:", "酸性/碱性/过量/少量/加热/通风橱", move that prose after // on the same line.
 - Never treat formula-internal parentheses as annotations, for example Al(OH)3, Ca3(PO4)2, (NH4)2SO4, or state markers such as (aq).
 - If an existing row already has //, preserve or improve the annotation after // and keep it on the same line.
-- Use short annotation labels when useful: "condition: ...", "amount: ...", "medium: ...", "note: ...". Chinese annotation text is allowed.
+- Do not emit machine labels such as "note:", "condition:", "amount:", or "medium:" in the annotation. Rewrite them as natural Chinese prose because the UI already labels the suffix as "补充说明".
 - Return an AI draft for annotation-only rewrites too; the teacher can accept it to standardize the row.
 - Only correct the chemistry equation core when you are confident the teacher's core is chemically wrong.
 
 Examples:
 - Input: Mn2+ + ClO- + 2OH- -> MnO2↓ + Cl- + H2O（注：NaClO溶液本身呈碱性，提供OH-）
-  Draft: Mn2+ + ClO- + 2OH- -> MnO2↓ + Cl- + H2O // condition: alkaline; note: NaClO溶液本身呈碱性，提供OH-
+  Draft: Mn2+ + ClO- + 2OH- -> MnO2↓ + Cl- + H2O // NaClO溶液本身呈碱性，提供OH-
 - Input: Pb(CH3COO)2 + H2S -> PbS↓ + 2HAc（酸性条件）
-  Draft: Pb(CH3COO)2 + H2S -> PbS↓ + 2HAc // condition: acidic
+  Draft: Pb(CH3COO)2 + H2S -> PbS↓ + 2HAc // 酸性条件
 """
 
 ELEMENT_SYMBOLS = {
@@ -152,6 +152,28 @@ CONDITION_TAGS = {
     "ventilated": ("ventilated", "通风", "通风橱"),
 }
 
+ANNOTATION_LABEL_VALUE_DISPLAY = {
+    ("condition", "acidic"): "酸性条件",
+    ("condition", "acid"): "酸性条件",
+    ("condition", "alkaline"): "碱性条件",
+    ("condition", "basic"): "碱性条件",
+    ("condition", "neutral"): "中性条件",
+    ("condition", "heated"): "加热条件",
+    ("condition", "heat"): "加热条件",
+    ("condition", "light"): "光照条件",
+    ("condition", "concentrated"): "浓溶液条件",
+    ("condition", "dilute"): "稀溶液条件",
+    ("medium", "acidic"): "酸性介质",
+    ("medium", "alkaline"): "碱性介质",
+    ("medium", "basic"): "碱性介质",
+    ("medium", "neutral"): "中性介质",
+    ("amount", "excess"): "过量",
+    ("amount", "small amount"): "少量",
+}
+
+CHINESE_ANNOTATION_PREFIX_RE = re.compile(r"^(?:补充说明|说明|备注|注)\s*[:：]\s*")
+ENGLISH_ANNOTATION_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z][A-Za-z _-]*)\s*[:：]\s*(?P<value>.+)$")
+
 
 def _clean(value: Any) -> str:
     return str(value or "").strip()
@@ -215,7 +237,41 @@ def _split_inline_annotation(raw_text: str) -> tuple[str, str]:
     if INLINE_ANNOTATION_DELIMITER not in raw_text:
         return raw_text.strip(), ""
     equation_core, annotation_text = raw_text.split(INLINE_ANNOTATION_DELIMITER, 1)
-    return equation_core.strip(), annotation_text.strip()
+    return equation_core.strip(), _normalize_inline_annotation_text(annotation_text)
+
+
+def _normalize_inline_annotation_segment(value: str) -> str:
+    text = _clean(value)
+    previous = None
+    while text and previous != text:
+        previous = text
+        text = CHINESE_ANNOTATION_PREFIX_RE.sub("", text).strip()
+    match = ENGLISH_ANNOTATION_LABEL_RE.match(text)
+    if not match:
+        return text
+    label = match.group("label").strip().replace("_", " ").replace("-", " ").lower()
+    value_text = match.group("value").strip()
+    normalized_value = value_text.lower()
+    mapped = ANNOTATION_LABEL_VALUE_DISPLAY.get((label, normalized_value))
+    if mapped:
+        return mapped
+    if label in {"note", "notes", "comment", "annotation"}:
+        return value_text
+    if label == "condition":
+        return f"条件：{value_text}"
+    if label == "medium":
+        return f"介质：{value_text}"
+    if label == "amount":
+        return f"用量：{value_text}"
+    return text
+
+
+def _normalize_inline_annotation_text(annotation_text: Any) -> str:
+    text = _clean(annotation_text)
+    if not text:
+        return ""
+    segments = [_normalize_inline_annotation_segment(segment) for segment in re.split(r"\s*[;；]\s*", text)]
+    return "；".join(segment for segment in segments if segment)
 
 
 def reaction_row_display_text(row: dict[str, Any]) -> str:
@@ -749,7 +805,8 @@ def _equation_ai_prompt(payload: Any, normalized_rows: list[dict[str, Any]]) -> 
                 "Inline annotation rule: keep exactly one reaction equation per non-empty line. "
                 "When a condition, excess/small-amount note, acid/base medium, or reagent-source explanation is needed, "
                 "append it after // on the same line. If raw_text already has a // suffix and only the equation core is corrected, "
-                "preserve the existing suffix exactly."
+                "preserve the existing suffix exactly. The // suffix must be natural Chinese supplemental explanation, "
+                "not English machine labels such as note:, condition:, amount:, or medium:."
             ),
         },
         {

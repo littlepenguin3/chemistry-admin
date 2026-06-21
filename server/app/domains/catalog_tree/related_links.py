@@ -104,12 +104,21 @@ def related_links(session: Any, node_id: str, *, include_hidden: bool, include_d
                 WHERE sibling.parent_id IS NOT DISTINCT FROM :parent_id
                   AND sibling.id <> :node_id
                   AND sibling.node_kind = 'point'
-                  AND sibling.status = 'published'
-                ORDER BY ABS(sibling.display_order - :display_order), sibling.display_order
-                LIMIT 6
+                  AND sibling.status <> 'archived'
+                  AND (
+                    CAST(:source_canonical_point_id AS text) IS NULL
+                    OR sibling.canonical_point_id IS DISTINCT FROM CAST(:source_canonical_point_id AS text)
+                  )
+                  AND (:include_hidden OR sibling.status = 'published')
+                ORDER BY sibling.display_order, sibling.title, sibling.id
                 """
             ),
-            {"node_id": node_id, "parent_id": node.get("parent_id"), "display_order": int(node.get("display_order") or 0)},
+            {
+                "node_id": node_id,
+                "parent_id": node.get("parent_id"),
+                "source_canonical_point_id": node.get("canonical_point_id"),
+                "include_hidden": include_hidden,
+            },
         )
         .mappings()
         .all()
@@ -128,7 +137,11 @@ def related_links(session: Any, node_id: str, *, include_hidden: bool, include_d
                 "sort_order": index,
                 "label": None,
                 "source": "generated_default",
-                "metadata": {"generated_from": "same_parent_neighborhood"},
+                "metadata": {
+                    "generated_from": "same_parent_points",
+                    "default_scope": "same_parent",
+                    "default_scope_label": "同目录默认",
+                },
             }
         )
     return result

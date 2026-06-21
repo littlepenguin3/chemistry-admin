@@ -5,12 +5,56 @@ import type { MediaAsset } from "./media";
 export type CatalogNodeKind = "directory" | "point";
 export type CatalogNodeStatus = "draft" | "published" | "archived";
 export type CatalogPrincipleMode = "equation" | "text";
+export type CatalogNodePrimaryState =
+  | "archived"
+  | "blocked"
+  | "needs_content"
+  | "needs_video"
+  | "draft"
+  | "ready"
+  | "published"
+  | "sync_attention"
+  | string;
 
 export type CatalogValidation = {
   ok: boolean;
   errors: string[];
   warnings: string[];
   nodes?: Array<{ node_id: string; title: string; errors: string[]; warnings: string[] }>;
+};
+
+export type CatalogNodeStatusCondition = {
+  key: string;
+  group: "core_readiness" | "visibility" | "async_consumption" | "advanced" | string;
+  severity: "error" | "warning" | "info" | "success" | string;
+  status: string;
+  reason: string;
+  message: string;
+  action?: string | null;
+};
+
+export type CatalogNodeStatusSummary = {
+  primary_state: CatalogNodePrimaryState;
+  primary_label?: string;
+  primary_reason: string;
+  core_readiness: {
+    content_fields: "complete" | "missing" | "not_applicable" | string;
+    video: "present" | "absent" | "not_applicable" | string;
+    video_label?: string;
+    missing_fields?: string[];
+    descendant_action_count?: number;
+    descendant_status_counts?: Record<string, number>;
+  };
+  visibility: {
+    placement: CatalogNodeStatus | "missing" | "not_applicable" | string;
+    shared_content: "missing" | "draft" | "published" | "archived" | "not_applicable" | string;
+    student_available: boolean;
+  };
+  async_consumption: {
+    search_index: "idle" | "pending" | "running" | "synced" | "stale" | "failed" | "disabled" | "unavailable" | "not_applicable" | string;
+    ai_evidence: "idle" | "pending" | "running" | "available" | "stale" | "failed" | "disabled" | "unavailable" | "not_applicable" | string;
+  };
+  conditions: CatalogNodeStatusCondition[];
 };
 
 export type CatalogBreadcrumb = {
@@ -49,6 +93,7 @@ export type CatalogNodeCard = {
   published_media_count: number;
   active_placement_count?: number;
   validation: CatalogValidation;
+  node_status?: CatalogNodeStatusSummary | null;
   index_state?: CatalogIndexState | null;
 };
 
@@ -360,6 +405,7 @@ export type CatalogNodeDetail = {
   media_bindings: CatalogMediaBinding[];
   related_links: CatalogRelatedLink[];
   validation: CatalogValidation;
+  node_status?: CatalogNodeStatusSummary | null;
   search_preview?: CatalogSearchPreview | null;
   index_state?: CatalogIndexState | null;
   job_state?: CatalogPointJobState | null;

@@ -67,6 +67,12 @@ def node_select(where_clause: str) -> str:
           n.canonical_point_id,
           cp.title AS canonical_point_title,
           cp.status AS canonical_point_status,
+          pc_summary.content_status AS point_content_status,
+          pc_summary.principle_mode AS point_principle_mode,
+          pc_summary.principle_equation AS point_principle_equation,
+          pc_summary.principle_text AS point_principle_text,
+          pc_summary.phenomenon_explanation AS point_phenomenon_explanation,
+          pc_summary.safety_note AS point_safety_note,
           n.status,
           n.display_order,
           n.metadata,
@@ -131,10 +137,160 @@ def node_select(where_clause: str) -> str:
             SELECT to_jsonb(s)
             FROM experiment_catalog_point_search_index_state s
             WHERE s.node_id = n.id
-          ) AS index_state
+          ) AS index_state,
+          (
+            SELECT to_jsonb(es)
+            FROM experiment_catalog_point_evidence_state es
+            WHERE (n.canonical_point_id IS NOT NULL AND es.canonical_point_id = n.canonical_point_id)
+               OR es.node_id = n.id
+            ORDER BY
+              CASE WHEN n.canonical_point_id IS NOT NULL AND es.canonical_point_id = n.canonical_point_id THEN 0 ELSE 1 END,
+              es.updated_at DESC
+            LIMIT 1
+          ) AS evidence_state,
+          CASE
+            WHEN n.node_kind = 'directory' THEN (
+              WITH RECURSIVE descendant_tree AS (
+                SELECT child.id, child.parent_id, child.node_kind, child.status, child.canonical_point_id
+                FROM experiment_catalog_nodes child
+                WHERE child.parent_id = n.id
+                  AND child.status <> 'archived'
+                UNION ALL
+                SELECT child.id, child.parent_id, child.node_kind, child.status, child.canonical_point_id
+                FROM experiment_catalog_nodes child
+                JOIN descendant_tree parent ON child.parent_id = parent.id
+                WHERE child.status <> 'archived'
+              )
+              SELECT jsonb_build_object(
+                'blocked', COALESCE(COUNT(*) FILTER (
+                  WHERE dt.node_kind = 'point'
+                    AND dt.canonical_point_id IS NULL
+                ), 0),
+                'needs_content', COALESCE(COUNT(*) FILTER (
+                  WHERE dt.node_kind = 'point'
+                    AND dt.canonical_point_id IS NOT NULL
+                    AND (
+                      dpc.content_id IS NULL
+                      OR
+                      CASE
+                        WHEN COALESCE(NULLIF(trim(dpc.principle_mode), ''), 'text') = 'equation'
+                          THEN COALESCE(NULLIF(trim(dpc.principle_equation), ''), '') = ''
+                        ELSE COALESCE(NULLIF(trim(dpc.principle_text), ''), '') = ''
+                      END
+                      OR COALESCE(NULLIF(trim(dpc.phenomenon_explanation), ''), '') = ''
+                      OR COALESCE(NULLIF(trim(dpc.safety_note), ''), '') = ''
+                    )
+                ), 0),
+                'needs_video', COALESCE(COUNT(*) FILTER (
+                  WHERE dt.node_kind = 'point'
+                    AND dt.canonical_point_id IS NOT NULL
+                    AND dpc.content_id IS NOT NULL
+                    AND NOT (
+                      CASE
+                        WHEN COALESCE(NULLIF(trim(dpc.principle_mode), ''), 'text') = 'equation'
+                          THEN COALESCE(NULLIF(trim(dpc.principle_equation), ''), '') = ''
+                        ELSE COALESCE(NULLIF(trim(dpc.principle_text), ''), '') = ''
+                      END
+                      OR COALESCE(NULLIF(trim(dpc.phenomenon_explanation), ''), '') = ''
+                      OR COALESCE(NULLIF(trim(dpc.safety_note), ''), '') = ''
+                    )
+                    AND COALESCE(dmb.media_count, 0) = 0
+                ), 0),
+                'draft', COALESCE(COUNT(*) FILTER (
+                  WHERE dt.node_kind = 'point'
+                    AND dt.canonical_point_id IS NOT NULL
+                    AND dpc.content_id IS NOT NULL
+                    AND COALESCE(dmb.media_count, 0) > 0
+                    AND NOT (
+                      CASE
+                        WHEN COALESCE(NULLIF(trim(dpc.principle_mode), ''), 'text') = 'equation'
+                          THEN COALESCE(NULLIF(trim(dpc.principle_equation), ''), '') = ''
+                        ELSE COALESCE(NULLIF(trim(dpc.principle_text), ''), '') = ''
+                      END
+                      OR COALESCE(NULLIF(trim(dpc.phenomenon_explanation), ''), '') = ''
+                      OR COALESCE(NULLIF(trim(dpc.safety_note), ''), '') = ''
+                    )
+                    AND dt.status <> 'published'
+                ), 0),
+                'sync_attention', COALESCE(COUNT(*) FILTER (
+                  WHERE dt.node_kind = 'point'
+                    AND dt.status = 'published'
+                    AND dt.canonical_point_id IS NOT NULL
+                    AND dpc.content_id IS NOT NULL
+                    AND COALESCE(dmb.media_count, 0) > 0
+                    AND NOT (
+                      CASE
+                        WHEN COALESCE(NULLIF(trim(dpc.principle_mode), ''), 'text') = 'equation'
+                          THEN COALESCE(NULLIF(trim(dpc.principle_equation), ''), '') = ''
+                        ELSE COALESCE(NULLIF(trim(dpc.principle_text), ''), '') = ''
+                      END
+                      OR COALESCE(NULLIF(trim(dpc.phenomenon_explanation), ''), '') = ''
+                      OR COALESCE(NULLIF(trim(dpc.safety_note), ''), '') = ''
+                    )
+                    AND (
+                      COALESCE(dsi.sync_status, '') IN ('failed', 'unavailable')
+                      OR COALESCE(dev.evidence_status, '') IN ('failed', 'unavailable')
+                    )
+                ), 0)
+              )
+              FROM descendant_tree dt
+              LEFT JOIN LATERAL (
+                SELECT pc.node_id AS content_id,
+                       pc.content_status,
+                       pc.principle_mode,
+                       pc.principle_equation,
+                       pc.principle_text,
+                       pc.phenomenon_explanation,
+                       pc.safety_note
+                FROM experiment_catalog_point_content pc
+                WHERE (dt.canonical_point_id IS NOT NULL AND pc.canonical_point_id = dt.canonical_point_id)
+                   OR pc.node_id = dt.id
+                ORDER BY
+                  CASE WHEN pc.canonical_point_id = dt.canonical_point_id THEN 0 ELSE 1 END,
+                  CASE pc.content_status WHEN 'published' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
+                  pc.updated_at DESC
+                LIMIT 1
+              ) dpc ON TRUE
+              LEFT JOIN LATERAL (
+                SELECT COUNT(*) AS media_count
+                FROM experiment_catalog_point_media_bindings mb
+                WHERE ((dt.canonical_point_id IS NOT NULL AND mb.canonical_point_id = dt.canonical_point_id)
+                    OR mb.node_id = dt.id)
+                  AND mb.binding_status <> 'archived'
+              ) dmb ON TRUE
+              LEFT JOIN experiment_catalog_point_search_index_state dsi ON dsi.node_id = dt.id
+              LEFT JOIN LATERAL (
+                SELECT es.evidence_status
+                FROM experiment_catalog_point_evidence_state es
+                WHERE (dt.canonical_point_id IS NOT NULL AND es.canonical_point_id = dt.canonical_point_id)
+                   OR es.node_id = dt.id
+                ORDER BY
+                  CASE WHEN dt.canonical_point_id IS NOT NULL AND es.canonical_point_id = dt.canonical_point_id THEN 0 ELSE 1 END,
+                  es.updated_at DESC
+                LIMIT 1
+              ) dev ON TRUE
+            )
+            ELSE '{{}}'::jsonb
+          END AS descendant_status_counts
         FROM experiment_catalog_nodes n
         JOIN chapters c ON c.id = n.chapter_id
         LEFT JOIN experiment_catalog_points cp ON cp.id = n.canonical_point_id
+        LEFT JOIN LATERAL (
+          SELECT pc.content_status,
+                 pc.principle_mode,
+                 pc.principle_equation,
+                 pc.principle_text,
+                 pc.phenomenon_explanation,
+                 pc.safety_note
+          FROM experiment_catalog_point_content pc
+          WHERE (n.canonical_point_id IS NOT NULL AND pc.canonical_point_id = n.canonical_point_id)
+             OR pc.node_id = n.id
+          ORDER BY
+            CASE WHEN pc.canonical_point_id = n.canonical_point_id THEN 0 ELSE 1 END,
+            CASE pc.content_status WHEN 'published' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
+            pc.updated_at DESC
+          LIMIT 1
+        ) pc_summary ON TRUE
         {where_clause}
     """
 
@@ -153,16 +309,447 @@ def row_dict(row: Any) -> dict[str, Any]:
             item[key] = {}
     if item.get("index_state") is not None and not isinstance(item.get("index_state"), dict):
         item["index_state"] = dict(item["index_state"])
+    if item.get("evidence_state") is not None and not isinstance(item.get("evidence_state"), dict):
+        item["evidence_state"] = dict(item["evidence_state"])
+    if not isinstance(item.get("descendant_status_counts"), dict):
+        item["descendant_status_counts"] = {}
     return item
+
+
+def _status_condition(
+    key: str,
+    *,
+    group: str,
+    severity: str,
+    status_value: str,
+    reason: str,
+    message: str,
+    action: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "group": group,
+        "severity": severity,
+        "status": status_value,
+        "reason": reason,
+        "message": message,
+        "action": action,
+    }
+
+
+def _content_source(node: dict[str, Any], content: dict[str, Any] | None) -> dict[str, Any]:
+    if content:
+        return content
+    return {
+        "content_status": node.get("point_content_status"),
+        "principle_mode": node.get("point_principle_mode"),
+        "principle_equation": node.get("point_principle_equation"),
+        "principle_text": node.get("point_principle_text"),
+        "phenomenon_explanation": node.get("point_phenomenon_explanation"),
+        "safety_note": node.get("point_safety_note"),
+    }
+
+
+def _has_saved_content(node: dict[str, Any], content: dict[str, Any] | None, source: dict[str, Any]) -> bool:
+    return bool(content or node.get("has_point_content") or source.get("content_status"))
+
+
+def _principle_complete(content: dict[str, Any]) -> bool:
+    mode = clean(content.get("principle_mode") or "text")
+    if mode == "equation":
+        return bool(reaction_principle_text(content))
+    if mode == "text":
+        return bool(clean(content.get("principle_text")))
+    return False
+
+
+def _missing_learning_fields(content: dict[str, Any]) -> list[str]:
+    missing: list[str] = []
+    if not _principle_complete(content):
+        missing.append("原理")
+    if not clean(content.get("phenomenon_explanation")):
+        missing.append("现象解释")
+    if not clean(content.get("safety_note")):
+        missing.append("安全提示")
+    return missing
+
+
+def _map_search_index_state(index_state: dict[str, Any] | None) -> str:
+    if not index_state:
+        return "idle"
+    status_value = clean(index_state.get("sync_status"))
+    if status_value == "synced":
+        return "synced"
+    if status_value in {"pending", "running", "stale", "failed", "disabled", "unavailable"}:
+        return status_value
+    return status_value or "idle"
+
+
+def _map_ai_evidence_state(evidence_state: dict[str, Any] | None) -> str:
+    if not evidence_state:
+        return "idle"
+    status_value = clean(evidence_state.get("evidence_status"))
+    if status_value in {"succeeded", "available", "available_static_fallback"}:
+        return "available"
+    if status_value in {"pending", "running", "stale", "failed", "disabled", "unavailable"}:
+        return status_value
+    if status_value in {"missing", "missing_fallback_evidence"}:
+        return "idle"
+    if status_value == "stale_fallback_evidence":
+        return "stale"
+    return status_value or "idle"
+
+
+def _primary_state_label(primary_state: str) -> str:
+    labels = {
+        "archived": "已归档",
+        "blocked": "阻断",
+        "needs_content": "缺内容",
+        "needs_video": "缺视频",
+        "draft": "草稿",
+        "ready": "待发布",
+        "published": "已发布",
+        "sync_attention": "同步异常",
+    }
+    return labels.get(primary_state, "未知状态")
+
+
+def _directory_node_status(node: dict[str, Any]) -> dict[str, Any]:
+    counts = node.get("descendant_status_counts") if isinstance(node.get("descendant_status_counts"), dict) else {}
+    blocked = int(counts.get("blocked") or 0)
+    needs_content = int(counts.get("needs_content") or 0)
+    needs_video = int(counts.get("needs_video") or 0)
+    draft = int(counts.get("draft") or 0)
+    sync_attention = int(counts.get("sync_attention") or 0)
+    actionable_count = blocked + needs_content + needs_video + draft + sync_attention
+    conditions: list[dict[str, Any]] = []
+    if blocked:
+        conditions.append(
+            _status_condition(
+                "directory_descendant_blocked",
+                group="visibility",
+                severity="error",
+                status_value="blocked",
+                reason=f"{blocked} 个后代点位结构异常",
+                message=f"目录下有 {blocked} 个点位缺少实验身份，无法稳定复用共享实验。",
+                action="定位并修正点位身份",
+            )
+        )
+    if needs_content:
+        conditions.append(
+            _status_condition(
+                "directory_descendant_needs_content",
+                group="core_readiness",
+                severity="warning",
+                status_value="needs_content",
+                reason=f"{needs_content} 个后代点位缺内容",
+                message=f"目录下有 {needs_content} 个点位需要补齐原理、现象解释或安全提示。",
+                action="筛选缺内容点位",
+            )
+        )
+    if needs_video:
+        conditions.append(
+            _status_condition(
+                "directory_descendant_needs_video",
+                group="core_readiness",
+                severity="warning",
+                status_value="needs_video",
+                reason=f"{needs_video} 个后代点位缺视频",
+                message=f"目录下有 {needs_video} 个点位尚未绑定实验视频。",
+                action="筛选缺视频点位",
+            )
+        )
+    if draft:
+        conditions.append(
+            _status_condition(
+                "directory_descendant_draft",
+                group="visibility",
+                severity="info",
+                status_value="draft",
+                reason=f"{draft} 个后代点位未发布",
+                message=f"目录下有 {draft} 个点位内容完整但尚未学生可见。",
+                action="筛选待发布点位",
+            )
+        )
+    if sync_attention:
+        conditions.append(
+            _status_condition(
+                "directory_descendant_sync_attention",
+                group="async_consumption",
+                severity="warning",
+                status_value="sync_attention",
+                reason=f"{sync_attention} 个后代点位同步异常",
+                message=f"目录下有 {sync_attention} 个已发布点位存在搜索或 AI 证据同步异常。",
+                action="筛选同步异常",
+            )
+        )
+    if clean(node.get("status")) == "archived":
+        primary_state = "archived"
+        primary_reason = "目录已归档"
+    elif blocked:
+        primary_state = "blocked"
+        primary_reason = f"{blocked} 个后代点位不可发布"
+    elif needs_content:
+        primary_state = "needs_content"
+        primary_reason = f"{needs_content} 个后代点位缺内容"
+    elif needs_video:
+        primary_state = "needs_video"
+        primary_reason = f"{needs_video} 个后代点位缺视频"
+    elif clean(node.get("status")) != "published":
+        primary_state = "draft"
+        primary_reason = "目录尚未发布"
+    elif sync_attention:
+        primary_state = "sync_attention"
+        primary_reason = f"{sync_attention} 个后代点位同步异常"
+    else:
+        primary_state = "published"
+        primary_reason = "目录已发布"
+    return {
+        "primary_state": primary_state,
+        "primary_label": _primary_state_label(primary_state),
+        "primary_reason": primary_reason,
+        "core_readiness": {
+            "content_fields": "not_applicable",
+            "video": "not_applicable",
+            "missing_fields": [],
+            "descendant_action_count": actionable_count,
+            "descendant_status_counts": {
+                "blocked": blocked,
+                "needs_content": needs_content,
+                "needs_video": needs_video,
+                "draft": draft,
+                "sync_attention": sync_attention,
+            },
+        },
+        "visibility": {
+            "placement": clean(node.get("status")) or "draft",
+            "shared_content": "not_applicable",
+            "student_available": clean(node.get("status")) == "published",
+        },
+        "async_consumption": {
+            "search_index": "not_applicable",
+            "ai_evidence": "not_applicable",
+        },
+        "conditions": conditions,
+    }
+
+
+def catalog_node_status_summary(
+    node: dict[str, Any],
+    *,
+    content: dict[str, Any] | None = None,
+    validation: dict[str, Any] | None = None,
+    job_state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not point_capable(node):
+        return _directory_node_status(node)
+
+    content_source = _content_source(node, content)
+    content_exists = _has_saved_content(node, content, content_source)
+    missing_fields = _missing_learning_fields(content_source)
+    validation = validation if validation is not None else validate_node_payload(node, content if content_exists else None)
+    placement_state = clean(node.get("status")) or "draft"
+    shared_content_state = "missing"
+    if content_exists:
+        shared_content_state = clean(content_source.get("content_status")) or "draft"
+    if clean(node.get("canonical_point_status")) == "archived":
+        shared_content_state = "archived"
+    video_present = int(node.get("media_count") or 0) > 0
+    index_state = (job_state or {}).get("es_state") if job_state else node.get("index_state")
+    evidence_state = (job_state or {}).get("evidence_state") if job_state else node.get("evidence_state")
+    search_state = _map_search_index_state(index_state if isinstance(index_state, dict) else None)
+    ai_state = _map_ai_evidence_state(evidence_state if isinstance(evidence_state, dict) else None)
+    student_available = placement_state == "published" and shared_content_state != "archived" and not validation.get("errors")
+    conditions: list[dict[str, Any]] = []
+
+    if placement_state == "archived" or shared_content_state == "archived":
+        conditions.append(
+            _status_condition(
+                "point_archived",
+                group="visibility",
+                severity="info",
+                status_value="archived",
+                reason="点位已归档",
+                message="此点位已从常规目录中隐藏。",
+                action="如需继续维护，请先恢复节点",
+            )
+        )
+    if validation.get("errors"):
+        conditions.append(
+            _status_condition(
+                "point_structure_invalid",
+                group="visibility",
+                severity="error",
+                status_value="blocked",
+                reason="点位结构需要处理",
+                message="点位目录身份或共享实验身份异常，暂不能发布。",
+                action="检查节点身份和共享实验绑定",
+            )
+        )
+    if not content_exists:
+        conditions.append(
+            _status_condition(
+                "shared_content_missing",
+                group="core_readiness",
+                severity="warning",
+                status_value="missing",
+                reason="三要素尚未填写",
+                message="学生端可先显示点位标题占位；进入视频前请先补齐原理、现象解释和安全提示。",
+                action="先补齐三要素",
+            )
+        )
+    elif missing_fields:
+        conditions.append(
+            _status_condition(
+                "learning_fields_missing",
+                group="core_readiness",
+                severity="warning",
+                status_value="missing",
+                reason=f"缺少{ '、'.join(missing_fields) }",
+                message=f"请补齐{ '、'.join(missing_fields) }。",
+                action="补齐学习字段",
+            )
+        )
+    if not video_present and not missing_fields:
+        conditions.append(
+            _status_condition(
+                "experiment_video_missing",
+                group="core_readiness",
+                severity="warning",
+                status_value="absent",
+                reason="无视频",
+                message="请为此点位添加实验视频。",
+                action="绑定实验视频",
+            )
+        )
+    if placement_state != "published" and placement_state != "archived":
+        conditions.append(
+            _status_condition(
+                "placement_not_published",
+                group="visibility",
+                severity="info",
+                status_value=placement_state,
+                reason="目录位置未发布",
+                message="当前目录位置仍是草稿，学生目录中暂不可见。",
+                action="发布节点或所在目录",
+            )
+        )
+    if search_state in {"failed", "unavailable"}:
+        conditions.append(
+            _status_condition(
+                "search_index_attention",
+                group="async_consumption",
+                severity="warning",
+                status_value=search_state,
+                reason="搜索同步异常",
+                message="学生搜索消费的 ES 文档同步失败或不可用。",
+                action="在同步诊断中重试 ES 刷新",
+            )
+        )
+    elif search_state in {"pending", "running", "stale"}:
+        conditions.append(
+            _status_condition(
+                "search_index_pending",
+                group="async_consumption",
+                severity="info",
+                status_value=search_state,
+                reason="搜索同步处理中",
+                message="ES 搜索文档仍在异步处理，可能短暂滞后于已保存内容。",
+                action=None,
+            )
+        )
+    if ai_state in {"failed", "unavailable"}:
+        conditions.append(
+            _status_condition(
+                "ai_evidence_attention",
+                group="async_consumption",
+                severity="warning",
+                status_value=ai_state,
+                reason="AI 证据同步异常",
+                message="AI/RAG 证据刷新失败或不可用，不影响点位内容继续编辑。",
+                action="在同步诊断中重试 RAG 刷新",
+            )
+        )
+    elif ai_state in {"pending", "running", "stale"}:
+        conditions.append(
+            _status_condition(
+                "ai_evidence_pending",
+                group="async_consumption",
+                severity="info",
+                status_value=ai_state,
+                reason="AI 证据处理中",
+                message="AI/RAG 证据仍在异步处理，可能滞后于已保存内容。",
+                action=None,
+            )
+        )
+    if int(node.get("media_count") or 0) > 1:
+        conditions.append(
+            _status_condition(
+                "legacy_multiple_video_bindings",
+                group="advanced",
+                severity="info",
+                status_value="multiple_bindings",
+                reason="存在多个历史视频绑定",
+                message="教师状态仍按有视频/无视频判断；多个绑定只作为高级诊断保留。",
+                action="在视频面板清理历史绑定",
+            )
+        )
+
+    if placement_state == "archived" or shared_content_state == "archived":
+        primary_state = "archived"
+        primary_reason = "点位已归档"
+    elif validation.get("errors"):
+        primary_state = "blocked"
+        primary_reason = "点位结构需要处理"
+    elif missing_fields:
+        primary_state = "needs_content"
+        primary_reason = f"缺少{ '、'.join(missing_fields) }"
+    elif not video_present:
+        primary_state = "needs_video"
+        primary_reason = "无视频"
+    elif placement_state != "published":
+        primary_state = "ready"
+        primary_reason = "内容和视频完整，等待发布目录位置"
+    elif search_state in {"failed", "unavailable"} or ai_state in {"failed", "unavailable"}:
+        primary_state = "sync_attention"
+        primary_reason = "搜索或 AI 同步异常"
+    else:
+        primary_state = "published"
+        primary_reason = "学生可见"
+
+    return {
+        "primary_state": primary_state,
+        "primary_label": _primary_state_label(primary_state),
+        "primary_reason": primary_reason,
+        "core_readiness": {
+            "content_fields": "complete" if not missing_fields else "missing",
+            "video": "present" if video_present else "absent",
+            "video_label": "有视频" if video_present else "无视频",
+            "missing_fields": missing_fields,
+        },
+        "visibility": {
+            "placement": placement_state,
+            "shared_content": shared_content_state,
+            "student_available": student_available,
+        },
+        "async_consumption": {
+            "search_index": search_state,
+            "ai_evidence": ai_state,
+        },
+        "conditions": conditions,
+    }
 
 
 def node_card(
     node: dict[str, Any],
     *,
+    content: dict[str, Any] | None = None,
     validation: dict[str, Any] | None = None,
+    job_state: dict[str, Any] | None = None,
     include_teacher_note: bool = False,
 ) -> dict[str, Any]:
     kind = str(node.get("node_kind") or "directory")
+    active_validation = validation if validation is not None else validate_node_payload(node, content)
     card = {
         "node_id": node["node_id"],
         "chapter_id": node["chapter_id"],
@@ -190,7 +777,8 @@ def node_card(
         "media_count": int(node.get("media_count") or 0),
         "published_media_count": int(node.get("published_media_count") or 0),
         "active_placement_count": int(node.get("active_placement_count") or 0) if kind == "point" else 0,
-        "validation": validation if validation is not None else validate_node_payload(node),
+        "validation": active_validation,
+        "node_status": catalog_node_status_summary(node, content=content, validation=active_validation, job_state=job_state),
         "index_state": node.get("index_state"),
     }
     if include_teacher_note:
@@ -362,10 +950,6 @@ def validate_node_payload(node: dict[str, Any], content: dict[str, Any] | None =
             errors.append("Point placement must target a canonical experiment point")
         if node.get("has_children"):
             errors.append("Point nodes cannot have children")
-        if content and content.get("content_status") in {"draft", "archived"}:
-            warnings.append("Canonical point content is not published")
-        elif not content:
-            warnings.append("Canonical point content has not been saved")
     return {"ok": not errors, "errors": errors, "warnings": warnings}
 
 

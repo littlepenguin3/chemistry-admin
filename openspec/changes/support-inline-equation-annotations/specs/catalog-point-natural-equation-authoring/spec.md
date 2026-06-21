@@ -4,7 +4,7 @@
 The system SHALL support `//` as a reserved inline annotation delimiter in natural multiline reaction equation input while preserving the existing one-line-per-equation contract.
 
 #### Scenario: Teacher enters one annotated reaction line
-- **WHEN** a teacher enters `Mn^2+ + ClO- + 2OH- -> MnO2 + Cl- + H2O // condition: alkaline; note: NaClO solution provides OH-`
+- **WHEN** a teacher enters `Mn^2+ + ClO- + 2OH- -> MnO2 + Cl- + H2O // NaClO溶液本身呈碱性，提供OH-`
 - **THEN** the system MUST treat the entire non-empty line as one reaction equation row
 - **AND** it MUST parse only the text before `//` as the reaction equation candidate
 - **AND** it MUST preserve the text after `//` as the row's inline annotation.

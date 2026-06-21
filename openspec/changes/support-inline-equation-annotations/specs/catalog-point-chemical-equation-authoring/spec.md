@@ -4,7 +4,7 @@
 The backend SHALL split annotated reaction rows into an equation core and row-level annotation before chemical normalization.
 
 #### Scenario: Normalizing an annotated equation row
-- **WHEN** point content containing `Mn^2+ + ClO- + 2OH- -> MnO2 + Cl- + H2O // condition: alkaline; note: NaClO solution provides OH-` is previewed or saved
+- **WHEN** point content containing `Mn^2+ + ClO- + 2OH- -> MnO2 + Cl- + H2O // NaClO溶液本身呈碱性，提供OH-` is previewed or saved
 - **THEN** the backend MUST set the equation core to the text before `//`
 - **AND** it MUST set the annotation text to the text after `//`
 - **AND** canonical display, mhchem, balancing diagnostics, reactants, products, and core formulae MUST be derived only from the equation core.

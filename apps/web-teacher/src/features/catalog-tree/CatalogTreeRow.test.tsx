@@ -118,7 +118,7 @@ describe("CatalogTreeRow", () => {
     expect(screen.getByLabelText("展开目录")).toBeInTheDocument();
     expect(screen.getByLabelText("新建子节点")).toBeInTheDocument();
     expect(screen.getByLabelText("共 3 个点位")).toHaveTextContent("3");
-    expect(screen.getByLabelText("状态：草稿")).toBeInTheDocument();
+    expect(screen.getByLabelText("节点状态：草稿")).toBeInTheDocument();
     expect(container.querySelector(".catalog-sidebar-status-dot")).toHaveClass("is-draft");
     expect(container).not.toHaveTextContent("draft");
     expect(container.querySelector(".catalog-sidebar-switcher-spacer")).toBeNull();
@@ -163,7 +163,7 @@ describe("CatalogTreeRow", () => {
     expect(container.querySelector(".catalog-sidebar-point-status")).toHaveClass("is-published");
   });
 
-  it("renders draft point status as neutral instead of warning", () => {
+  it("renders missing-video point status as the primary row signal", () => {
     const { container } = renderRow({
       catalogNode: node({
         node_id: "point-draft",
@@ -174,7 +174,23 @@ describe("CatalogTreeRow", () => {
       isInternal: false,
     });
 
-    expect(container.querySelector(".catalog-sidebar-point-status")).toHaveClass("is-draft");
+    expect(screen.getByLabelText("点位状态：缺视频：无视频")).toBeInTheDocument();
+    expect(container.querySelector(".catalog-sidebar-point-status")).toHaveClass("is-warning");
+  });
+
+  it("renders complete draft point as ready", () => {
+    const { container } = renderRow({
+      catalogNode: node({
+        node_id: "point-draft-video",
+        title: "Draft point with video",
+        node_kind: "point",
+        status: "draft",
+        media_count: 1,
+      }),
+      isInternal: false,
+    });
+
+    expect(container.querySelector(".catalog-sidebar-point-status")).toHaveClass("is-published");
     expect(container.querySelector(".catalog-sidebar-point-status")).not.toHaveClass("is-warning");
   });
 
@@ -188,6 +204,33 @@ describe("CatalogTreeRow", () => {
     const row = container.querySelector(".catalog-sidebar-item");
     expect(row).toHaveClass("is-selected");
     expect(row).toHaveAttribute("title", title);
+    expect(row).toHaveStyle({ boxSizing: "border-box" });
+  });
+
+  it("keeps long titles separate from the fixed trailing status controls", () => {
+    const title = "一、卤素单质在不同溶剂中的溶解性以及更长更长的补充说明";
+    const { container } = renderRow({
+      catalogNode: node({
+        node_id: "dir-wide-trailing",
+        title,
+        node_kind: "directory",
+        has_children: true,
+        descendant_point_count: 15,
+      }),
+      isSelected: true,
+    });
+
+    const row = container.querySelector(".catalog-sidebar-row");
+    const copy = container.querySelector(".catalog-sidebar-copy");
+    const trailing = container.querySelector(".catalog-sidebar-trailing");
+
+    expect(row?.children).toContain(copy);
+    expect(row?.children).toContain(trailing);
+    expect(copy).toHaveTextContent(title);
+    expect(trailing?.querySelector(".catalog-sidebar-count-slot")).toHaveTextContent("15");
+    expect(trailing?.querySelector(".catalog-sidebar-directory-status-slot")).not.toBeNull();
+    expect(trailing?.querySelector(".catalog-sidebar-primary-action-slot")).not.toBeNull();
+    expect(trailing?.querySelector(".catalog-sidebar-more-slot")).not.toBeNull();
   });
 
   it("does not render archived backend status text visibly", () => {
@@ -195,7 +238,7 @@ describe("CatalogTreeRow", () => {
       catalogNode: node({ node_id: "dir-archived", title: "归档目录", node_kind: "directory", status: "archived" }),
     });
 
-    expect(screen.getByLabelText("状态：已归档")).toBeInTheDocument();
+    expect(screen.getByLabelText("节点状态：已归档")).toBeInTheDocument();
     expect(container).not.toHaveTextContent("archived");
   });
 });

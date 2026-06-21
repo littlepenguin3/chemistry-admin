@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from server.app.domains.catalog_tree.common import node_card, node_select, row_dict
+from server.app.domains.catalog_tree.common import node_card, node_select, row_dict, validate_node_payload
 from server.app.domains.catalog_tree.directories import create_node_params, normalize_point_card_presentation
 
 
@@ -162,6 +162,179 @@ def test_catalog_node_select_counts_non_archived_descendant_points_recursively()
     assert query.count("child.status <> 'archived'") >= 3
     assert "WHERE node_kind = 'point'" in query
     assert "ELSE 0" in query
+    assert "AS point_content_status" in query
+    assert "AS evidence_state" in query
+    assert "AS descendant_status_counts" in query
+    assert "SELECT pc.node_id AS content_id" in query
+    assert "SELECT pc.id AS content_id" not in query
+    assert "AND dt.canonical_point_id IS NULL" in query
+    assert "dpc.content_id IS NULL" in query
+    assert "AND (dt.status <> 'published' OR COALESCE(dpc.content_status, 'missing') <> 'published')" not in query
+    assert "AND COALESCE(dpc.content_status, 'missing') = 'published'" not in query
+
+
+def test_catalog_node_status_is_in_all_teacher_read_payload_contracts() -> None:
+    nodes_source = (CATALOG_DIR / "nodes.py").read_text(encoding="utf-8")
+    common_source = (CATALOG_DIR / "common.py").read_text(encoding="utf-8")
+
+    assert '"node_status": catalog_node_status_summary' in common_source
+    assert "nodes = [node_card(row_dict(row), include_teacher_note=True) for row in rows]" in nodes_source
+    assert 'return {"parent": node_card(parent, include_teacher_note=True), "children": children}' in nodes_source
+    assert '"node_status": node_status' in nodes_source
+    assert '"items": [node_card(row_dict(row), include_teacher_note=True) for row in rows]' in nodes_source
+
+
+def test_related_default_links_cast_nullable_canonical_point_parameter() -> None:
+    related_source = (CATALOG_DIR / "related_links.py").read_text(encoding="utf-8")
+
+    assert "CAST(:source_canonical_point_id AS text) IS NULL" in related_source
+    assert "sibling.canonical_point_id IS DISTINCT FROM CAST(:source_canonical_point_id AS text)" in related_source
+
+
+def _point_node(**overrides: object) -> dict[str, object]:
+    return {
+        "node_id": "cat-point-1",
+        "chapter_id": "CH1",
+        "parent_id": None,
+        "node_kind": "point",
+        "title": "Chlorine water point",
+        "summary": "",
+        "student_description": "",
+        "card_presentation": {},
+        "point_card_presentation": {},
+        "canonical_point_id": "cat-canon-1",
+        "canonical_point_status": "published",
+        "status": "published",
+        "display_order": 1,
+        "has_children": False,
+        "has_point_content": True,
+        "media_count": 1,
+        "published_media_count": 1,
+        "active_placement_count": 1,
+        "index_state": None,
+        "evidence_state": None,
+        **overrides,
+    }
+
+
+def _complete_content(**overrides: object) -> dict[str, object]:
+    return {
+        "content_status": "published",
+        "point_title": "Chlorine water point",
+        "principle_mode": "text",
+        "principle_text": "Chlorine water oxidizes bromide ions.",
+        "phenomenon_explanation": "The organic layer turns orange.",
+        "safety_note": "Use small amounts and ventilation.",
+        **overrides,
+    }
+
+
+def test_node_status_prioritizes_missing_video_over_publication() -> None:
+    card = node_card(
+        _point_node(media_count=0, published_media_count=0),
+        content=_complete_content(),
+        validation={"ok": True, "errors": [], "warnings": []},
+    )
+
+    assert card["node_status"]["primary_state"] == "needs_video"
+    assert card["node_status"]["primary_reason"] == "无视频"
+    assert card["node_status"]["core_readiness"]["video"] == "absent"
+    assert card["node_status"]["core_readiness"]["video_label"] == "无视频"
+    assert card["node_status"]["visibility"]["student_available"] is True
+
+
+def test_node_status_prioritizes_missing_content_before_missing_video() -> None:
+    card = node_card(
+        _point_node(has_point_content=False, media_count=0, published_media_count=0),
+        validation={"ok": True, "errors": [], "warnings": []},
+    )
+
+    assert card["node_status"]["primary_state"] == "needs_content"
+    assert card["node_status"]["primary_reason"] == "缺少原理、现象解释、安全提示"
+    assert card["node_status"]["core_readiness"]["content_fields"] == "missing"
+    assert card["node_status"]["core_readiness"]["video"] == "absent"
+    assert card["node_status"]["visibility"]["student_available"] is True
+    assert not any(condition["key"] == "experiment_video_missing" for condition in card["node_status"]["conditions"])
+
+
+def test_node_status_prioritizes_missing_learning_fields_before_sync_state() -> None:
+    card = node_card(
+        _point_node(index_state={"sync_status": "failed", "last_error": "ES down"}),
+        content=_complete_content(phenomenon_explanation="", safety_note=""),
+        validation={"ok": True, "errors": [], "warnings": []},
+    )
+
+    assert card["node_status"]["primary_state"] == "needs_content"
+    assert card["node_status"]["core_readiness"]["missing_fields"] == ["现象解释", "安全提示"]
+    assert card["node_status"]["async_consumption"]["search_index"] == "failed"
+
+
+def test_node_status_escalates_published_sync_failure_to_attention() -> None:
+    card = node_card(
+        _point_node(
+            index_state={"sync_status": "failed", "last_error": "ES down"},
+            evidence_state={"evidence_status": "succeeded"},
+        ),
+        content=_complete_content(),
+        validation={"ok": True, "errors": [], "warnings": []},
+    )
+
+    assert card["node_status"]["primary_state"] == "sync_attention"
+    assert card["node_status"]["visibility"]["student_available"] is True
+    assert any(condition["key"] == "search_index_attention" for condition in card["node_status"]["conditions"])
+
+
+def test_node_status_treats_unsaved_content_as_quality_gap_not_blocker() -> None:
+    card = node_card(
+        _point_node(has_point_content=False, media_count=1),
+        validation={
+            "ok": True,
+            "errors": [],
+            "warnings": [],
+        },
+    )
+
+    serialized = json.dumps(card["node_status"], ensure_ascii=False)
+    assert card["node_status"]["primary_state"] == "needs_content"
+    assert "三要素尚未填写" in serialized
+    assert card["node_status"]["visibility"]["student_available"] is True
+    assert "Canonical point content" not in serialized
+
+
+def test_node_structure_validation_does_not_warn_on_empty_learning_content() -> None:
+    validation = validate_node_payload(_point_node(has_point_content=False), None)
+
+    assert validation["ok"] is True
+    assert validation["warnings"] == []
+
+
+def test_directory_node_status_aggregates_descendant_actionability() -> None:
+    card = node_card(
+        {
+            "node_id": "cat-dir-1",
+            "chapter_id": "CH1",
+            "parent_id": None,
+            "node_kind": "directory",
+            "title": "Oxidation categories",
+            "summary": "",
+            "student_description": "",
+            "card_presentation": {},
+            "point_card_presentation": {},
+            "status": "published",
+            "display_order": 1,
+            "has_children": True,
+            "descendant_point_count": 5,
+            "descendant_status_counts": {"needs_content": 1, "needs_video": 2, "sync_attention": 1},
+            "has_point_content": False,
+            "media_count": 0,
+            "published_media_count": 0,
+        },
+        validation={"ok": True, "errors": [], "warnings": []},
+    )
+
+    assert card["node_status"]["primary_state"] == "needs_content"
+    assert card["node_status"]["core_readiness"]["descendant_action_count"] == 4
+    assert card["node_status"]["core_readiness"]["descendant_status_counts"]["sync_attention"] == 1
 
 
 def test_point_card_payload_is_constrained_and_does_not_inherit_directory_layout() -> None:
@@ -198,6 +371,8 @@ def test_point_card_payload_is_constrained_and_does_not_inherit_directory_layout
 def test_video_library_search_contract_is_point_only_with_directory_category_text() -> None:
     search_source = (SERVER_DIR / "app" / "domains" / "video_library" / "search.py").read_text(encoding="utf-8")
     catalog_search_source = (CATALOG_DIR / "search_documents.py").read_text(encoding="utf-8")
+    student_source = (CATALOG_DIR / "student_read_models.py").read_text(encoding="utf-8")
+    file_source = (CATALOG_DIR / "files.py").read_text(encoding="utf-8")
 
     assert "WHERE n.node_kind = 'point'" in search_source
     assert "canonical_point_id" in search_source
@@ -213,6 +388,11 @@ def test_video_library_search_contract_is_point_only_with_directory_category_tex
     assert "placement_node_id" in catalog_search_source
     assert '"category_text": category_text' in catalog_search_source
     assert "teacher_note" not in catalog_search_source
+    assert "not content or content.get(\"content_status\") != \"published\"" not in catalog_search_source
+    assert "content_for_search = (published_content if require_published else content) or" in catalog_search_source
+    assert "Point content not available" not in student_source
+    assert "published_content = content if content and content.get(\"content_status\") == \"published\" else None" in student_source
+    assert "pc.content_status = 'published'" not in file_source
 
 
 def test_catalog_tree_facade_stays_slim_and_boundaries_are_named() -> None:
@@ -237,6 +417,18 @@ def test_catalog_tree_facade_stays_slim_and_boundaries_are_named() -> None:
     for filename, symbol in expected_modules.items():
         source = (CATALOG_DIR / filename).read_text(encoding="utf-8")
         assert symbol in source
+
+
+def test_related_experiment_defaults_are_same_parent_points_without_debug_limits() -> None:
+    source = (CATALOG_DIR / "related_links.py").read_text(encoding="utf-8")
+
+    assert "same_parent_points" in source
+    assert "default_scope_label" in source
+    assert "sibling.parent_id IS NOT DISTINCT FROM :parent_id" in source
+    assert "sibling.node_kind = 'point'" in source
+    assert "sibling.status <> 'archived'" in source
+    assert "LIMIT 6" not in source
+    assert "same_parent_neighborhood" not in source
 
 
 def test_catalog_point_placement_backend_contracts_are_explicit() -> None:

@@ -4,10 +4,13 @@ import type {
   CatalogNodeDetail,
   CatalogNodeKind,
   CatalogNodeMovePayload,
+  CatalogNodePrimaryState,
+  CatalogNodeStatusSummary,
   CatalogNodeUpdatePayload,
   CatalogPointContentPayload,
   CatalogPrincipleMode,
   CatalogReactionEquationInput,
+  CatalogReactionEquationNormalized,
   CatalogRelatedLinksPayload,
 } from "../../api/catalogTree";
 
@@ -43,10 +46,13 @@ export type CatalogPointContentFormValues = {
 
 export type CatalogRelatedLinkFormItem = {
   target_node_id?: string;
+  target_title?: string;
   relation_type?: "manual" | "default_override" | "generated_default";
+  source?: string;
   hidden?: boolean;
   sort_order?: number;
   label?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type CatalogRelatedLinksFormValues = {
@@ -129,10 +135,16 @@ export function buildCatalogNodeUpdatePayload(values: CatalogNodeFormValues): Ca
 
 export function hydrateCatalogPointContentForm(detail: CatalogNodeDetail | null | undefined): CatalogPointContentFormValues {
   const content = detail?.point_content;
+  const editorTextForEquation = (equation: CatalogReactionEquationNormalized): string => {
+    const annotation = equation.annotation_text?.trim();
+    if (!annotation) return equation.raw_text || equation.canonical_display || "";
+    const core = equation.equation_core?.trim() || equation.raw_text?.split("//")[0]?.trim() || equation.canonical_display || "";
+    return core ? `${core} // ${annotation}` : equation.raw_text || equation.canonical_display || "";
+  };
   const reactionEquations =
     content?.reaction_equations?.length
       ? content.reaction_equations.map((equation, index) => ({
-          raw_text: equation.raw_text || equation.canonical_display || "",
+          raw_text: editorTextForEquation(equation),
           row_order: equation.row_order || index + 1,
         }))
       : content?.principle_equation
@@ -191,10 +203,13 @@ export function hydrateCatalogRelatedLinksForm(detail: CatalogNodeDetail | null 
   return {
     links: (detail?.related_links || []).map((link, index) => ({
       target_node_id: link.target_node_id,
-      relation_type: link.relation_type === "generated_default" ? "manual" : link.relation_type === "default_override" ? "default_override" : "manual",
+      target_title: link.target_title || link.target_node_id,
+      relation_type: link.relation_type === "default_override" ? "default_override" : link.relation_type === "generated_default" ? "generated_default" : "manual",
+      source: link.source || link.relation_type,
       hidden: Boolean(link.hidden),
       sort_order: link.sort_order || index + 1,
       label: link.label || "",
+      metadata: link.metadata || {},
     })),
   };
 }
@@ -206,12 +221,14 @@ export function buildCatalogRelatedLinksPayload(values: CatalogRelatedLinksFormV
       const targetNodeId = String(link.target_node_id || "").trim();
       if (!targetNodeId || seen.has(targetNodeId)) return;
       seen.add(targetNodeId);
+      const relationType = link.relation_type === "generated_default" ? "default_override" : link.relation_type || "manual";
       links.push({
         target_node_id: targetNodeId,
-        relation_type: link.relation_type || "manual",
+        relation_type: relationType,
         hidden: Boolean(link.hidden),
-        sort_order: Number(link.sort_order || index + 1),
+        sort_order: index + 1,
         label: link.label?.trim() || null,
+        metadata: link.metadata || {},
       });
     });
   return { links };
@@ -258,4 +275,137 @@ export function catalogStatusDotClass(status: string): string {
   if (status === "published") return "is-published";
   if (status === "archived") return "is-archived";
   return "is-draft";
+}
+
+export type CatalogStatusFilter = "all" | "actionable" | "needs_content" | "needs_video" | "published" | "sync_attention";
+
+export const catalogStatusFilterOptions: Array<{ value: CatalogStatusFilter; label: string }> = [
+  { value: "all", label: "全部" },
+  { value: "actionable", label: "待处理" },
+  { value: "needs_content", label: "缺内容" },
+  { value: "needs_video", label: "缺视频" },
+  { value: "published", label: "已发布" },
+  { value: "sync_attention", label: "同步异常" },
+];
+
+function isCatalogNodeDetail(value: CatalogNodeCard | CatalogNodeDetail): value is CatalogNodeDetail {
+  return Boolean((value as CatalogNodeDetail).node);
+}
+
+function fallbackStatusForNode(node: CatalogNodeCard): CatalogNodeStatusSummary {
+  const hasStructureErrors = Boolean(node.validation?.errors?.length);
+  const hasContent = Boolean(node.has_point_content);
+  const hasVideo = node.node_kind === "point" ? node.media_count > 0 : true;
+  const primaryState: CatalogNodePrimaryState =
+    node.status === "archived"
+      ? "archived"
+      : hasStructureErrors
+        ? "blocked"
+        : node.node_kind === "point" && !hasContent
+          ? "needs_content"
+          : node.node_kind === "point" && !hasVideo
+            ? "needs_video"
+            : node.status === "published"
+              ? "published"
+              : node.node_kind === "point"
+                ? "ready"
+                : "draft";
+  return {
+    primary_state: primaryState,
+    primary_label: catalogNodePrimaryStateLabel(primaryState),
+    primary_reason:
+      primaryState === "blocked"
+        ? "点位结构需要处理"
+        : primaryState === "needs_content"
+          ? "三要素尚未填写"
+        : primaryState === "needs_video"
+          ? "无视频"
+          : catalogNodePrimaryStateLabel(primaryState),
+    core_readiness: {
+      content_fields: hasContent ? "complete" : "missing",
+      video: hasVideo ? "present" : "absent",
+      video_label: hasVideo ? "有视频" : "无视频",
+      missing_fields: [],
+      descendant_action_count: 0,
+      descendant_status_counts: {},
+    },
+    visibility: {
+      placement: node.status,
+      shared_content: node.node_kind === "point" ? (hasContent ? node.status : "missing") : "not_applicable",
+      student_available: node.status === "published" && !hasStructureErrors,
+    },
+    async_consumption: {
+      search_index: node.index_state?.sync_status === "synced" ? "synced" : node.index_state?.sync_status || "idle",
+      ai_evidence: "idle",
+    },
+    conditions: [],
+  };
+}
+
+export function resolveCatalogNodeStatus(source: CatalogNodeCard | CatalogNodeDetail): CatalogNodeStatusSummary {
+  if (isCatalogNodeDetail(source)) {
+    return source.node_status || source.node.node_status || fallbackStatusForNode(source.node);
+  }
+  return source.node_status || fallbackStatusForNode(source);
+}
+
+export function catalogNodePrimaryStateLabel(state: string): string {
+  const labels: Record<string, string> = {
+    archived: "已归档",
+    blocked: "阻断",
+    needs_content: "缺内容",
+    needs_video: "缺视频",
+    draft: "草稿",
+    ready: "待发布",
+    published: "已发布",
+    sync_attention: "同步异常",
+  };
+  return labels[state] || "未知状态";
+}
+
+export function catalogNodePrimaryStateClass(state: string): string {
+  if (state === "published" || state === "ready") return "is-published";
+  if (state === "archived") return "is-archived";
+  if (state === "blocked" || state === "needs_content" || state === "needs_video" || state === "sync_attention") return "is-warning";
+  return "is-draft";
+}
+
+export function catalogNodeActionCount(node: CatalogNodeCard): number {
+  const status = resolveCatalogNodeStatus(node);
+  const counts = status.core_readiness.descendant_status_counts || {};
+  const aggregate =
+    Number(counts.blocked || 0) +
+    Number(counts.needs_content || 0) +
+    Number(counts.needs_video || 0) +
+    Number(counts.draft || 0) +
+    Number(counts.sync_attention || 0);
+  return node.node_kind === "directory" ? Math.max(Number(status.core_readiness.descendant_action_count ?? 0), aggregate) : 0;
+}
+
+export function catalogNodeStatusTooltip(node: CatalogNodeCard | CatalogNodeDetail): string {
+  const status = resolveCatalogNodeStatus(node);
+  const label = status.primary_label || catalogNodePrimaryStateLabel(status.primary_state);
+  const reason = status.primary_reason || label;
+  return reason === label ? label : `${label}：${reason}`;
+}
+
+export function matchesCatalogNodeStatusFilter(node: CatalogNodeCard, filter: CatalogStatusFilter): boolean {
+  if (filter === "all") return true;
+  const status = resolveCatalogNodeStatus(node);
+  const state = status.primary_state;
+  const counts = status.core_readiness.descendant_status_counts || {};
+  if (filter === "published") return state === "published";
+  if (filter === "needs_content") return state === "needs_content" || Number(counts.needs_content || 0) > 0;
+  if (filter === "needs_video") return state === "needs_video" || Number(counts.needs_video || 0) > 0;
+  if (filter === "sync_attention") {
+    return state === "sync_attention" || Number(counts.sync_attention || 0) > 0;
+  }
+  return (
+    state === "blocked" ||
+    state === "needs_content" ||
+    state === "needs_video" ||
+    state === "draft" ||
+    state === "ready" ||
+    catalogNodeActionCount(node) > 0
+  );
 }

@@ -18,9 +18,9 @@ from server.app.domains.catalog_tree.common import (
     assert_kind_transition,
     assert_parent_valid,
     breadcrumbs,
+    catalog_node_status_summary,
     canonical_point_id_for_node,
     clean,
-    content_publication_errors,
     dump_model,
     get_content,
     get_node,
@@ -153,8 +153,9 @@ def get_node_detail(*, node_id: str) -> dict[str, Any]:
             if point_capable(node) and node.get("canonical_point_id")
             else []
         )
+        node_status = catalog_node_status_summary(node, content=content, validation=validation, job_state=job_state)
         return {
-            "node": node_card(node, validation=validation, include_teacher_note=True),
+            "node": node_card(node, content=content, validation=validation, job_state=job_state, include_teacher_note=True),
             "canonical_point": {
                 "canonical_point_id": node.get("canonical_point_id"),
                 "title": node.get("canonical_point_title") or node.get("title"),
@@ -170,6 +171,7 @@ def get_node_detail(*, node_id: str) -> dict[str, Any]:
             "media_bindings": media,
             "related_links": related,
             "validation": validation,
+            "node_status": node_status,
             "search_preview": search_preview_for_node(session, node_id=node_id),
             "index_state": node.get("index_state"),
             "job_state": job_state,
@@ -961,8 +963,7 @@ def validate_selected_node(session: Any, *, node_id: str, include_subtree: bool 
         node = get_node(session, current_id)
         content = get_content(session, current_id) if point_capable(node) else None
         node_validation = validate_node_payload(node, content)
-        publish_errors = content_publication_errors(node, content)
-        current_errors = [*node_validation["errors"], *publish_errors]
+        current_errors = [*node_validation["errors"]]
         current_warnings = node_validation["warnings"]
         errors.extend(f"{node['title']}: {error}" for error in current_errors)
         warnings.extend(f"{node['title']}: {warning}" for warning in current_warnings)

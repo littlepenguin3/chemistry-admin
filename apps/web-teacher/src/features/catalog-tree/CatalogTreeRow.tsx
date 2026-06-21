@@ -23,7 +23,14 @@ import {
 
 import type { CatalogNodeCard } from "../../api/catalogTree";
 import type { CatalogArboristNode } from "./catalogTreeData";
-import { catalogNodeKindLabel, catalogStatusDotClass, catalogStatusLabel } from "./catalogTreeMappers";
+import {
+  catalogNodeActionCount,
+  catalogNodeKindLabel,
+  catalogNodePrimaryStateClass,
+  catalogNodePrimaryStateLabel,
+  catalogNodeStatusTooltip,
+  resolveCatalogNodeStatus,
+} from "./catalogTreeMappers";
 
 const { Text } = Typography;
 
@@ -49,18 +56,13 @@ function rowIcon(kind: CatalogNodeCard["node_kind"], open: boolean): ReactNode {
   return open ? <FolderOpen size={20} strokeWidth={1.85} /> : <Folder size={20} strokeWidth={1.85} />;
 }
 
-function pointStatusIcon(status: CatalogNodeCard["status"], hasWarnings: boolean): ReactNode {
-  if (hasWarnings) return <CircleAlert size={16} strokeWidth={1.9} />;
-  if (status === "draft") return <CircleDashed size={16} strokeWidth={1.9} />;
-  if (status === "archived") return <Archive size={16} strokeWidth={1.9} />;
+function primaryStatusIcon(state: string): ReactNode {
+  if (state === "blocked" || state === "needs_content" || state === "needs_video" || state === "sync_attention") {
+    return <CircleAlert size={16} strokeWidth={1.9} />;
+  }
+  if (state === "draft") return <CircleDashed size={16} strokeWidth={1.9} />;
+  if (state === "archived") return <Archive size={16} strokeWidth={1.9} />;
   return <CheckCircle2 size={16} strokeWidth={1.9} />;
-}
-
-function pointStatusClass(status: CatalogNodeCard["status"], hasWarnings: boolean): string {
-  if (hasWarnings) return "is-warning";
-  if (status === "draft") return "is-draft";
-  if (status === "archived") return "is-archived";
-  return "is-published";
 }
 
 function actionIcon(action: CatalogTreeRowAction): ReactNode {
@@ -184,10 +186,10 @@ export function CatalogTreeRow({
   onRequestLoad?: CatalogTreeLoadRequester;
 }) {
   const catalogNode = node.data.catalogNode;
-  const hasWarnings = Boolean(catalogNode.validation?.errors?.length || catalogNode.validation?.warnings?.length);
-  const warningText = [...(catalogNode.validation?.errors || []), ...(catalogNode.validation?.warnings || [])].join(" / ");
-  const statusLabel = catalogStatusLabel(catalogNode.status);
-  const pointStatusLabel = hasWarnings ? `${statusLabel}，有校验提示` : statusLabel;
+  const nodeStatus = resolveCatalogNodeStatus(catalogNode);
+  const primaryState = nodeStatus.primary_state;
+  const primaryStatusLabel = nodeStatus.primary_label || catalogNodePrimaryStateLabel(primaryState);
+  const primaryStatusText = catalogNodeStatusTooltip(catalogNode);
   const [isPointerDragHover, setIsPointerDragHover] = useState(false);
   const dragNodes = Array.isArray((tree as { dragNodes?: unknown }).dragNodes) ? tree.dragNodes : [];
   const canReceiveDirectoryHover =
@@ -200,8 +202,14 @@ export function CatalogTreeRow({
         dragNode.data.catalogNode.chapter_id === catalogNode.chapter_id,
     );
   const isDirectoryDropHover = node.willReceiveDrop || (isPointerDragHover && canReceiveDirectoryHover);
-  const directoryPointCount =
-    catalogNode.node_kind === "directory" && catalogNode.descendant_point_count > 0 ? String(catalogNode.descendant_point_count) : null;
+  const directoryActionCount = catalogNodeActionCount(catalogNode);
+  const directoryPointCount = catalogNode.node_kind === "directory" && catalogNode.descendant_point_count > 0 ? catalogNode.descendant_point_count : 0;
+  const directoryCountLabel =
+    directoryActionCount > 0
+      ? { value: directoryActionCount, label: `${directoryActionCount} 个待处理点位` }
+      : directoryPointCount > 0
+        ? { value: directoryPointCount, label: `共 ${directoryPointCount} 个点位` }
+        : null;
   const menuItems = buildMenuItems(catalogNode);
   const shouldAutoExpandDropTarget = isDirectoryDropHover && node.isInternal && !node.isOpen;
 
@@ -250,6 +258,7 @@ export function CatalogTreeRow({
       style={
         {
           ...style,
+          boxSizing: "border-box",
           "--catalog-elbow-left": `${13 + Math.max(0, node.level - 1) * 22}px`,
           "--catalog-elbow-width": "10px",
         } as CSSProperties & Record<string, string>
@@ -293,19 +302,19 @@ export function CatalogTreeRow({
         </span>
         <span className="catalog-sidebar-trailing">
           <span className="catalog-sidebar-slot catalog-sidebar-count-slot">
-            {directoryPointCount ? (
-              <Tooltip title={`共 ${directoryPointCount} 个点位`}>
-                <span className="catalog-sidebar-count" aria-label={`共 ${directoryPointCount} 个点位`}>
-                  {directoryPointCount}
+            {directoryCountLabel ? (
+              <Tooltip title={directoryCountLabel.label}>
+                <span className={directoryActionCount > 0 ? "catalog-sidebar-count is-actionable" : "catalog-sidebar-count"} aria-label={directoryCountLabel.label}>
+                  {directoryCountLabel.value}
                 </span>
               </Tooltip>
             ) : null}
           </span>
           <span className="catalog-sidebar-slot catalog-sidebar-directory-status-slot">
             {catalogNode.node_kind === "directory" ? (
-              <Tooltip title={statusLabel}>
-                <span className="catalog-sidebar-status" aria-label={`状态：${statusLabel}`}>
-                  <span className={`catalog-sidebar-status-dot ${catalogStatusDotClass(catalogNode.status)}`} aria-hidden="true" />
+              <Tooltip title={primaryStatusText}>
+                <span className="catalog-sidebar-status" aria-label={`节点状态：${primaryStatusText}`}>
+                  <span className={`catalog-sidebar-status-dot ${catalogNodePrimaryStateClass(primaryState)}`} aria-hidden="true" />
                 </span>
               </Tooltip>
             ) : null}
@@ -335,12 +344,12 @@ export function CatalogTreeRow({
                 />
               </Dropdown>
             ) : (
-              <Tooltip title={hasWarnings && warningText ? `${pointStatusLabel}：${warningText}` : pointStatusLabel}>
+              <Tooltip title={primaryStatusText}>
                 <span
-                  className={`catalog-sidebar-point-status ${pointStatusClass(catalogNode.status, hasWarnings)}`}
-                  aria-label={`点位状态：${pointStatusLabel}`}
+                  className={`catalog-sidebar-point-status ${catalogNodePrimaryStateClass(primaryState)}`}
+                  aria-label={`点位状态：${primaryStatusText}`}
                 >
-                  {pointStatusIcon(catalogNode.status, hasWarnings)}
+                  {primaryStatusIcon(primaryState)}
                 </span>
               </Tooltip>
             )}

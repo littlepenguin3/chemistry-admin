@@ -8,7 +8,7 @@ import { CatalogAdvancedPanel } from "./CatalogAdvancedPanel";
 import { CatalogAiContextPanel } from "./CatalogAiContextPanel";
 import { CatalogEditorHeader } from "./CatalogEditorHeader";
 import { CatalogNodeContentPanel } from "./CatalogNodeContentPanel";
-import { CatalogPublishChecksPanel } from "./CatalogPublishChecksPanel";
+import { CatalogNodeStatusPanel } from "./CatalogNodeStatusPanel";
 import { CatalogRelatedLinksPanel } from "./CatalogRelatedLinksPanel";
 import { CatalogStudentCardPanel } from "./CatalogStudentCardPanel";
 import { CatalogVideoPanel } from "./CatalogVideoPanel";
@@ -20,6 +20,7 @@ import {
   hydrateCatalogPointContentForm,
   hydrateCatalogRelatedLinksForm,
   isPointCapable,
+  resolveCatalogNodeStatus,
   type CatalogNodeFormValues,
   type CatalogPointContentFormValues,
   type CatalogRelatedLinksFormValues,
@@ -27,8 +28,8 @@ import {
 
 const { Text, Title } = Typography;
 
-export const directoryCatalogEditorTabKeys = ["content", "student-card", "publish", "advanced"] as const;
-export const pointCatalogEditorTabKeys = ["content", "video", "related", "student-card", "ai-context", "publish", "advanced"] as const;
+export const directoryCatalogEditorTabKeys = ["content", "student-card", "node-status", "advanced"] as const;
+export const pointCatalogEditorTabKeys = ["content", "video", "related", "student-card", "ai-context", "node-status", "advanced"] as const;
 
 export type CatalogEditorTabKey = (typeof pointCatalogEditorTabKeys)[number];
 
@@ -68,6 +69,8 @@ export function CatalogTreeEditor({
     () => new Map((mediaAssets.data?.items || []).map((asset) => [asset.id, asset])),
     [mediaAssets.data?.items],
   );
+  const nodeStatus = detail ? resolveCatalogNodeStatus(detail) : null;
+  const canBindVideo = !pointCapable || nodeStatus?.core_readiness.content_fields === "complete";
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -123,7 +126,7 @@ export function CatalogTreeEditor({
           </div>
           <div className="catalog-editor-empty-copy">
             <Title level={4}>请选择左侧目录或点位</Title>
-            <Text type="secondary">目录负责组织学生导航，点位负责维护学习内容、视频绑定与发布检查。</Text>
+            <Text type="secondary">目录负责组织学生导航，点位负责维护学习内容、视频绑定与节点状态。</Text>
           </div>
           <div className="catalog-editor-empty-hints" aria-hidden="true">
             <span>目录</span>
@@ -171,6 +174,7 @@ export function CatalogTreeEditor({
           setMediaAssetIds={setMediaAssetIds}
           mediaAssetMap={mediaAssetMap}
           mutations={mutations}
+          canBindVideo={canBindVideo}
         />
       ),
     },
@@ -202,10 +206,10 @@ export function CatalogTreeEditor({
       children: <CatalogAiContextPanel detail={detail} mutations={mutations} />,
     },
     {
-      key: "publish",
-      label: "发布检查",
+      key: "node-status",
+      label: "节点状态",
       forceRender: true,
-      children: <CatalogPublishChecksPanel detail={detail} validation={validation} />,
+      children: <CatalogNodeStatusPanel detail={detail} validation={validation} mutations={mutations} />,
     },
     {
       key: "advanced",

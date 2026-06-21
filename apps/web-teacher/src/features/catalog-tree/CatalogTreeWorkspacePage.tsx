@@ -10,8 +10,15 @@ import { formatChapterTitle } from "../../lib/resourceUtils";
 import { CatalogTreeEditor } from "./CatalogTreeEditor";
 import { useCatalogChildren, useCatalogChapters, useCatalogMutations, useCatalogNodeDetail, useCatalogRoots, useCatalogSearch } from "./catalogTreeHooks";
 import { CatalogTreeNodeList } from "./CatalogTreeNodeList";
-import { buildCatalogNodeCreatePayload, catalogNodeKindLabel } from "./catalogTreeMappers";
-import type { CatalogNodeFormValues } from "./catalogTreeMappers";
+import {
+  buildCatalogNodeCreatePayload,
+  catalogNodeKindLabel,
+  catalogNodePrimaryStateLabel,
+  catalogStatusFilterOptions,
+  matchesCatalogNodeStatusFilter,
+  resolveCatalogNodeStatus,
+} from "./catalogTreeMappers";
+import type { CatalogNodeFormValues, CatalogStatusFilter } from "./catalogTreeMappers";
 import "./catalogTree.css";
 
 const { Text } = Typography;
@@ -178,6 +185,7 @@ export function CatalogTreeWorkspacePage() {
   const [chapterId, setChapterId] = useState<string>();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
+  const [statusFilter, setStatusFilter] = useState<CatalogStatusFilter>("all");
   const [reuseSearchText, setReuseSearchText] = useState("");
   const [copySourceSearchText, setCopySourceSearchText] = useState("");
   const [createIntent, setCreateIntent] = useState<CreateIntent | null>(null);
@@ -246,16 +254,25 @@ export function CatalogTreeWorkspacePage() {
     label: chapter.label,
   }));
   const rootItems = roots.data?.nodes || [];
+  const searchItems = useMemo(
+    () => (search.data?.items || []).filter((item) => matchesCatalogNodeStatusFilter(item, statusFilter)),
+    [search.data?.items, statusFilter],
+  );
   const siblingItems = selectedDetail.data?.node.parent_id ? selectedSiblingChildren.data?.children || [] : rootItems;
   const currentChapter = chapters.data?.find((chapter) => chapter.chapter_id === chapterId);
   const currentChapterLabel = currentChapter ? formatChapterTitle(currentChapter.chapter_title, currentChapter.chapter_id) : "未选择章节";
-  const selectedValidation = selectedDetail.data?.validation;
-  const validationSummary = useMemo(() => {
-    if (!selectedValidation) return null;
-    if (selectedValidation.errors.length) return <Tag color="red">错误 {selectedValidation.errors.length}</Tag>;
-    if (selectedValidation.warnings.length) return <Tag color="gold">提示 {selectedValidation.warnings.length}</Tag>;
-    return <Tag color="green">可发布</Tag>;
-  }, [selectedValidation]);
+  const nodeStatusSummary = useMemo(() => {
+    if (!selectedDetail.data) return null;
+    const status = resolveCatalogNodeStatus(selectedDetail.data);
+    const color = ["blocked", "needs_content", "needs_video"].includes(status.primary_state)
+      ? "red"
+      : status.primary_state === "sync_attention"
+        ? "gold"
+        : status.primary_state === "published"
+          ? "green"
+          : "default";
+    return <Tag color={color}>{status.primary_label || catalogNodePrimaryStateLabel(status.primary_state)}</Tag>;
+  }, [selectedDetail.data]);
 
   const openCreate = (kind: CatalogNodeKind, parentId?: string | null) => {
     if (!chapterId) return;
@@ -380,7 +397,7 @@ export function CatalogTreeWorkspacePage() {
         description="在当前章节下维护多级目录和视频点位，目录负责分组导航，点位负责学习内容。"
         extra={
           <Space wrap>
-            {validationSummary}
+            {nodeStatusSummary}
             <Button icon={<ReloadOutlined />} onClick={() => roots.refetch()}>
               刷新
             </Button>
@@ -422,12 +439,21 @@ export function CatalogTreeWorkspacePage() {
               placeholder="搜索目录、点位、教学备注或旧身份"
               allowClear
             />
+            <Radio.Group
+              className="catalog-status-filter"
+              size="small"
+              optionType="button"
+              buttonStyle="solid"
+              value={statusFilter}
+              options={catalogStatusFilterOptions}
+              onChange={(event) => setStatusFilter(event.target.value as CatalogStatusFilter)}
+            />
           </div>
           {searchText.trim().length >= 2 ? (
             <div className="catalog-search-results catalog-tree-search-results">
-              <QueryState loading={search.isFetching} error={search.error} empty={!search.data?.items.length}>
+              <QueryState loading={search.isFetching} error={search.error} empty={!searchItems.length}>
                 <Flex gap={8} wrap>
-                  {(search.data?.items || []).map((item) => (
+                  {searchItems.map((item) => (
                     <Button
                       key={item.node_id}
                       icon={kindIcon(item.node_kind)}
@@ -457,6 +483,7 @@ export function CatalogTreeWorkspacePage() {
             onReorder={(items) => mutations.reorderNodes.mutateAsync(items)}
             onRefreshRoots={() => roots.refetch()}
             onChangeStatus={(node, action) => mutations.changeNodeStatus.mutate({ nodeId: node.node_id, action })}
+            statusFilter={statusFilter}
           />
         </aside>
 

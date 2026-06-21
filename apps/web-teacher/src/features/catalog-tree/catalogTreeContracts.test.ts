@@ -4,6 +4,7 @@ import advancedPanelSource from "./CatalogAdvancedPanel.tsx?raw";
 import aiContextPanelSource from "./CatalogAiContextPanel.tsx?raw";
 import editorHeaderSource from "./CatalogEditorHeader.tsx?raw";
 import contentPanelSource from "./CatalogNodeContentPanel.tsx?raw";
+import nodeStatusPanelSource from "./CatalogNodeStatusPanel.tsx?raw";
 import editorSource from "./CatalogTreeEditor.tsx?raw";
 import rowSource from "./CatalogTreeRow.tsx?raw";
 import treeDataSource from "./catalogTreeData.ts?raw";
@@ -22,7 +23,8 @@ describe("catalog tree UI contracts", () => {
     expect(editorSource).toContain('key: "related"');
     expect(editorSource).toContain('key: "student-card"');
     expect(editorSource).toContain('key: "ai-context"');
-    expect(editorSource).toContain('key: "publish"');
+    expect(editorSource).toContain('key: "node-status"');
+    expect(editorSource).not.toContain('key: "publish"');
     expect(editorSource).toContain('key: "advanced"');
     expect(aiContextPanelSource).toContain("静态兜底证据");
     expect(aiContextPanelSource).toContain("静态证据状态流");
@@ -129,6 +131,17 @@ describe("catalog tree UI contracts", () => {
     expect(catalogTreeApiSource).not.toContain("uploadCatalogPointMedia");
   });
 
+  it("presents related experiments as an ordered learning list instead of raw link records", () => {
+    expect(relatedPanelSource).toContain("同一直接父目录下的其他实验");
+    expect(relatedPanelSource).toContain("重置为同目录默认");
+    expect(relatedPanelSource).toContain("拖动调整顺序");
+    expect(relatedPanelSource).toContain("手动添加");
+    expect(relatedPanelSource).toContain("已调整默认");
+    expect(relatedPanelSource).not.toContain("目标点位 Node ID");
+    expect(relatedPanelSource).not.toContain("添加相关链接");
+    expect(relatedPanelSource).not.toContain('label="关系"');
+  });
+
   it("uses Arborist movement with invalid point-drop feedback instead of Ant Design Tree behavior", () => {
     expect(treeSource).toContain('from "react-arborist"');
     expect(treeSource).toContain("onMove={handleMove}");
@@ -172,6 +185,25 @@ describe("catalog tree UI contracts", () => {
     expect(rowSource).not.toContain("catalog-tree-drag-handle");
     expect([treeSource, rowSource].join("\n")).not.toContain("ArrowUpOutlined");
     expect([treeSource, rowSource].join("\n")).not.toContain("ArrowDownOutlined");
+  });
+
+  it("keeps the sidebar tree clipped horizontally while preserving vertical scrolling", async () => {
+    // @ts-expect-error The frontend tsconfig intentionally omits Node types, but Vitest runs this contract in Node.
+    const { readFileSync } = await import("node:fs");
+    const cwd = (globalThis as unknown as { process: { cwd: () => string } }).process.cwd();
+    const catalogTreeCssSource = readFileSync(`${cwd}/src/features/catalog-tree/catalogTree.css`, "utf8") as string;
+
+    expect(catalogTreeCssSource).toContain("overflow-x: hidden !important");
+    expect(catalogTreeCssSource).toContain("overflow-y: auto !important");
+    expect(catalogTreeCssSource).toMatch(/\.catalog-arborist-tree > div,[\s\S]*\.catalog-arborist-tree > div > div\s*\{[\s\S]*min-width: 0 !important;/);
+    expect(catalogTreeCssSource).toMatch(/\.catalog-arborist-tree > div > div\s*\{[\s\S]*overflow: hidden;/);
+    expect(catalogTreeCssSource).toContain("--catalog-sidebar-trailing-width: 130px");
+    expect(catalogTreeCssSource).toContain("grid-template-columns: 20px 24px minmax(0, 1fr) var(--catalog-sidebar-trailing-width)");
+    expect(catalogTreeCssSource).toMatch(/\.catalog-sidebar-item\s*\{[\s\S]*box-sizing: border-box;[\s\S]*width: 100%;[\s\S]*max-width: 100%;[\s\S]*overflow: hidden;/);
+    expect(catalogTreeCssSource).toMatch(/\.catalog-sidebar-row\s*\{[\s\S]*box-sizing: border-box;[\s\S]*width: 100%;[\s\S]*max-width: 100%;[\s\S]*min-width: 0;/);
+    expect(catalogTreeCssSource).toMatch(/\.catalog-sidebar-copy\s*\{[\s\S]*box-sizing: border-box;[\s\S]*min-width: 0;[\s\S]*overflow: hidden;/);
+    expect(catalogTreeCssSource).toMatch(/\.catalog-sidebar-trailing\s*\{[\s\S]*box-sizing: border-box;[\s\S]*width: var\(--catalog-sidebar-trailing-width\);/);
+    expect(rowSource).toContain('boxSizing: "border-box"');
   });
 
   it("keeps sidebar guide lines row-clipped while preserving L-shaped branch states", () => {
@@ -232,9 +264,20 @@ describe("catalog tree UI contracts", () => {
   });
 
   it("gates directory-only editor queries and tabs", () => {
-    expect(editorSource).toContain('["content", "student-card", "publish", "advanced"]');
-    expect(editorSource).toContain('["content", "video", "related", "student-card", "ai-context", "publish", "advanced"]');
+    expect(editorSource).toContain('["content", "student-card", "node-status", "advanced"]');
+    expect(editorSource).toContain('["content", "video", "related", "student-card", "ai-context", "node-status", "advanced"]');
     expect(editorSource).toContain("useCatalogMediaAssets(pointCapable)");
     expect(editorSource).toContain("pointCapable && relatedQuery.trim().length >= 2");
+  });
+
+  it("groups node status panel diagnostics without the legacy publish-check panel", () => {
+    expect(editorSource).toContain("CatalogNodeStatusPanel");
+    expect(editorSource).not.toContain("CatalogPublishChecksPanel");
+    expect(nodeStatusPanelSource).toContain("核心完整性");
+    expect(nodeStatusPanelSource).toContain("学生可见性");
+    expect(nodeStatusPanelSource).toContain("同步诊断");
+    expect(nodeStatusPanelSource).toContain("刷新 ES");
+    expect(nodeStatusPanelSource).toContain("刷新 RAG");
+    expect(nodeStatusPanelSource).toContain("重试失败任务");
   });
 });

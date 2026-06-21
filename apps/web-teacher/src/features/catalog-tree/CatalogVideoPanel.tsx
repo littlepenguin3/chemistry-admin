@@ -17,6 +17,7 @@ export function CatalogVideoPanel({
   setMediaAssetIds,
   mediaAssetMap,
   mutations,
+  canBindVideo,
 }: {
   detail: CatalogNodeDetail;
   mediaAssets: UseQueryResult<ApiList<MediaAsset>>;
@@ -24,6 +25,7 @@ export function CatalogVideoPanel({
   setMediaAssetIds: (ids: string[]) => void;
   mediaAssetMap: Map<string, MediaAsset>;
   mutations: CatalogMutations;
+  canBindVideo: boolean;
 }) {
   const { node } = detail;
 
@@ -54,6 +56,7 @@ export function CatalogVideoPanel({
           <ArrowRightOutlined />
         </a>
       </div>
+      {!canBindVideo ? <Text type="secondary">请先补齐三要素后再绑定实验视频。</Text> : null}
       <div className="catalog-media-bind-toolbar">
         <Select
           mode="multiple"
@@ -62,6 +65,7 @@ export function CatalogVideoPanel({
           value={mediaAssetIds}
           onChange={setMediaAssetIds}
           loading={mediaAssets.isFetching}
+          disabled={!canBindVideo}
           placeholder="选择后台视频素材"
           options={(mediaAssets.data?.items || []).map((asset) => ({
             value: asset.id,
@@ -70,7 +74,7 @@ export function CatalogVideoPanel({
         />
         <Button
           icon={<VideoCameraOutlined />}
-          disabled={!mediaAssetIds.length}
+          disabled={!canBindVideo || !mediaAssetIds.length}
           loading={mutations.bindMedia.isPending}
           onClick={() => mutations.bindMedia.mutate({ nodeId: node.node_id, assetIds: mediaAssetIds, assetMap: mediaAssetMap, status: "draft" })}
         >

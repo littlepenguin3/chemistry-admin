@@ -130,12 +130,12 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
         return None
     content = get_content(session, node["node_id"])
     if require_published:
-        if node["status"] != "published" or not content or content.get("content_status") != "published":
+        if node["status"] != "published":
             return None
         if not published_path_available(session, node["node_id"]):
             return None
-    if not content:
-        return None
+    published_content = content if content and content.get("content_status") == "published" else None
+    content_for_search = (published_content if require_published else content) or {"point_title": node["title"], "principle_mode": "text"}
 
     from server.app.domains.catalog_tree.media_bindings import student_videos
     from server.app.domains.catalog_tree.related_links import related_links
@@ -156,16 +156,20 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
     )
     related = related_links(session, node["node_id"], include_hidden=False, include_defaults=True)
     videos = student_videos(session, node["node_id"])
-    principle = reaction_principle_text(content) if content.get("principle_mode") == "equation" else clean(content.get("principle_text"))
-    core_principle = (
-        reaction_principle_text(content, include_annotations=False)
-        if content.get("principle_mode") == "equation"
-        else clean(content.get("principle_text"))
+    principle = (
+        reaction_principle_text(content_for_search)
+        if content_for_search.get("principle_mode") == "equation"
+        else clean(content_for_search.get("principle_text"))
     )
-    phenomenon = clean(content.get("phenomenon_explanation"))
-    safety = clean(content.get("safety_note"))
-    chemistry = chemistry_terms_for_document(content.get("point_title"), core_principle, phenomenon, safety)
-    equation_terms = reaction_derived_terms(content)
+    core_principle = (
+        reaction_principle_text(content_for_search, include_annotations=False)
+        if content_for_search.get("principle_mode") == "equation"
+        else clean(content_for_search.get("principle_text"))
+    )
+    phenomenon = clean(content_for_search.get("phenomenon_explanation"))
+    safety = clean(content_for_search.get("safety_note"))
+    chemistry = chemistry_terms_for_document(content_for_search.get("point_title"), core_principle, phenomenon, safety)
+    equation_terms = reaction_derived_terms(content_for_search)
     formulae = sorted(set([*chemistry["formulae"], *equation_terms["formulae"]]))
     aliases = sorted(set([*chemistry["aliases"], *equation_terms["aliases"]]))
     reaction_features = sorted(set([*chemistry["reaction_features"], *equation_terms["reaction_features"]]))
@@ -177,7 +181,7 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
         for item in [
             path_text,
             category_text,
-            clean(content.get("point_title")),
+            clean(content_for_search.get("point_title")),
             principle,
             phenomenon,
             safety,
@@ -202,14 +206,14 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
         "chapter_path": [path[0]["title"]] if path else [],
         "catalog_path": [item["title"] for item in path],
         "category_text": category_text,
-        "title": clean(content.get("point_title")) or node["title"],
+        "title": clean(content_for_search.get("point_title")) or node["title"],
         "subtitle": path_text,
         "snippet": phenomenon or principle,
         "search_text": search_text,
         "principle": principle,
         "phenomenon_explanation": phenomenon,
         "safety_note": safety,
-        "reaction_equations": content.get("reaction_equations") if content.get("principle_mode") == "equation" else [],
+        "reaction_equations": content_for_search.get("reaction_equations") if content_for_search.get("principle_mode") == "equation" else [],
         "formulae": formulae,
         "aliases": aliases,
         "reaction_features": reaction_features,
@@ -227,8 +231,8 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
             "placement_node_id": node["node_id"],
             "canonical_point_id": node.get("canonical_point_id"),
             "chapter_id": node["chapter_id"],
-            "context_title": clean(content.get("point_title")) or node["title"],
+            "context_title": clean(content_for_search.get("point_title")) or node["title"],
             "context_summary": phenomenon or principle,
         },
-        "updated_at": content.get("updated_at") or node.get("updated_at"),
+        "updated_at": content_for_search.get("updated_at") or node.get("updated_at"),
     }
