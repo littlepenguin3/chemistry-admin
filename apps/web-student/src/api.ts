@@ -227,6 +227,11 @@ export type StudentRelatedPoint = {
 export type StudentReactionEquation = {
   row_order: number;
   raw_text: string;
+  equation_core?: string | null;
+  annotation_text?: string | null;
+  annotation_formulae?: string[];
+  annotation_aliases?: string[];
+  condition_tags?: string[];
   canonical_display?: string | null;
   canonical_mhchem?: string | null;
   validation_status?: "valid" | "warning" | "invalid" | string;

@@ -5,6 +5,7 @@ import {
   buildCatalogNodeCreatePayload,
   buildCatalogPointContentPayload,
   buildCatalogRelatedLinksPayload,
+  catalogStatusColor,
   catalogStatusDotClass,
   catalogStatusLabel,
   displayCatalogPointTitle,
@@ -258,5 +259,6 @@ describe("catalog tree mappers", () => {
     expect(catalogStatusDotClass("published")).toBe("is-published");
     expect(catalogStatusDotClass("draft")).toBe("is-draft");
     expect(catalogStatusDotClass("archived")).toBe("is-archived");
+    expect(catalogStatusColor("draft")).toBe("default");
   });
 });

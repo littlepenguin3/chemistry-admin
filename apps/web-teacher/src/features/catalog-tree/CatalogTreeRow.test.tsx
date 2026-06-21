@@ -163,6 +163,21 @@ describe("CatalogTreeRow", () => {
     expect(container.querySelector(".catalog-sidebar-point-status")).toHaveClass("is-published");
   });
 
+  it("renders draft point status as neutral instead of warning", () => {
+    const { container } = renderRow({
+      catalogNode: node({
+        node_id: "point-draft",
+        title: "Draft point",
+        node_kind: "point",
+        status: "draft",
+      }),
+      isInternal: false,
+    });
+
+    expect(container.querySelector(".catalog-sidebar-point-status")).toHaveClass("is-draft");
+    expect(container.querySelector(".catalog-sidebar-point-status")).not.toHaveClass("is-warning");
+  });
+
   it("keeps selected state and long-title title text on the row shell", () => {
     const title = "氯水对溴离子、碘离子混合溶液的氧化性验证实验";
     const { container } = renderRow({

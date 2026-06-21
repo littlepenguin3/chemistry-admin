@@ -78,6 +78,11 @@ class CatalogReactionEquationNormalized(BaseModel):
     canonical_point_id: str | None = None
     row_order: int = 0
     raw_text: str
+    equation_core: str = ""
+    annotation_text: str = ""
+    annotation_formulae: list[str] = Field(default_factory=list)
+    annotation_aliases: list[str] = Field(default_factory=list)
+    condition_tags: list[str] = Field(default_factory=list)
     canonical_display: str = ""
     canonical_mhchem: str | None = None
     plain_search_text: str = ""
@@ -127,6 +132,9 @@ class CatalogEquationAssistDraft(BaseModel):
     replacement_text: str | None = None
     canonical_display: str = ""
     canonical_mhchem: str | None = None
+    annotation_text: str = ""
+    annotation_formulae: list[str] = Field(default_factory=list)
+    condition_tags: list[str] = Field(default_factory=list)
     validation_status: str = Field(default="warning", pattern="^(valid|warning|invalid)$")
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

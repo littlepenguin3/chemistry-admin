@@ -13,6 +13,12 @@ import { compactText } from "../../shared/utils/text";
 import type { AssistantContext } from "../assistant/assistantContext";
 import { catalogPathLabel } from "./CatalogNodeCards";
 
+function studentEquationDisplayText(equation: NonNullable<StudentPointDetailResponse["reaction_equations"]>[number]): string {
+  const core = equation.canonical_display || equation.equation_core || equation.raw_text;
+  const annotation = equation.annotation_text?.trim();
+  return [core, annotation ? `说明：${annotation}` : ""].filter(Boolean).join("\n");
+}
+
 export function CatalogPointDetailPanel({
   nodeId,
   search,
@@ -62,7 +68,7 @@ export function CatalogPointDetailPanel({
     detail?.principle_mode === "equation"
       ? (detail.reaction_equations || [])
           .filter((equation) => equation.validation_status !== "invalid")
-          .map((equation) => equation.canonical_display || equation.raw_text)
+          .map((equation) => studentEquationDisplayText(equation))
           .filter(Boolean)
           .join("\n") || detail.principle_equation
       : detail?.principle_text;

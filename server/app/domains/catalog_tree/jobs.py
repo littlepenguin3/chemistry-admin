@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from server.app.domains.assistant.rag_sources import _source_evidence_payload, _source_from_chunk
 from server.app.domains.catalog_tree.common import breadcrumbs, clean, get_content, get_node, point_capable
-from server.app.domains.catalog_tree.equations import reaction_derived_terms, reaction_principle_text
+from server.app.domains.catalog_tree.equations import reaction_derived_terms, reaction_principle_text, reaction_row_display_text
 from server.app.domains.errors import DomainHTTPException as HTTPException, domain_status as status
 from server.app.hybrid_rag import retrieve_hybrid_context
 from server.app.infrastructure.database import db_session
@@ -966,6 +966,9 @@ def _catalog_point_context(session: Any, *, node_id: str) -> dict[str, Any]:
         "formulae": [],
         "aliases": [],
         "reaction_features": [],
+        "annotation_formulae": [],
+        "annotation_aliases": [],
+        "condition_tags": [],
         "participants": [],
     }
     field_contributors = [
@@ -995,6 +998,9 @@ def _catalog_point_context(session: Any, *, node_id: str) -> dict[str, Any]:
         "formulae": equation_terms.get("formulae") or [],
         "aliases": equation_terms.get("aliases") or [],
         "reaction_features": equation_terms.get("reaction_features") or [],
+        "annotation_formulae": equation_terms.get("annotation_formulae") or [],
+        "annotation_aliases": equation_terms.get("annotation_aliases") or [],
+        "condition_tags": equation_terms.get("condition_tags") or [],
         "videos": videos,
         "related_points": related,
         "field_contributors": field_contributors,
@@ -1004,7 +1010,7 @@ def _catalog_point_context(session: Any, *, node_id: str) -> dict[str, Any]:
 def _catalog_point_queries(context: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
     path_text = " ".join(context.get("catalog_path") or [])
     equation_text = " ".join(
-        str(row.get("canonical_display") or row.get("raw_text") or "")
+        reaction_row_display_text(row)
         for row in context.get("normalized_equations") or []
         if isinstance(row, dict)
     )
@@ -1017,7 +1023,16 @@ def _catalog_point_queries(context: dict[str, Any]) -> tuple[list[str], dict[str
         str(context.get("phenomenon_explanation") or ""),
         str(context.get("safety_note") or ""),
     ]
-    chemistry_terms = " ".join([*(context.get("formulae") or []), *(context.get("aliases") or []), *(context.get("reaction_features") or [])])
+    chemistry_terms = " ".join(
+        [
+            *(context.get("formulae") or []),
+            *(context.get("aliases") or []),
+            *(context.get("reaction_features") or []),
+            *(context.get("annotation_formulae") or []),
+            *(context.get("annotation_aliases") or []),
+            *(context.get("condition_tags") or []),
+        ]
+    )
     raw_queries = [
         " ".join(item for item in base_parts if item),
         " ".join(item for item in [str(context.get("title") or ""), chemistry_terms, str(context.get("phenomenon_explanation") or "")] if item),

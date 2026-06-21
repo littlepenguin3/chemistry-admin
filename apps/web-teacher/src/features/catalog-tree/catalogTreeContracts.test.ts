@@ -93,7 +93,8 @@ describe("catalog tree UI contracts", () => {
     expect(contentPanelSource).toContain("catalog-equation-code-editor");
     expect(contentPanelSource).toContain("catalog-equation-code-gutter");
     expect(contentPanelSource).toContain("applyCandidate(candidate)");
-    expect(contentPanelSource).toContain("runEquationAssist(equation.row_order)");
+    expect(contentPanelSource).toContain("catalog-equation-apply-button");
+    expect(contentPanelSource).not.toContain("runEquationAssist(equation.row_order)");
     expect(contentPanelSource).toContain('mode: "suggest"');
     expect(contentPanelSource).toContain("previewSeq.current");
     expect(contentPanelSource).toContain("setTimeout");
@@ -101,8 +102,8 @@ describe("catalog tree UI contracts", () => {
     expect(contentPanelSource).toContain("previewCatalogReactionEquations(rows, textValue)");
     expect(contentPanelSource).toContain("assistCatalogReactionEquations");
     expect(contentPanelSource).toContain("catalog-equation-natural-editor");
-    expect(contentPanelSource).toContain("AI 校对本行");
-    expect(contentPanelSource).toContain("AI 校对全部");
+    expect(contentPanelSource).not.toContain("AI 校对本行");
+    expect(contentPanelSource).toContain("AI 校对");
     expect(contentPanelSource).toContain("查看 AI 分析");
     expect(contentPanelSource).not.toContain("系统理解为");
     expect(contentPanelSource).not.toContain("系统校对");

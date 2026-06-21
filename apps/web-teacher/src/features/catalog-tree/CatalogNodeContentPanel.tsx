@@ -52,6 +52,24 @@ function replaceEquationLine(value: string, rowOrder: number, replacement: strin
   return next.join("\n");
 }
 
+function inlineAnnotationSuffix(value: string): string {
+  const delimiterIndex = value.indexOf("//");
+  if (delimiterIndex < 0) return "";
+  return value.slice(delimiterIndex).trim();
+}
+
+function currentEquationLine(value: string, rowOrder: number): string {
+  const lines = value.split(/\r?\n/);
+  const nonEmptyLines = lines.filter((line) => line.trim());
+  return nonEmptyLines[rowOrder - 1] || "";
+}
+
+function preserveInlineAnnotationSuffix(currentLine: string, replacement: string): string {
+  const currentSuffix = inlineAnnotationSuffix(currentLine);
+  if (!currentSuffix || replacement.includes("//")) return replacement;
+  return `${replacement.trim()} ${currentSuffix}`;
+}
+
 function CatalogEquationCodeEditor({
   value = "",
   onChange,
@@ -113,7 +131,6 @@ export function CatalogNodeContentPanel({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [assistLoading, setAssistLoading] = useState(false);
-  const [assistLoadingRow, setAssistLoadingRow] = useState<number | null>(null);
   const [assistMessage, setAssistMessage] = useState("");
   const [assistDrafts, setAssistDrafts] = useState<CatalogEquationAssistDraft[]>([]);
   const previewSeq = useRef(0);
@@ -174,31 +191,19 @@ export function CatalogNodeContentPanel({
     const replacement = candidate.replacement_text || candidate.draft_text || candidate.canonical_display;
     if (!replacement) return;
     if (candidate.row_order) {
-      pointForm.setFieldValue("reaction_equations_text", replaceEquationLine(equationText, candidate.row_order, replacement));
+      const currentLine = currentEquationLine(equationText, candidate.row_order);
+      const replacementWithAnnotation = preserveInlineAnnotationSuffix(currentLine, replacement);
+      pointForm.setFieldValue("reaction_equations_text", replaceEquationLine(equationText, candidate.row_order, replacementWithAnnotation));
       return;
     }
     const current = equationText.trim();
     pointForm.setFieldValue("reaction_equations_text", [current, replacement].filter(Boolean).join("\n"));
   };
-  const mergeRowAssistDrafts = (incoming: CatalogEquationAssistDraft[], rowOrder?: number) => {
-    if (!rowOrder) {
-      setAssistDrafts(incoming);
-      return;
-    }
-    setAssistDrafts((current) => [
-      ...current.filter((draft) => draft.row_order !== rowOrder),
-      ...incoming.filter((draft) => !draft.row_order || draft.row_order === rowOrder),
-    ]);
-  };
 
-  const runEquationAssist = async (rowOrder?: number) => {
-    if (rowOrder) {
-      setAssistLoadingRow(rowOrder);
-    } else {
-      setAssistLoading(true);
-    }
+  const runEquationAssist = async () => {
+    setAssistLoading(true);
     setAssistMessage("");
-    if (!rowOrder) setAssistDrafts([]);
+    setAssistDrafts([]);
     try {
       const response = await assistCatalogReactionEquations({
         mode: "suggest",
@@ -209,15 +214,11 @@ export function CatalogNodeContentPanel({
         safety_note: pointForm.getFieldValue("safety_note") || "",
       });
       setAssistMessage(response.reason || "");
-      mergeRowAssistDrafts(response.drafts || [], rowOrder);
+      setAssistDrafts(response.drafts || []);
     } catch (error) {
       setAssistMessage(error instanceof Error ? error.message : "助手暂时不可用。");
     } finally {
-      if (rowOrder) {
-        setAssistLoadingRow(null);
-      } else {
-        setAssistLoading(false);
-      }
+      setAssistLoading(false);
     }
   };
 
@@ -242,7 +243,6 @@ export function CatalogNodeContentPanel({
           <Form.Item name="teacher_note" label="教学备注" extra="仅教师端可见，不进入学生端、学生搜索或题目证据链。">
             <Input.TextArea className="catalog-teacher-note" autoSize={{ minRows: 2, maxRows: 5 }} />
           </Form.Item>
-          <Alert type="info" showIcon title="学生可见描述和卡片样式在“学生卡片”面板维护。" />
           <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={mutations.updateNode.isPending}>
             保存目录内容
           </Button>
@@ -259,7 +259,7 @@ export function CatalogNodeContentPanel({
           <Text type="secondary">默认只显示老师最常维护的点位知识字段。</Text>
         </div>
         <Space wrap>
-          <Tag color={detail.point_content?.content_status === "published" ? "green" : "gold"}>
+          <Tag color={detail.point_content?.content_status === "published" ? "green" : "default"}>
             {pointContentStatusLabel(detail.point_content?.content_status)}
           </Tag>
           <Button
@@ -313,6 +313,9 @@ export function CatalogNodeContentPanel({
         </Form.Item>
         {principleMode === "equation" ? (
           <div className="catalog-equation-natural-editor">
+            <div className="catalog-equation-inline-help">
+              条件、过量、酸碱环境或说明请写在同一行的 <code>//</code> 后面；一行仍然只代表一个方程式。
+            </div>
             <div className="catalog-equation-natural-header">
               <div className="catalog-equation-natural-copy">
                 <Text strong>实验反应式</Text>
@@ -324,7 +327,7 @@ export function CatalogNodeContentPanel({
                 <div className="catalog-equation-pane-heading">
                   <div>
                     <Text strong>反应式预览</Text>
-                    <Text type="secondary">默认只按右侧输入渲染，不展示脚本建议。</Text>
+                    <Text type="secondary">根据右侧输入实时渲染。</Text>
                   </div>
                 </div>
                 {previewError ? <div className="catalog-equation-natural-feedback is-error">{previewError}</div> : null}
@@ -336,8 +339,12 @@ export function CatalogNodeContentPanel({
                       <Space wrap>
                         <Text type="secondary">保存时以右侧输入为准，后端会生成 AI/检索可用的规范结构。</Text>
                         {reviewModel.rows.some((row) => row.candidates.length) ? (
-                          <Button size="small" type="primary" onClick={() => reviewModel.rows.forEach((row) => row.candidates[0] && applyCandidate(row.candidates[0]))}>
-                            采用全部 AI 建议
+                          <Button
+                            className="catalog-equation-apply-button"
+                            size="small"
+                            onClick={() => reviewModel.rows.forEach((row) => row.candidates[0] && applyCandidate(row.candidates[0]))}
+                          >
+                            全部采用
                           </Button>
                         ) : null}
                       </Space>
@@ -354,17 +361,10 @@ export function CatalogNodeContentPanel({
                                 ) : (
                                   equation.canonical_display || equation.raw_text
                                 )}
+                                {equation.annotation_text ? (
+                                  <div className="catalog-equation-inline-note">说明：{equation.annotation_text}</div>
+                                ) : null}
                               </div>
-                              <Space wrap size={8}>
-                                <Button
-                                  size="small"
-                                  icon={<RobotOutlined />}
-                                  loading={assistLoadingRow === equation.row_order}
-                                  onClick={() => void runEquationAssist(equation.row_order)}
-                                >
-                                  AI 校对本行
-                                </Button>
-                              </Space>
                             </div>
                             {candidates.length ? (
                               <div className="catalog-equation-natural-candidates">
@@ -379,9 +379,12 @@ export function CatalogNodeContentPanel({
                                         ) : (
                                           candidate.canonical_display
                                         )}
+                                        {candidate.annotation_text ? (
+                                          <div className="catalog-equation-inline-note">说明：{candidate.annotation_text}</div>
+                                        ) : null}
                                       </div>
-                                      <Button size="small" type="primary" onClick={() => applyCandidate(candidate)}>
-                                        采用这个反应式
+                                      <Button className="catalog-equation-apply-button" size="small" onClick={() => applyCandidate(candidate)}>
+                                        采用
                                       </Button>
                                     </div>
                                     {candidate.rationale ? (
@@ -407,9 +410,12 @@ export function CatalogNodeContentPanel({
                               <Tag color="green">{candidate.sourceLabel}</Tag>
                               <div className="catalog-equation-natural-rendered">
                                 {candidate.canonical_mhchem ? <AssistantMarkdownContent text={`$${candidate.canonical_mhchem}$`} inline /> : candidate.canonical_display}
+                                {candidate.annotation_text ? (
+                                  <div className="catalog-equation-inline-note">说明：{candidate.annotation_text}</div>
+                                ) : null}
                               </div>
-                              <Button size="small" type="primary" onClick={() => applyCandidate(candidate)}>
-                                采用这个反应式
+                              <Button className="catalog-equation-apply-button" size="small" onClick={() => applyCandidate(candidate)}>
+                                采用
                               </Button>
                             </div>
                             {candidate.rationale ? (
@@ -449,7 +455,7 @@ export function CatalogNodeContentPanel({
                   </div>
                   <Space wrap>
                     <Button type="primary" icon={<RobotOutlined />} loading={assistLoading} onClick={() => void runEquationAssist()}>
-                      {hasEquationInput ? "AI 校对全部" : "AI 根据点位建议"}
+                      {hasEquationInput ? "AI 校对" : "AI 根据点位建议"}
                     </Button>
                   </Space>
                 </div>

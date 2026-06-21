@@ -10,6 +10,8 @@ from server.app.infrastructure.settings import ROOT
 
 ALIAS_PATH = ROOT / "data" / "seed" / "search" / "chemical_aliases.json"
 STOPWORD_PATH = ROOT / "data" / "seed" / "search" / "chemical_stopwords.txt"
+UNICODE_SUPERSCRIPT_CHARGE_RE = re.compile(r"(?<=[A-Za-z0-9)\]])([⁰¹²³⁴⁵⁶⁷⁸⁹]*[⁺⁻]|[⁺⁻][⁰¹²³⁴⁵⁶⁷⁸⁹]*)")
+CHARGE_SUFFIX_RE = re.compile(r"(\^\{?[0-9+-]+\}?|(?<=[A-Za-z0-9)\]])[+-])$")
 
 SUBSCRIPT_MAP = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
 SUPERSCRIPT_MAP = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻", "0123456789+-")
@@ -46,6 +48,7 @@ def domain_stopwords() -> list[str]:
 
 def normalize_chemistry_text(value: Any) -> str:
     text = str(value or "").strip()
+    text = UNICODE_SUPERSCRIPT_CHARGE_RE.sub(lambda match: f"^{match.group(1).translate(SUPERSCRIPT_MAP)}", text)
     text = text.translate(SUBSCRIPT_MAP).translate(SUPERSCRIPT_MAP).translate(FULLWIDTH_MAP)
     for source, target in ARROW_VARIANTS.items():
         text = text.replace(source, target)
@@ -57,6 +60,7 @@ def normalize_formula(value: Any) -> str:
     text = normalize_chemistry_text(value)
     text = STATE_MARKER_RE.sub("", text)
     text = text.replace("·", "")
+    text = CHARGE_SUFFIX_RE.sub("", text)
     text = re.sub(r"[^A-Za-z0-9()+-]", "", text)
     text = COEFFICIENT_RE.sub("", text)
     return text.upper()

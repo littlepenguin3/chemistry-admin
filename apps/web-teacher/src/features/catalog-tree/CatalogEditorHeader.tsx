@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Button, Popconfirm, Space, Typography } from "antd";
 import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, StopOutlined } from "@ant-design/icons";
-import { AlertTriangle, CircleCheck, FlaskConical, Folder, Image, Link2, ListTree, Video } from "lucide-react";
+import { AlertTriangle, CircleCheck, CircleDashed, FlaskConical, Folder, Image, Link2, ListTree, Video } from "lucide-react";
 
 import type { CatalogNodeDetail } from "../../api/catalogTree";
 import {
@@ -36,7 +36,14 @@ function pointContentStatusLabel(status?: string | null): string {
 function pointContentTone(status?: string | null): SummaryTone {
   if (status === "published") return "ok";
   if (status === "archived") return "archived";
+  if (status === "draft") return "draft";
   return "warning";
+}
+
+function publicationIcon(status?: string | null): ReactNode {
+  if (status === "published") return <CircleCheck size={16} />;
+  if (status === "draft") return <CircleDashed size={16} />;
+  return <AlertTriangle size={16} />;
 }
 
 function statusNote(status: string): string {
@@ -105,12 +112,12 @@ function buildDirectorySummaryItems(detail: CatalogNodeDetail, validationIssues:
     validationSummary(validationIssues),
     {
       key: "visibility",
-      icon: node.status === "published" ? <CircleCheck size={16} /> : <AlertTriangle size={16} />,
+      icon: publicationIcon(node.status),
       label: "学生可见性",
       value: catalogStatusLabel(node.status),
       note: statusNote(node.status),
       tone: node.status,
-      emphasis: node.status !== "published",
+      emphasis: node.status !== "published" && node.status !== "draft",
     },
   ];
 }
@@ -125,12 +132,12 @@ function buildPointSummaryItems(detail: CatalogNodeDetail, validationIssues: num
   return [
     {
       key: "content",
-      icon: contentStatus === "published" ? <CircleCheck size={16} /> : <AlertTriangle size={16} />,
+      icon: publicationIcon(contentStatus),
       label: "学习内容",
       value: pointContentStatusLabel(contentStatus),
       note: detail.point_content ? "知识字段" : "待维护",
       tone: pointContentTone(contentStatus),
-      emphasis: contentStatus !== "published",
+      emphasis: contentStatus !== "published" && contentStatus !== "draft",
     },
     {
       key: "video",

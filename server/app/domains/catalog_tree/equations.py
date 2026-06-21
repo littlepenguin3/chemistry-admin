@@ -20,6 +20,31 @@ from server.app.domains.platform.settings import effective_ai_settings
 from server.app.infrastructure.settings import get_settings
 
 PARSER_VERSION = "natural-v1"
+INLINE_ANNOTATION_DELIMITER = "//"
+EQUATION_ANNOTATION_REWRITE_SKILL = """
+Task: rewrite teacher-authored reaction lines into the platform reaction-line DSL.
+
+DSL:
+- Each non-empty line is exactly one reaction row.
+- A row has this shape: EQUATION_CORE [ // ANNOTATION ].
+- EQUATION_CORE contains only the chemical equation.
+- ANNOTATION contains conditions, amount notes, medium notes, observation constraints, reagent-source explanations, or teacher prose.
+
+Rewrite rules:
+- Prefer preserving the teacher's equation core. Do not change the core merely to explain a condition or reagent source.
+- If the teacher wrote a trailing prose note with parentheses, Chinese brackets, "注:", "备注:", "说明:", "酸性/碱性/过量/少量/加热/通风橱", move that prose after // on the same line.
+- Never treat formula-internal parentheses as annotations, for example Al(OH)3, Ca3(PO4)2, (NH4)2SO4, or state markers such as (aq).
+- If an existing row already has //, preserve or improve the annotation after // and keep it on the same line.
+- Use short annotation labels when useful: "condition: ...", "amount: ...", "medium: ...", "note: ...". Chinese annotation text is allowed.
+- Return an AI draft for annotation-only rewrites too; the teacher can accept it to standardize the row.
+- Only correct the chemistry equation core when you are confident the teacher's core is chemically wrong.
+
+Examples:
+- Input: Mn2+ + ClO- + 2OH- -> MnO2↓ + Cl- + H2O（注：NaClO溶液本身呈碱性，提供OH-）
+  Draft: Mn2+ + ClO- + 2OH- -> MnO2↓ + Cl- + H2O // condition: alkaline; note: NaClO溶液本身呈碱性，提供OH-
+- Input: Pb(CH3COO)2 + H2S -> PbS↓ + 2HAc（酸性条件）
+  Draft: Pb(CH3COO)2 + H2S -> PbS↓ + 2HAc // condition: acidic
+"""
 
 ELEMENT_SYMBOLS = {
     "H",
@@ -112,6 +137,20 @@ ELEMENT_RE = re.compile(r"([A-Z][a-z]?)(\d*)")
 SPECIES_RE = re.compile(r"^\s*(\d+)?\s*(.*)$")
 SUBSCRIPT_DIGITS = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
 SUPERSCRIPT_SIGNS = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻", "0123456789+-")
+UNICODE_SUPERSCRIPT_CHARGE_RE = re.compile(r"(?<=[A-Za-z0-9)\]₀₁₂₃₄₅₆₇₈₉])([⁰¹²³⁴⁵⁶⁷⁸⁹]*[⁺⁻]|[⁺⁻][⁰¹²³⁴⁵⁶⁷⁸⁹]*)")
+
+CONDITION_TAGS = {
+    "acidic": ("acidic", "acid", "酸性", "强酸", "稀酸", "浓酸"),
+    "alkaline": ("alkaline", "basic", "base", "alkali", "碱性", "强碱", "弱碱", "碱式"),
+    "neutral": ("neutral", "中性"),
+    "excess": ("excess", "excessive", "过量", "足量"),
+    "small_amount": ("small amount", "少量", "微量"),
+    "dilute": ("dilute", "稀", "稀溶液"),
+    "concentrated": ("concentrated", "浓", "浓溶液"),
+    "heated": ("heat", "heated", "heating", "加热", "微热", "水浴"),
+    "light": ("light", "hv", "光照"),
+    "ventilated": ("ventilated", "通风", "通风橱"),
+}
 
 
 def _clean(value: Any) -> str:
@@ -141,6 +180,66 @@ def _json(value: Any) -> str:
 
 def _teacher_warning(message: str) -> str:
     return message
+
+
+def _convert_superscript_charge(match: re.Match[str]) -> str:
+    value = match.group(1)
+    converted = value.translate(SUPERSCRIPT_SIGNS)
+    return f"^{converted}"
+
+
+def _normalize_unicode_charge_notation(value: str) -> str:
+    return UNICODE_SUPERSCRIPT_CHARGE_RE.sub(_convert_superscript_charge, value)
+
+
+def _normalize_compact_charge_notation(value: str) -> str:
+    if not value or value[-1] not in "+-" or re.search(r"\^\{?[0-9+-]+\}?$", value):
+        return value
+    sign = value[-1]
+    body = value[:-1]
+    if not body:
+        return value
+    digit_match = re.search(r"(\d+)$", body)
+    if not digit_match:
+        return f"{body}^{sign}"
+    digits = digit_match.group(1)
+    prefix = body[: digit_match.start()]
+    if len(digits) >= 2:
+        return f"{prefix}{digits[:-1]}^{digits[-1]}{sign}"
+    if re.fullmatch(r"[A-Za-z]{1,2}", prefix or ""):
+        return f"{prefix}^{digits}{sign}"
+    return f"{body}^{sign}"
+
+
+def _split_inline_annotation(raw_text: str) -> tuple[str, str]:
+    if INLINE_ANNOTATION_DELIMITER not in raw_text:
+        return raw_text.strip(), ""
+    equation_core, annotation_text = raw_text.split(INLINE_ANNOTATION_DELIMITER, 1)
+    return equation_core.strip(), annotation_text.strip()
+
+
+def reaction_row_display_text(row: dict[str, Any]) -> str:
+    core = _clean(row.get("canonical_display") or row.get("equation_core") or row.get("raw_text"))
+    annotation = _clean(row.get("annotation_text"))
+    if annotation and core:
+        return f"{core} {INLINE_ANNOTATION_DELIMITER} {annotation}"
+    return core
+
+
+def _annotation_condition_tags(annotation_text: str) -> list[str]:
+    normalized = normalize_chemistry_text(annotation_text).lower()
+    return [
+        tag
+        for tag, needles in CONDITION_TAGS.items()
+        if any(str(needle).lower() in normalized for needle in needles)
+    ]
+
+
+def _annotation_formulae(annotation_text: str) -> list[str]:
+    if not annotation_text:
+        return []
+    prepared, _, _ = _prepare_text(annotation_text)
+    return _unique(extract_formulae(prepared))
 
 
 def split_multiline_equations(value: Any) -> list[dict[str, Any]]:
@@ -187,7 +286,8 @@ def _normalize_arrow(arrow: str) -> str:
 
 
 def _prepare_text(raw_text: str) -> tuple[str, list[dict[str, str]], list[str]]:
-    text_value = raw_text.translate(SUBSCRIPT_DIGITS).translate(SUPERSCRIPT_SIGNS)
+    text_value = _normalize_unicode_charge_notation(raw_text)
+    text_value = text_value.translate(SUBSCRIPT_DIGITS).translate(SUPERSCRIPT_SIGNS)
     text_value = normalize_chemistry_text(text_value)
     text_value, alias_mappings, warnings = _replace_chinese_aliases(text_value)
     text_value = re.sub(r"\s+", " ", text_value.strip())
@@ -198,7 +298,7 @@ def _prepare_text(raw_text: str) -> tuple[str, list[dict[str, str]], list[str]]:
 
 def _strip_state_and_charge(formula: str) -> str:
     value = STATE_RE.sub("", formula.strip())
-    value = re.sub(r"(?<![A-Za-z])\^\{?[0-9+-]+\}?", "", value)
+    value = re.sub(r"\^\{?[0-9+-]+\}?$", "", value)
     value = re.sub(r"(?<=[A-Za-z0-9\]])[+-]$", "", value)
     return value
 
@@ -210,6 +310,7 @@ def _canonicalize_formula(value: str) -> tuple[str, bool, bool]:
     if state_match:
         state = f"({state_match.group(1).lower()})"
         value = STATE_RE.sub("", value.strip())
+    value = _normalize_compact_charge_notation(value)
     trailing_charge = ""
     charge_match = re.search(r"(\^\{?[0-9+-]+\}?|[+-])$", value)
     if charge_match and re.search(r"[A-Za-z0-9)\]]", value[: charge_match.start()]):
@@ -436,6 +537,10 @@ def _balance_suggestion(left: str, right: str, arrow: str) -> str | None:
 def normalize_reaction_equation(row: Any, *, row_order: int) -> dict[str, Any]:
     data = _dump_model(row)
     raw_text = _clean(data.get("raw_text"))
+    equation_core, annotation_text = _split_inline_annotation(raw_text)
+    annotation_formulae = _annotation_formulae(annotation_text)
+    annotation_aliases = expand_formula_aliases(annotation_formulae)
+    condition_tags = _annotation_condition_tags(annotation_text)
     metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
     warnings: list[str] = []
     errors: list[str] = []
@@ -456,47 +561,28 @@ def normalize_reaction_equation(row: Any, *, row_order: int) -> dict[str, Any]:
     if not raw_text:
         errors.append("请先输入反应式。")
     else:
-        prepared, alias_mappings, alias_warnings = _prepare_text(raw_text)
-        warnings.extend(alias_warnings)
+        prepared, alias_mappings, _alias_warnings = _prepare_text(equation_core)
         split = _split_reaction(prepared)
         if not split:
-            errors.append("未找到反应箭头或等号，请使用 =、->、→ 或 ⇌。")
+            display = equation_core
+            formulae = _unique(extract_formulae(equation_core))
+            aliases = expand_formula_aliases(formulae)
+            reaction_features = extract_reaction_features(equation_core, equation_core)
         else:
             left, arrow, right = split
             canonical_left, reactant_species, left_warnings, left_uncertain = _canonical_side(left)
             canonical_right, product_species, right_warnings, right_uncertain = _canonical_side(right)
-            warnings.extend(left_warnings)
-            warnings.extend(right_warnings)
             display_arrow = "⇌" if arrow == "⇌" else "→" if arrow in {"=", "→"} else arrow
             display = f"{canonical_left} {display_arrow} {canonical_right}"
             if prepared != display:
                 corrections.append(_teacher_warning(f"已规范为：{display}"))
             reactants = _unique(_species_formula(species) for species in reactant_species)
             products = _unique(_species_formula(species) for species in product_species)
-            if not reactants or not products:
-                warnings.append("系统无法稳定识别反应物和生成物，请检查写法。")
-            if left_uncertain or right_uncertain:
-                warnings.append("部分元素符号识别不确定，请人工确认。")
             formulae = _unique([*reactants, *products, *extract_formulae(display)])
             aliases = expand_formula_aliases(formulae)
-            reaction_features = extract_reaction_features(display, raw_text)
+            reaction_features = extract_reaction_features(display, equation_core)
             participants = {"reactants": reactants, "products": products, "all": formulae, "arrow": display_arrow}
             canonical_mhchem = f"\\ce{{{_mhchem_body(display, display_arrow == '⇌')}}}"
-            left_counts = _side_counts(canonical_left)
-            right_counts = _side_counts(canonical_right)
-            balanced = _balance_suggestion(canonical_left, canonical_right, display_arrow)
-            if left_counts and right_counts and left_counts != right_counts:
-                if balanced and balanced != display:
-                    warnings.append("当前系数疑似未配平，系统给出可采用的配平建议。")
-                    suggested_display = balanced
-                    suggested_mhchem = f"\\ce{{{_mhchem_body(balanced, display_arrow == '⇌')}}}"
-                    suggestion_reason = "配平建议"
-                else:
-                    warnings.append("当前系数疑似未配平，请检查配平和电荷。")
-            elif corrections:
-                suggested_display = display
-                suggested_mhchem = canonical_mhchem
-                suggestion_reason = "规范写法建议"
 
     validation_status = "invalid" if errors else "warning" if warnings else "valid"
     if validation_status == "invalid":
@@ -515,7 +601,23 @@ def normalize_reaction_equation(row: Any, *, row_order: int) -> dict[str, Any]:
         **metadata,
         "alias_mappings": alias_mappings,
         "corrections": corrections,
+        "equation_core": equation_core,
+        "annotation_text": annotation_text,
+        "annotation_formulae": annotation_formulae,
+        "annotation_aliases": annotation_aliases,
+        "condition_tags": condition_tags,
     }
+    plain_search_text = " ".join(
+        part
+        for part in [
+            display if validation_status != "invalid" else equation_core,
+            annotation_text,
+            " ".join(annotation_formulae),
+            " ".join(annotation_aliases),
+            " ".join(condition_tags),
+        ]
+        if part
+    )
 
     return {
         "id": data.get("id"),
@@ -523,9 +625,14 @@ def normalize_reaction_equation(row: Any, *, row_order: int) -> dict[str, Any]:
         "canonical_point_id": data.get("canonical_point_id"),
         "row_order": int(data.get("row_order") or row_order),
         "raw_text": raw_text,
+        "equation_core": equation_core,
+        "annotation_text": annotation_text,
+        "annotation_formulae": annotation_formulae,
+        "annotation_aliases": annotation_aliases,
+        "condition_tags": condition_tags,
         "canonical_display": display if validation_status != "invalid" else "",
         "canonical_mhchem": canonical_mhchem,
-        "plain_search_text": display,
+        "plain_search_text": plain_search_text,
         "formulae": formulae,
         "aliases": aliases,
         "reactants": reactants,
@@ -563,15 +670,19 @@ def _assist_draft_from_normalized(
     row_order: int | None = None,
     supplemental: bool = False,
 ) -> dict[str, Any] | None:
-    replacement_text = _clean(row.get("canonical_display") or row.get("raw_text"))
-    if not replacement_text or row.get("validation_status") == "invalid":
+    display_text = _clean(row.get("canonical_display") or row.get("equation_core") or row.get("raw_text"))
+    replacement_text = reaction_row_display_text({**row, "canonical_display": display_text})
+    if not display_text or row.get("validation_status") == "invalid":
         return None
     canonical_mhchem = row.get("canonical_mhchem")
     return {
         "draft_text": replacement_text,
         "replacement_text": replacement_text,
-        "canonical_display": replacement_text,
+        "canonical_display": display_text,
         "canonical_mhchem": canonical_mhchem,
+        "annotation_text": row.get("annotation_text") or "",
+        "annotation_formulae": row.get("annotation_formulae") or [],
+        "condition_tags": row.get("condition_tags") or [],
         "validation_status": row.get("validation_status") or "warning",
         "warnings": row.get("warnings") or [],
         "errors": row.get("errors") or [],
@@ -595,6 +706,14 @@ def _ai_settings_ready() -> tuple[Any | None, str | None]:
     return settings, None
 
 
+def _single_leading_system_message(messages: list[dict[str, str]]) -> list[dict[str, str]]:
+    system_parts = [message["content"] for message in messages if message.get("role") == "system" and message.get("content")]
+    non_system_messages = [message for message in messages if message.get("role") != "system"]
+    if not system_parts:
+        return non_system_messages
+    return [{"role": "system", "content": "\n\n".join(system_parts)}, *non_system_messages]
+
+
 def _equation_ai_prompt(payload: Any, normalized_rows: list[dict[str, Any]]) -> list[dict[str, str]]:
     point_context = {
         "point_title": _clean(getattr(payload, "point_title", None)),
@@ -602,27 +721,35 @@ def _equation_ai_prompt(payload: Any, normalized_rows: list[dict[str, Any]]) -> 
         "phenomenon_explanation": _clean(getattr(payload, "phenomenon_explanation", None)),
         "safety_note": _clean(getattr(payload, "safety_note", None)),
     }
-    parser_rows = [
+    input_rows = [
         {
             "row_order": row.get("row_order"),
             "raw_text": row.get("raw_text"),
-            "canonical_display": row.get("canonical_display"),
-            "validation_status": row.get("validation_status"),
-            "warnings": row.get("warnings") or [],
-            "errors": row.get("errors") or [],
-            "formulae": row.get("formulae") or [],
+            "equation_core": row.get("equation_core"),
+            "annotation_text": row.get("annotation_text"),
         }
         for row in normalized_rows
     ]
-    return [
+    messages = [
         {
             "role": "system",
             "content": (
-                "你是高中化学实验反应式助手。请基于教师当前输入、点位上下文和 parser_preview 给出 AI 校对建议。"
-                "只返回 JSON，不要 Markdown。格式：{\"drafts\":[{\"row_order\":1,\"draft_text\":\"...\",\"rationale\":\"...\"}]}。"
-                "draft_text 必须是单行反应式，可使用 →、⇌、↑、↓，不要直接保存，不要编造危险操作步骤。"
-                "不要把 parser 的自动规范化或配平猜测直接当作候选；只有你确信应替换或补全时才返回 draft。"
-                "如果原始输入为空，可根据点位上下文生成候选反应式；如果不确定，请少给或不给。"
+                EQUATION_ANNOTATION_REWRITE_SKILL
+                + "\n\n"
+                "You are a high-school chemistry experiment reaction-equation reviewer. "
+                "Use only the teacher's current input rows and point context. Do not mention or rely on any local pre-check. "
+                "Return JSON only, no Markdown. Shape: {\"drafts\":[{\"row_order\":1,\"draft_text\":\"...\",\"rationale\":\"...\"}]}. "
+                "draft_text must be a single-line reaction equation and may use ->, →, <=>, ⇌, ↑, or ↓. "
+                "Only return a draft when you are confident it should replace or supplement the teacher input."
+            ),
+        },
+        {
+            "role": "system",
+            "content": (
+                "Inline annotation rule: keep exactly one reaction equation per non-empty line. "
+                "When a condition, excess/small-amount note, acid/base medium, or reagent-source explanation is needed, "
+                "append it after // on the same line. If raw_text already has a // suffix and only the equation core is corrected, "
+                "preserve the existing suffix exactly."
             ),
         },
         {
@@ -631,26 +758,28 @@ def _equation_ai_prompt(payload: Any, normalized_rows: list[dict[str, Any]]) -> 
                 {
                     "mode": _clean(getattr(payload, "mode", "suggest")),
                     "point_context": point_context,
-                    "parser_preview": parser_rows,
+                    "input_rows": input_rows,
                     "current_multiline_text": _clean(getattr(payload, "multiline_text", None)),
                 },
                 ensure_ascii=False,
             ),
         },
     ]
+    return _single_leading_system_message(messages)
 
 
 def _sanitize_ai_drafts(raw_drafts: Any, normalized_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not isinstance(raw_drafts, list):
         return []
     valid_orders = {int(row["row_order"]) for row in normalized_rows if row.get("row_order")}
+    rows_by_order = {int(row["row_order"]): row for row in normalized_rows if row.get("row_order")}
     drafts: list[dict[str, Any]] = []
     seen: set[tuple[int | None, str]] = set()
     for item in raw_drafts[:8]:
         if not isinstance(item, dict):
             continue
         draft_text = _clean(item.get("draft_text"))
-        if not draft_text or "\n" in draft_text or len(draft_text) > 300:
+        if not draft_text or "\n" in draft_text or len(draft_text) > 500:
             continue
         row_order_raw = item.get("row_order")
         try:
@@ -659,6 +788,10 @@ def _sanitize_ai_drafts(raw_drafts: Any, normalized_rows: list[dict[str, Any]]) 
             row_order = None
         if row_order is not None and row_order not in valid_orders:
             row_order = None
+        current_row = rows_by_order.get(row_order) if row_order is not None else None
+        current_annotation = _clean((current_row or {}).get("annotation_text"))
+        if current_annotation and INLINE_ANNOTATION_DELIMITER not in draft_text:
+            draft_text = f"{draft_text} {INLINE_ANNOTATION_DELIMITER} {current_annotation}"
         normalized = normalize_reaction_equation(
             {"raw_text": draft_text, "row_order": row_order},
             row_order=row_order or len(normalized_rows) + len(drafts) + 1,
@@ -819,9 +952,12 @@ def active_reaction_equations(content: dict[str, Any] | None) -> list[dict[str, 
     return [row for row in content.get("reaction_equations") or [] if row.get("validation_status") != "invalid"]
 
 
-def reaction_principle_text(content: dict[str, Any] | None) -> str:
+def reaction_principle_text(content: dict[str, Any] | None, *, include_annotations: bool = True) -> str:
     rows = active_reaction_equations(content)
-    parts = [_clean(row.get("canonical_display") or row.get("raw_text")) for row in rows]
+    parts = [
+        reaction_row_display_text(row) if include_annotations else _clean(row.get("canonical_display") or row.get("equation_core") or row.get("raw_text"))
+        for row in rows
+    ]
     parts = [part for part in parts if part]
     if parts:
         return "\n".join(parts)
@@ -834,4 +970,7 @@ def reaction_derived_terms(content: dict[str, Any] | None) -> dict[str, list[str
         "formulae": _unique([formula for row in rows for formula in row.get("formulae", [])]),
         "aliases": _unique([alias for row in rows for alias in row.get("aliases", [])]),
         "reaction_features": _unique([feature for row in rows for feature in row.get("reaction_features", [])]),
+        "annotation_formulae": _unique([formula for row in rows for formula in row.get("annotation_formulae", [])]),
+        "annotation_aliases": _unique([alias for row in rows for alias in row.get("annotation_aliases", [])]),
+        "condition_tags": _unique([tag for row in rows for tag in row.get("condition_tags", [])]),
     }

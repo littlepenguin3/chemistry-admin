@@ -220,6 +220,11 @@ export type CatalogReactionEquationNormalized = {
   canonical_point_id?: string | null;
   row_order: number;
   raw_text: string;
+  equation_core?: string;
+  annotation_text?: string;
+  annotation_formulae?: string[];
+  annotation_aliases?: string[];
+  condition_tags?: string[];
   canonical_display: string;
   canonical_mhchem?: string | null;
   plain_search_text: string;
@@ -254,6 +259,9 @@ export type CatalogEquationAssistDraft = {
   replacement_text?: string | null;
   canonical_display?: string;
   canonical_mhchem?: string | null;
+  annotation_text?: string;
+  annotation_formulae?: string[];
+  condition_tags?: string[];
   validation_status?: "valid" | "warning" | "invalid";
   warnings?: string[];
   errors?: string[];

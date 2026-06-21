@@ -157,13 +157,21 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
     related = related_links(session, node["node_id"], include_hidden=False, include_defaults=True)
     videos = student_videos(session, node["node_id"])
     principle = reaction_principle_text(content) if content.get("principle_mode") == "equation" else clean(content.get("principle_text"))
+    core_principle = (
+        reaction_principle_text(content, include_annotations=False)
+        if content.get("principle_mode") == "equation"
+        else clean(content.get("principle_text"))
+    )
     phenomenon = clean(content.get("phenomenon_explanation"))
     safety = clean(content.get("safety_note"))
-    chemistry = chemistry_terms_for_document(content.get("point_title"), principle, phenomenon, safety)
+    chemistry = chemistry_terms_for_document(content.get("point_title"), core_principle, phenomenon, safety)
     equation_terms = reaction_derived_terms(content)
     formulae = sorted(set([*chemistry["formulae"], *equation_terms["formulae"]]))
     aliases = sorted(set([*chemistry["aliases"], *equation_terms["aliases"]]))
     reaction_features = sorted(set([*chemistry["reaction_features"], *equation_terms["reaction_features"]]))
+    annotation_formulae = sorted(set(equation_terms.get("annotation_formulae") or []))
+    annotation_aliases = sorted(set(equation_terms.get("annotation_aliases") or []))
+    condition_tags = sorted(set(equation_terms.get("condition_tags") or []))
     search_text = " ".join(
         item
         for item in [
@@ -178,6 +186,9 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
             " ".join(formulae),
             " ".join(aliases),
             " ".join(reaction_features),
+            " ".join(annotation_formulae),
+            " ".join(annotation_aliases),
+            " ".join(condition_tags),
         ]
         if item
     )
@@ -202,6 +213,9 @@ def student_search_document_for_node(session: Any, *, node_id: str, require_publ
         "formulae": formulae,
         "aliases": aliases,
         "reaction_features": reaction_features,
+        "annotation_formulae": annotation_formulae,
+        "annotation_aliases": annotation_aliases,
+        "condition_tags": condition_tags,
         "related_text": [clean(link.get("target_title")) for link in related if clean(link.get("target_title"))],
         "has_video": bool(videos),
         "video_count": len(videos),

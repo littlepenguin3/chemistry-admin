@@ -14,6 +14,9 @@ export type CatalogEquationReviewCandidate = {
   replacement_text: string;
   canonical_display: string;
   canonical_mhchem?: string | null;
+  annotation_text?: string;
+  annotation_formulae?: string[];
+  condition_tags?: string[];
   validation_status: CatalogReactionEquationNormalized["validation_status"];
   warnings: string[];
   errors: string[];
@@ -62,6 +65,9 @@ function mergeCandidate(
       errors: Array.from(new Set([...item.errors, ...candidate.errors])),
       formulae: Array.from(new Set([...item.formulae, ...candidate.formulae])),
       canonical_mhchem: item.canonical_mhchem || candidate.canonical_mhchem,
+      annotation_text: item.annotation_text || candidate.annotation_text,
+      annotation_formulae: Array.from(new Set([...(item.annotation_formulae || []), ...(candidate.annotation_formulae || [])])),
+      condition_tags: Array.from(new Set([...(item.condition_tags || []), ...(candidate.condition_tags || [])])),
     };
   });
 }
@@ -83,6 +89,9 @@ function assistCandidateFromDraft(draft: CatalogEquationAssistDraft): CatalogEqu
     replacement_text: replacement,
     canonical_display: display,
     canonical_mhchem: draft.canonical_mhchem,
+    annotation_text: draft.annotation_text || "",
+    annotation_formulae: draft.annotation_formulae || [],
+    condition_tags: draft.condition_tags || [],
     validation_status: status,
     warnings: draft.warnings || [],
     errors: draft.errors || [],

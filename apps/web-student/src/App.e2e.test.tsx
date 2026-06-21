@@ -371,6 +371,7 @@ const catalogPointDetail: StudentPointDetailResponse = {
       raw_text: "Cl2 + 2 KBr = 2 KCl + Br2",
       canonical_display: "Cl2 + 2 KBr = 2 KCl + Br2",
       canonical_mhchem: "\\ce{Cl2 + 2 KBr -> 2 KCl + Br2}",
+      annotation_text: "condition: organic layer observation",
       validation_status: "valid",
     },
   ],
@@ -752,7 +753,8 @@ describe("student app route stack", () => {
     expect(screen.getByText("实验原理")).toBeInTheDocument();
     expect(screen.getByText("暂无可播放视频")).toBeInTheDocument();
     expect(screen.getByText("实验原理")).toBeInTheDocument();
-    expect(screen.getByText("Cl2 + 2 KBr = 2 KCl + Br2")).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes("Cl2 + 2 KBr = 2 KCl + Br2"))).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes("说明：condition: organic layer observation"))).toBeInTheDocument();
     expect(screen.getByText("现象解释")).toBeInTheDocument();
     expect(screen.getByText("安全提示")).toBeInTheDocument();
     expect(screen.getByText("现象解释")).toBeInTheDocument();

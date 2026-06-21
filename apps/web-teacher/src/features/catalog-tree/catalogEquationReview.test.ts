@@ -19,14 +19,14 @@ function previewResponse(): CatalogEquationPreviewResponse {
         products: ["H2O"],
         participants: {},
         reaction_features: [],
-        validation_status: "warning",
-        warnings: ["当前系数疑似未配平"],
+        validation_status: "valid",
+        warnings: [],
         errors: [],
         parser_version: "natural-v1",
         migrated_from_principle_equation: false,
-        suggested_display: "2 H2 + O2 → 2 H2O",
-        suggested_mhchem: "\\ce{2 H2 + O2 -> 2 H2O}",
-        suggestion_reason: "配平建议",
+        suggested_display: null,
+        suggested_mhchem: null,
+        suggestion_reason: null,
         corrections: [],
       },
     ],
@@ -100,11 +100,35 @@ describe("catalog equation review model", () => {
     expect(model.rows[0].candidates).toHaveLength(0);
   });
 
-  it("does not turn parser suggestions into adoptable system candidates", () => {
+  it("keeps inline annotation metadata on adoptable AI candidates", () => {
+    const model = buildEquationReviewModel(previewResponse(), [
+      {
+        source: "ai",
+        row_order: 1,
+        draft_text: "2 H2 + O2 → 2 H2O // note: heat gently",
+        replacement_text: "2 H2 + O2 → 2 H2O // note: heat gently",
+        canonical_display: "2 H2 + O2 → 2 H2O",
+        canonical_mhchem: "\\ce{2 H2 + O2 -> 2 H2O}",
+        annotation_text: "note: heat gently",
+        annotation_formulae: [],
+        condition_tags: ["heated"],
+        validation_status: "valid",
+        rationale: "AI balance check.",
+      },
+    ]);
+
+    expect(model.rows[0].candidates[0]).toMatchObject({
+      replacement_text: "2 H2 + O2 → 2 H2O // note: heat gently",
+      annotation_text: "note: heat gently",
+      condition_tags: ["heated"],
+    });
+  });
+
+  it("does not create adoptable candidates without AI drafts", () => {
     const model = buildEquationReviewModel(previewResponse(), []);
 
     expect(model.rows).toHaveLength(1);
-    expect(model.rows[0].equation.suggested_display).toBe("2 H2 + O2 → 2 H2O");
+    expect(model.rows[0].equation.suggested_display).toBeNull();
     expect(model.rows[0].candidates).toEqual([]);
     expect(model.supplementalCandidates).toEqual([]);
   });

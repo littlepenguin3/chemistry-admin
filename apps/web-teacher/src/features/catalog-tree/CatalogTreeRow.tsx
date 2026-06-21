@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
+  CircleDashed,
   Clipboard,
   Copy,
   Folder,
@@ -49,13 +50,15 @@ function rowIcon(kind: CatalogNodeCard["node_kind"], open: boolean): ReactNode {
 }
 
 function pointStatusIcon(status: CatalogNodeCard["status"], hasWarnings: boolean): ReactNode {
-  if (hasWarnings || status === "draft") return <CircleAlert size={16} strokeWidth={1.9} />;
+  if (hasWarnings) return <CircleAlert size={16} strokeWidth={1.9} />;
+  if (status === "draft") return <CircleDashed size={16} strokeWidth={1.9} />;
   if (status === "archived") return <Archive size={16} strokeWidth={1.9} />;
   return <CheckCircle2 size={16} strokeWidth={1.9} />;
 }
 
 function pointStatusClass(status: CatalogNodeCard["status"], hasWarnings: boolean): string {
-  if (hasWarnings || status === "draft") return "is-warning";
+  if (hasWarnings) return "is-warning";
+  if (status === "draft") return "is-draft";
   if (status === "archived") return "is-archived";
   return "is-published";
 }

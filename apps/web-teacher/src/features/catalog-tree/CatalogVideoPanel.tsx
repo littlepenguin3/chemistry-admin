@@ -88,7 +88,7 @@ export function CatalogVideoPanel({
                 <strong>{binding.title}</strong>
                 <Text type="secondary">{binding.original_file_name}</Text>
                 <Space size={6} wrap>
-                  <Tag color={binding.binding_status === "published" ? "green" : "gold"}>{binding.binding_status}</Tag>
+                  <Tag color={binding.binding_status === "published" ? "green" : "default"}>{binding.binding_status}</Tag>
                   <Tag>{binding.upload_status}</Tag>
                   <a href={getMediaAssetFileUrl(binding.media_id)} target="_blank" rel="noreferrer">
                     <EyeOutlined /> 预览

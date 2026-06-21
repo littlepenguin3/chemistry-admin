@@ -245,7 +245,7 @@ export function catalogNodeKindLabel(kind: CatalogNodeKind): string {
 export function catalogStatusColor(status: string): string {
   if (status === "published") return "green";
   if (status === "archived") return "default";
-  return "gold";
+  return "default";
 }
 
 export function catalogStatusLabel(status: string): string {
