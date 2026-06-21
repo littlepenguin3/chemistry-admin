@@ -695,6 +695,10 @@
 }
 
 .ai-policy-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 10px;
 }
 
@@ -1642,6 +1646,10 @@
   .ai-monitor-workbench-grid {
     grid-template-columns: 1fr;
   }
+
+  .ai-guardrail-layers {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1100px) {
@@ -1651,6 +1659,29 @@
   }
 
   .ai-monitor-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ai-guardrail-command,
+  .ai-guardrail-headline {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-guardrail-shield {
+    min-height: 260px;
+  }
+
+  .ai-guardrail-pipeline,
+  .ai-guardrail-metrics,
+  .ai-policy-outcomes {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-guardrail-stage i {
+    display: none;
+  }
+
+  .ai-guardrail-layers {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1679,5 +1710,23 @@
 
   .ai-monitor-term-row {
     grid-template-columns: 1fr;
+  }
+
+  .ai-guardrail-layers {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-guardrail-radar {
+    width: 132px;
+    height: 132px;
+  }
+
+  .ai-guardrail-metric strong {
+    font-size: 25px;
+  }
+
+  .ai-policy-section-head {
+    display: grid;
+    align-items: start;
   }
 }
