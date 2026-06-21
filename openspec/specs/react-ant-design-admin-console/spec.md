@@ -28,13 +28,12 @@ The teacher console SHALL be implemented as a React + TypeScript + Ant Design de
 - **THEN** the system SHALL reject the session for the teacher console.
 
 ### Requirement: Teacher workflow navigation
-
 The teacher console SHALL expose navigation organized around teacher operations for the experiment-centered product direction without feature-tier branching between teacher-console roles.
 
 #### Scenario: Teacher views navigation
 - **GIVEN** a teacher-console user is logged in
 - **WHEN** the teacher menu is displayed
-- **THEN** the menu SHALL include dashboards for overview, classes and students, experiment management, question bank management, learning analytics, learning assistant, AI access, learning resources, feedback, and system settings
+- **THEN** the menu SHALL include dashboards for overview, classes and students, experiment management, question bank management, learning analytics, learning assistant, intelligent monitoring, learning resources, feedback, and system settings
 - **AND** the Classes and Students route SHALL use card-first class navigation rather than a table-first class list
 - **AND** the Experiment Management route SHALL include video resource management inside experiment detail
 - **AND** it SHALL NOT present course version management or video resources as primary teacher workflows.
@@ -49,7 +48,7 @@ The teacher console SHALL expose navigation organized around teacher operations 
 - **GIVEN** a legacy `role='teacher'` user is logged in
 - **WHEN** the teacher menu is displayed
 - **THEN** the navigation SHALL match the complete navigation available to `role='admin'`
-- **AND** it SHALL NOT hide learning assistant or other teacher-console modules because of role.
+- **AND** it SHALL NOT hide learning assistant, intelligent monitoring, or other teacher-console modules because of role.
 
 ### Requirement: Chapter-first overview aligned with the mini-program
 
@@ -148,4 +147,22 @@ The teacher console SHALL provide a "learning assistant" page for all teacher-co
 - **WHEN** the student AI assistant or student RAG feature switch affects the test request
 - **THEN** the page SHALL show the current AI configuration status
 - **AND** submission results SHALL reflect the same feature-switch behavior used by student chat.
+
+### Requirement: Operational monitoring route layout
+The teacher console SHALL support dense operational pages that use Ant Design modules, tabs, tags, alerts, tables/lists, and responsive grids without becoming landing pages or monolithic card stacks.
+
+#### Scenario: Intelligent monitoring route opens
+- **WHEN** a teacher opens the `智能监控` route
+- **THEN** the page SHALL render the operational content directly after the page title
+- **AND** it SHALL use tabs or equivalent module navigation for detailed diagnostics rather than a single long card stack.
+
+#### Scenario: Monitoring page contains many diagnostic panels
+- **WHEN** the page needs to show OpenAI, RAG, ES, dictionary, outbox, guardrail, and trend diagnostics
+- **THEN** related panels SHALL be grouped inside named modules
+- **AND** the default view SHALL prioritize status and next action over exhaustive detail.
+
+#### Scenario: Monitoring page is viewed on narrow laptop widths
+- **WHEN** the left shell navigation and page content compete for horizontal space
+- **THEN** the monitoring route SHALL stack or wrap module content without requiring horizontal page scrolling
+- **AND** primary actions such as refresh, search diagnostics, and module navigation SHALL remain reachable.
 
