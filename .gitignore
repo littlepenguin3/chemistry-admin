@@ -15,7 +15,11 @@ data/media/
 *.log
 
 # Admin repository extraction exclusions
-.codex/
+.codex/*
+!.codex/skills/
+.codex/skills/*
+!.codex/skills/openspec-*/
+!.codex/skills/openspec-*/SKILL.md
 apps/miniprogram/
 miniprogram/
 data/app/
