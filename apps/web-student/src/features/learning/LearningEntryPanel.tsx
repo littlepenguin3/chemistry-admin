@@ -4,20 +4,21 @@ import { StudentLearningPageResponse, errorMessage, getStudentLearningPage } fro
 import { LearningState } from "../../shared/mobile/LearningState";
 import { PeriodicTable } from "../periodic-table/PeriodicTable";
 import { periodicAreaByAreaId, profileAreaId, type AreaId } from "../periodic-table/periodicHelpers";
+import { LearningAreaPopover } from "./LearningAreaPopover";
 import { formatChapterEntryTitle, formatRecommendedAreaCueLabel } from "./learningFormat";
 
 type LearningProfileSummary = StudentLearningPageResponse["profiles"][number];
 
 export function LearningEntryPanel({
-  onSelectArea,
   onSelectProfile,
 }: {
-  onSelectArea: (areaId: AreaId) => void;
   onSelectProfile: (profile: LearningProfileSummary) => void;
 }) {
   const [page, setPage] = useState<StudentLearningPageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedArea, setSelectedArea] = useState<AreaId | null>(null);
+  const [areaAnchorElement, setAreaAnchorElement] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,12 +45,39 @@ export function LearningEntryPanel({
   const recommendedArea = recommendedProfile ? profileAreaId(recommendedProfile) : null;
   const recommendedCueLabel = formatRecommendedAreaCueLabel(recommendedProfile);
   const recommendedAreaLabel = recommendedArea ? periodicAreaByAreaId[recommendedArea] : null;
+  const closeAreaPopover = () => {
+    setSelectedArea(null);
+    setAreaAnchorElement(null);
+  };
 
   return (
     <section className="learning-panel" aria-label="元素周期表章节入口">
       {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载学习章节" /> : null}
       {error ? <LearningState icon={<FlaskConical size={23} />} text={error} /> : null}
-      {!loading && !error ? <PeriodicTable onSelectArea={onSelectArea} /> : null}
+      {!loading && !error ? (
+        <>
+          <PeriodicTable
+            onSelectArea={(areaId, triggerElement) => {
+              if (selectedArea === areaId && areaAnchorElement === triggerElement) {
+                closeAreaPopover();
+                return;
+              }
+              setSelectedArea(areaId);
+              setAreaAnchorElement(triggerElement);
+            }}
+          />
+          <LearningAreaPopover
+            selectedArea={selectedArea}
+            anchorElement={areaAnchorElement}
+            open={Boolean(selectedArea && areaAnchorElement)}
+            profiles={profiles}
+            onOpenChange={(isOpen) => {
+              if (!isOpen) closeAreaPopover();
+            }}
+            onSelectProfile={onSelectProfile}
+          />
+        </>
+      ) : null}
       {!loading && !error && recommendedProfile ? (
         <button
           type="button"

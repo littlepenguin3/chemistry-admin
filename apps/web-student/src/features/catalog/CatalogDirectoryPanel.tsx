@@ -12,11 +12,15 @@ export function CatalogDirectoryPanel({
   onLoaded,
   onOpenDirectory,
   onOpenPoint,
+  searchQuery = "",
+  variant = "panel",
 }: {
   nodeId: string;
   onLoaded?: (node: StudentCatalogNodeResponse) => void;
   onOpenDirectory: (node: StudentCatalogNodeCard) => void;
   onOpenPoint: (node: StudentCatalogNodeCard) => void;
+  searchQuery?: string;
+  variant?: "panel" | "body";
 }) {
   const [detail, setDetail] = useState<StudentCatalogNodeResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,14 +54,20 @@ export function CatalogDirectoryPanel({
   const pathText = catalogPathLabel(detail.breadcrumbs);
 
   return (
-    <section className="learning-panel catalog-directory-panel" aria-label="目录详情">
-      <div className="catalog-panel-head">
+    <section className={variant === "body" ? "catalog-directory-panel catalog-browser-body" : "learning-panel catalog-directory-panel"} aria-label="目录详情">
+      <div className={variant === "body" ? "catalog-browser-head" : "catalog-panel-head"}>
         <p>{pathText}</p>
         <h2>{detail.node.title}</h2>
         {detail.node.summary ? <span>{detail.node.summary}</span> : null}
       </div>
       {detail.children.length ? (
-        <CatalogNodeCards nodes={detail.children} breadcrumbs={detail.breadcrumbs} onOpenDirectory={onOpenDirectory} onOpenPoint={onOpenPoint} />
+        <CatalogNodeCards
+          nodes={detail.children}
+          breadcrumbs={detail.breadcrumbs}
+          searchQuery={searchQuery}
+          onOpenDirectory={onOpenDirectory}
+          onOpenPoint={onOpenPoint}
+        />
       ) : (
         <MobileEmptyState className="empty-learning-card" icon={<FolderOpen size={20} />}>
           <span>当前目录暂无子节点</span>

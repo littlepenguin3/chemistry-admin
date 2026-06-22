@@ -7,7 +7,7 @@ import { areaInk, areaSwatches, periodicAreaByAreaId, periodicAreaIdForElement, 
 export function PeriodicTable({
   onSelectArea,
 }: {
-  onSelectArea: (areaId: AreaId) => void;
+  onSelectArea: (areaId: AreaId, triggerElement: HTMLElement) => void;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const groupNumbers = Array.from({ length: 18 }, (_, index) => index + 1);
@@ -38,7 +38,7 @@ export function PeriodicTable({
             onChange={(event) => setSearchQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key !== "Enter" || !matchedElements[0]) return;
-              onSelectArea(periodicAreaIdForElement(matchedElements[0]));
+              onSelectArea(periodicAreaIdForElement(matchedElements[0]), event.currentTarget);
             }}
           />
         </label>
@@ -50,7 +50,7 @@ export function PeriodicTable({
               key={areaId}
               type="button"
               style={{ "--area-color": areaSwatches[areaId], "--area-ink": areaInk[areaId] } as CSSProperties}
-              onClick={() => onSelectArea(areaId)}
+              onClick={(event) => onSelectArea(areaId, event.currentTarget)}
               aria-label={periodicLegendLabelByAreaId[areaId]}
             >
               <i />
@@ -93,7 +93,7 @@ export function PeriodicTable({
               } as CSSProperties}
               aria-label={`${element.symbol} ${element.name}，选择${periodicAreaByAreaId[areaId]}`}
               title={`${element.symbol} ${element.name}`}
-              onClick={() => onSelectArea(areaId)}
+              onClick={(event) => onSelectArea(areaId, event.currentTarget)}
             >
               <span>{element.symbol}</span>
             </button>

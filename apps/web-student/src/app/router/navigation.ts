@@ -117,6 +117,7 @@ export function navigateToCatalogNode(
     profileId?: string | null;
     chapterId?: string | null;
     catalogPath?: string | null;
+    elementSymbol?: string | null;
   } = {},
 ): void {
   void navigate({
@@ -127,6 +128,7 @@ export function navigateToCatalogNode(
       profileId: options.profileId || "",
       chapterId: options.chapterId || "",
       catalogPath: options.catalogPath || "",
+      elementSymbol: options.elementSymbol || "",
     }),
   });
 }

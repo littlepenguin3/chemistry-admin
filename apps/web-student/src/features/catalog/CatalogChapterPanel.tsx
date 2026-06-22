@@ -12,11 +12,15 @@ export function CatalogChapterPanel({
   profileId,
   onOpenDirectory,
   onOpenPoint,
+  searchQuery = "",
+  variant = "panel",
 }: {
   chapterId?: string | null;
   profileId?: string | null;
   onOpenDirectory: (node: StudentCatalogNodeCard) => void;
   onOpenPoint: (node: StudentCatalogNodeCard) => void;
+  searchQuery?: string;
+  variant?: "panel" | "body";
 }) {
   const [catalog, setCatalog] = useState<StudentCatalogChapterResponse | null>(null);
   const [loading, setLoading] = useState(Boolean(chapterId));
@@ -58,13 +62,13 @@ export function CatalogChapterPanel({
   }
 
   return (
-    <section className="catalog-chapter-panel" aria-label="章节目录">
-      <div className="catalog-panel-head">
+    <section className={variant === "body" ? "catalog-chapter-panel catalog-browser-body" : "catalog-chapter-panel"} aria-label="章节目录">
+      <div className={variant === "body" ? "catalog-browser-head catalog-browser-head-compact" : "catalog-panel-head"}>
         <p>{profileId ? "章节学习目录" : "目录"}</p>
-        <h2>{catalog.chapter_title}</h2>
+        {variant === "body" ? null : <h2>{catalog.chapter_title}</h2>}
         <span>{catalog.nodes.length} 个入口</span>
       </div>
-      <CatalogNodeCards nodes={catalog.nodes} breadcrumbs={[]} onOpenDirectory={onOpenDirectory} onOpenPoint={onOpenPoint} />
+      <CatalogNodeCards nodes={catalog.nodes} breadcrumbs={[]} searchQuery={searchQuery} onOpenDirectory={onOpenDirectory} onOpenPoint={onOpenPoint} />
     </section>
   );
 }

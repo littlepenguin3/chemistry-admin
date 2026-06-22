@@ -12,13 +12,17 @@ import {
 type ActivePreviewInputSequence = {
   sequenceId: string;
   initialTarget: Element | null;
+  pressTarget: Element | null;
   lastPoint: PreviewInputPoint;
   moved: boolean;
+  suppressTapActivation: boolean;
 };
 
 type ScrollTarget =
   | { kind: "element"; element: HTMLElement }
   | { kind: "document"; element: Element };
+
+type ScrollAxis = "x" | "y";
 
 const actionableSelector = [
   "button",
@@ -61,18 +65,32 @@ function canOverflowY(element: HTMLElement): boolean {
   return /(auto|scroll|overlay)/.test(`${style.overflowY} ${style.overflow}`);
 }
 
-function scrollRange(element: Element): { top: number; max: number } {
-  const top = "scrollTop" in element ? Number(element.scrollTop) : 0;
-  const scrollHeight = "scrollHeight" in element ? Number(element.scrollHeight) : 0;
-  const clientHeight = "clientHeight" in element ? Number(element.clientHeight) : 0;
-  return { top, max: Math.max(0, scrollHeight - clientHeight) };
+function canOverflowX(element: HTMLElement): boolean {
+  const style = window.getComputedStyle(element);
+  return /(auto|scroll|overlay)/.test(`${style.overflowX} ${style.overflow}`);
 }
 
-function canScrollInDirection(element: Element, deltaScroll: number): boolean {
-  const { top, max } = scrollRange(element);
+function canOverflowOnAxis(element: HTMLElement, axis: ScrollAxis): boolean {
+  return axis === "x" ? canOverflowX(element) : canOverflowY(element);
+}
+
+function scrollRange(element: Element, axis: ScrollAxis = "y"): { current: number; max: number } {
+  const current = axis === "x" && "scrollLeft" in element ? Number(element.scrollLeft) : "scrollTop" in element ? Number(element.scrollTop) : 0;
+  const scrollHeight = "scrollHeight" in element ? Number(element.scrollHeight) : 0;
+  const clientHeight = "clientHeight" in element ? Number(element.clientHeight) : 0;
+  const scrollWidth = "scrollWidth" in element ? Number(element.scrollWidth) : 0;
+  const clientWidth = "clientWidth" in element ? Number(element.clientWidth) : 0;
+  return {
+    current,
+    max: Math.max(0, axis === "x" ? scrollWidth - clientWidth : scrollHeight - clientHeight),
+  };
+}
+
+function canScrollInDirection(element: Element, deltaScroll: number, axis: ScrollAxis = "y"): boolean {
+  const { current, max } = scrollRange(element, axis);
   if (max <= 0) return false;
-  if (deltaScroll > 0) return top < max;
-  if (deltaScroll < 0) return top > 0;
+  if (deltaScroll > 0) return current < max;
+  if (deltaScroll < 0) return current > 0;
   return false;
 }
 
@@ -81,26 +99,59 @@ export function elementFromPreviewPoint(point: PreviewInputPoint): Element | nul
   return document.elementFromPoint(point.x, point.y);
 }
 
-export function findScrollablePreviewTarget(start: Element | null, deltaScroll: number): ScrollTarget | null {
+export function findScrollablePreviewTarget(start: Element | null, deltaScroll: number, axis: ScrollAxis = "y"): ScrollTarget | null {
   let current: Element | null = start;
   while (current && current !== document.body && current !== document.documentElement) {
-    if (isHTMLElement(current) && canOverflowY(current) && canScrollInDirection(current, deltaScroll)) {
+    if (isHTMLElement(current) && canOverflowOnAxis(current, axis) && canScrollInDirection(current, deltaScroll, axis)) {
       return { kind: "element", element: current };
     }
     current = current.parentElement;
   }
 
   const scrollingElement = document.scrollingElement || document.documentElement;
-  return canScrollInDirection(scrollingElement, deltaScroll) ? { kind: "document", element: scrollingElement } : null;
+  return canScrollInDirection(scrollingElement, deltaScroll, axis) ? { kind: "document", element: scrollingElement } : null;
 }
 
-export function applyPreviewScroll(target: ScrollTarget | null, deltaScroll: number): void {
+export function applyPreviewScroll(target: ScrollTarget | null, deltaScroll: number, axis: ScrollAxis = "y"): void {
   if (!target || deltaScroll === 0) return;
-  const { top, max } = scrollRange(target.element);
-  const nextTop = Math.min(Math.max(top + deltaScroll, 0), max);
-  if ("scrollTop" in target.element) {
+  const { current, max } = scrollRange(target.element, axis);
+  const nextTop = Math.min(Math.max(current + deltaScroll, 0), max);
+  if (axis === "x" && "scrollLeft" in target.element) {
+    target.element.scrollLeft = nextTop;
+  } else if ("scrollTop" in target.element) {
     target.element.scrollTop = nextTop;
   }
+}
+
+export function applyPreviewDragScroll(
+  initialTarget: Element | null,
+  hitTarget: Element | null,
+  previousPoint: PreviewInputPoint,
+  point: PreviewInputPoint,
+): boolean {
+  const deltaScrollX = previousPoint.x - point.x;
+  const deltaScrollY = previousPoint.y - point.y;
+  const horizontalTarget =
+    findScrollablePreviewTarget(hitTarget, deltaScrollX, "x") ||
+    findScrollablePreviewTarget(initialTarget, deltaScrollX, "x");
+
+  if (Math.abs(deltaScrollX) > Math.abs(deltaScrollY) && horizontalTarget) {
+    applyPreviewScroll(horizontalTarget, deltaScrollX, "x");
+    return true;
+  }
+
+  const verticalTarget = findScrollablePreviewTarget(hitTarget || initialTarget, deltaScrollY, "y");
+  if (verticalTarget) {
+    applyPreviewScroll(verticalTarget, deltaScrollY, "y");
+    return true;
+  }
+
+  if (horizontalTarget) {
+    applyPreviewScroll(horizontalTarget, deltaScrollX, "x");
+    return true;
+  }
+
+  return false;
 }
 
 export function resolvePreviewActionTarget(initialTarget: Element | null, fallbackPoint: PreviewInputPoint): Element | null {
@@ -111,6 +162,32 @@ export function resolvePreviewActionTarget(initialTarget: Element | null, fallba
   const actionable = candidate.closest(actionableSelector);
   if (!actionable || isDisabledControl(actionable)) return null;
   return actionable;
+}
+
+export function dispatchPreviewPointerEvent(
+  target: Element | null,
+  type: "pointerdown" | "pointerup" | "pointercancel",
+  point: PreviewInputPoint,
+  pressed: boolean,
+): boolean {
+  if (!target || !target.isConnected) return true;
+  const eventInit: PointerEventInit = {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    clientX: point.x,
+    clientY: point.y,
+    pointerId: 1,
+    pointerType: "touch",
+    isPrimary: true,
+    button: 0,
+    buttons: pressed ? 1 : 0,
+  };
+  const event =
+    typeof window.PointerEvent === "function"
+      ? new PointerEvent(type, eventInit)
+      : new MouseEvent(type, eventInit);
+  return target.dispatchEvent(event);
 }
 
 export function activatePreviewTarget(target: Element | null): boolean {
@@ -177,16 +254,23 @@ export function PreviewInputRuntime() {
       if (message.type === "hover") return;
 
       if (message.type === "touchCancel") {
+        const activeSequence = activeSequenceRef.current;
+        const cancelTarget = activeSequence?.pressTarget?.isConnected ? activeSequence.pressTarget : null;
+        if (activeSequence) dispatchPreviewPointerEvent(cancelTarget, "pointercancel", activeSequence.lastPoint, false);
         clearSequence();
         return;
       }
 
       if (message.type === "touchStart") {
+        const initialTarget = elementFromPreviewPoint(message.point);
+        const pressAllowed = dispatchPreviewPointerEvent(initialTarget, "pointerdown", message.point, true);
         activeSequenceRef.current = {
           sequenceId: message.sequenceId,
-          initialTarget: elementFromPreviewPoint(message.point),
+          initialTarget,
+          pressTarget: initialTarget,
           lastPoint: message.point,
           moved: false,
+          suppressTapActivation: !pressAllowed,
         };
         return;
       }
@@ -201,24 +285,34 @@ export function PreviewInputRuntime() {
       }
 
       if (message.type === "tap") {
-        const target = resolvePreviewActionTarget(activeSequence.initialTarget, message.point);
-        activatePreviewTarget(target);
+        const releaseTarget = activeSequence.pressTarget?.isConnected
+          ? activeSequence.pressTarget
+          : elementFromPreviewPoint(message.point);
+        dispatchPreviewPointerEvent(releaseTarget, "pointerup", message.point, false);
+        if (!activeSequence.suppressTapActivation) {
+          const target = resolvePreviewActionTarget(activeSequence.initialTarget, message.point);
+          activatePreviewTarget(target);
+        }
         clearSequence();
         return;
       }
 
       if (message.type === "touchMove") {
         const previousPoint = message.previousPoint || activeSequence.lastPoint;
-        const deltaScroll = previousPoint.y - message.point.y;
+        const deltaScrollX = previousPoint.x - message.point.x;
+        const deltaScrollY = previousPoint.y - message.point.y;
         const hitTarget = elementFromPreviewPoint(message.point) || activeSequence.initialTarget;
-        const scrollTarget = findScrollablePreviewTarget(hitTarget, deltaScroll);
-        applyPreviewScroll(scrollTarget, deltaScroll);
+        applyPreviewDragScroll(activeSequence.initialTarget, hitTarget, previousPoint, message.point);
         activeSequence.lastPoint = message.point;
-        if (Math.abs(deltaScroll) > 0) activeSequence.moved = true;
+        if (Math.abs(deltaScrollX) > 0 || Math.abs(deltaScrollY) > 0) activeSequence.moved = true;
         return;
       }
 
       if (message.type === "touchEnd") {
+        const releaseTarget = activeSequence.pressTarget?.isConnected
+          ? activeSequence.pressTarget
+          : elementFromPreviewPoint(message.point);
+        dispatchPreviewPointerEvent(releaseTarget, "pointerup", message.point, false);
         clearSequence();
       }
     };

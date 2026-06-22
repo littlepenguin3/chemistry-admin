@@ -688,15 +688,23 @@ describe("student app route stack", () => {
     expect(document.querySelector(".learning-recommendation-card")).not.toBeNull();
     expect(document.querySelector(".chapter-entry-card")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "p区元素" }));
-    await waitFor(() => expect(window.location.pathname).toBe("/learn/area/p"));
-    expectBottomNavHidden();
-    expect(screen.getByText("p区元素")).toBeInTheDocument();
-    expect(screen.queryByText("当前选区")).not.toBeInTheDocument();
-    expect(screen.queryByText("推荐学习")).not.toBeInTheDocument();
-    await waitFor(() => expect(document.querySelector(".chapter-entry-card")).not.toBeNull());
-    fireEvent.click(document.querySelector<HTMLButtonElement>(".chapter-entry-card")!);
+    await waitFor(() => expect(window.location.pathname).toBe("/learn"));
+    expect(activeRoot()).toBe("learn");
+    const areaPopover = await screen.findByRole("dialog", { name: "p区元素" });
+    expect(areaPopover).toHaveClass("learning-area-popover");
+    await waitFor(() => expect(areaPopover.querySelector(".chapter-entry-card")).not.toBeNull());
+    fireEvent.pointerDown(document.querySelector<HTMLElement>(".learning-area-popover-backdrop")!);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "p区元素" })).not.toBeInTheDocument());
+    expect(window.location.pathname).toBe("/learn");
+    fireEvent.click(screen.getByRole("button", { name: "p区元素" }));
+    const reopenedAreaPopover = await screen.findByRole("dialog", { name: "p区元素" });
+    fireEvent.click(reopenedAreaPopover.querySelector<HTMLButtonElement>(".chapter-entry-card")!);
     await waitFor(() => expect(window.location.pathname).toBe("/chapter/halogens-17"));
     expectBottomNavHidden();
+    await waitFor(() => expect(document.querySelector(".family-catalog-shell")).not.toBeNull());
+    expect(document.querySelector(".family-detail-frame")).not.toBeNull();
+    expect(document.querySelector(".family-catalog-context")).not.toBeNull();
+    expect(document.querySelector(".family-element-rail")).not.toBeNull();
     await waitFor(() => expect(document.querySelector(".chapter-element-summary")).not.toBeNull());
     expect(screen.getByText("Experiment focus: oxidizes bromide")).toBeInTheDocument();
     expect(screen.getByText("Links directly to the halogen displacement video.")).toBeInTheDocument();
@@ -720,14 +728,27 @@ describe("student app route stack", () => {
     expect(screen.queryByRole("button", { name: "问 AI" })).not.toBeInTheDocument();
 
     await waitFor(() => expect(document.querySelector(".catalog-node-card-main")).not.toBeNull());
+    const familyCatalogPath = window.location.pathname;
     fireEvent.click(document.querySelector<HTMLButtonElement>(".catalog-node-card-main")!);
-    await waitFor(() => expect(window.location.pathname).toBe("/catalog/cat-dir-halogen"));
+    await waitFor(() => expect(apiMocks.getStudentCatalogNode).toHaveBeenLastCalledWith("cat-dir-halogen"));
+    expect(window.location.pathname).toBe(familyCatalogPath);
+    await waitFor(() => expect(document.querySelector(".family-catalog-shell")).not.toBeNull());
+    expect(document.querySelector(".family-detail-frame")).not.toBeNull();
+    expect(document.querySelector<HTMLButtonElement>(".family-catalog-up-action")).not.toBeDisabled();
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".family-catalog-more-action")!);
+    await waitFor(() => expect(document.querySelector(".family-catalog-more-sheet")).not.toBeNull());
+    fireEvent.pointerDown(document.querySelector<HTMLElement>(".family-catalog-more-backdrop")!);
+    await waitFor(() => expect(document.querySelector(".family-catalog-more-sheet")).toBeNull());
     await waitFor(() => expect(document.querySelector(".catalog-node-card.kind-directory")).not.toBeNull());
     fireEvent.click(document.querySelector<HTMLButtonElement>(".catalog-node-card-main")!);
-    await waitFor(() => expect(window.location.pathname).toBe("/catalog/cat-dir-oxidation"));
+    await waitFor(() => expect(apiMocks.getStudentCatalogNode).toHaveBeenLastCalledWith("cat-dir-oxidation"));
+    expect(window.location.pathname).toBe(familyCatalogPath);
+    await waitFor(() => expect(document.querySelector(".family-catalog-shell")).not.toBeNull());
     await waitFor(() => expect(document.querySelector(".catalog-node-card.kind-point")).not.toBeNull());
     fireEvent.click(document.querySelector<HTMLButtonElement>(".catalog-node-card-main")!);
     await waitFor(() => expect(window.location.pathname).toBe("/point/cat-point-halogen"));
+    expect(new URLSearchParams(window.location.search).get("profileId")).toBe("halogens-17");
+    expect(new URLSearchParams(window.location.search).get("elementSymbol")).toBe("Cl");
     expectBottomNavHidden();
 
     fireEvent.click(document.querySelector<HTMLButtonElement>(".context-assistant-action")!);
@@ -941,6 +962,7 @@ describe("student app route stack", () => {
     await renderAuthenticatedApp("/catalog/cat-dir-halogen");
     await waitFor(() => expect(apiMocks.getStudentCatalogNode).toHaveBeenLastCalledWith("cat-dir-halogen"));
     await waitFor(() => expect(document.querySelector(".catalog-node-card.kind-directory")).not.toBeNull());
+    expect(document.querySelector(".family-catalog-shell")).toBeNull();
     expectBottomNavHidden();
     cleanup();
 

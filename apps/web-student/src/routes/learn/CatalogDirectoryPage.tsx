@@ -7,12 +7,14 @@ import { DetailPageFrame } from "../../app/shell/DetailPageFrame";
 import type { StudentCatalogNodeCard, StudentCatalogNodeResponse } from "../../api";
 import { CatalogDirectoryPanel } from "../../features/catalog/CatalogDirectoryPanel";
 import { catalogPathLabel } from "../../features/catalog/CatalogNodeCards";
+import { FamilyCatalogShell } from "./FamilyCatalogShell";
 
 export function CatalogDirectoryPage() {
   const navigate = useNavigate();
   const params = useParams({ strict: false }) as { nodeId?: string };
   const search = useSearch({ strict: false }) as StudentRouteSearch;
   const [detail, setDetail] = useState<StudentCatalogNodeResponse | null>(null);
+  const [familyTitle, setFamilyTitle] = useState("章节目录");
   const nodeId = params.nodeId || "";
   const title = detail?.node.title || "目录";
 
@@ -40,6 +42,19 @@ export function CatalogDirectoryPage() {
     },
     [detail, navigate, search.profileId],
   );
+
+  if (search.profileId) {
+    return (
+      <DetailPageFrame title={familyTitle} source={search.from} className="family-detail-frame">
+        <FamilyCatalogShell
+          profileId={search.profileId}
+          directoryNodeId={nodeId}
+          initialElementSymbol={search.elementSymbol}
+          onTitleChange={setFamilyTitle}
+        />
+      </DetailPageFrame>
+    );
+  }
 
   return (
     <DetailPageFrame title={title} source={search.from}>

@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   activatePreviewTarget,
+  applyPreviewDragScroll,
   applyPreviewScroll,
+  dispatchPreviewPointerEvent,
   findScrollablePreviewTarget,
   resolvePreviewActionTarget,
 } from "./PreviewInputRuntime";
@@ -13,14 +15,33 @@ import {
   studentPreviewInputVersion,
 } from "./previewInputProtocol";
 
-function defineScrollMetrics(element: HTMLElement, metrics: { scrollHeight: number; clientHeight: number; scrollTop?: number }) {
-  Object.defineProperty(element, "scrollHeight", { configurable: true, value: metrics.scrollHeight });
-  Object.defineProperty(element, "clientHeight", { configurable: true, value: metrics.clientHeight });
+function defineScrollMetrics(
+  element: HTMLElement,
+  metrics: {
+    scrollHeight?: number;
+    clientHeight?: number;
+    scrollTop?: number;
+    scrollWidth?: number;
+    clientWidth?: number;
+    scrollLeft?: number;
+  },
+) {
+  Object.defineProperty(element, "scrollHeight", { configurable: true, value: metrics.scrollHeight ?? 0 });
+  Object.defineProperty(element, "clientHeight", { configurable: true, value: metrics.clientHeight ?? 0 });
+  Object.defineProperty(element, "scrollWidth", { configurable: true, value: metrics.scrollWidth ?? 0 });
+  Object.defineProperty(element, "clientWidth", { configurable: true, value: metrics.clientWidth ?? 0 });
   Object.defineProperty(element, "scrollTop", {
     configurable: true,
     get: () => metrics.scrollTop ?? 0,
     set: (value) => {
       metrics.scrollTop = value;
+    },
+  });
+  Object.defineProperty(element, "scrollLeft", {
+    configurable: true,
+    get: () => metrics.scrollLeft ?? 0,
+    set: (value) => {
+      metrics.scrollLeft = value;
     },
   });
 }
@@ -70,6 +91,24 @@ describe("student preview input runtime helpers", () => {
     expect(document.activeElement).toBe(document.body);
   });
 
+  it("dispatches cancelable pointer events so preview taps match mobile outside dismissal", () => {
+    const backdrop = document.createElement("div");
+    const events: string[] = [];
+    backdrop.addEventListener("pointerdown", (event) => {
+      events.push("pointerdown");
+      event.preventDefault();
+    });
+    backdrop.addEventListener("pointerup", () => events.push("pointerup"));
+    document.body.appendChild(backdrop);
+
+    const pressAllowed = dispatchPreviewPointerEvent(backdrop, "pointerdown", { x: 12, y: 24 }, true);
+    const releaseAllowed = dispatchPreviewPointerEvent(backdrop, "pointerup", { x: 12, y: 24 }, false);
+
+    expect(pressAllowed).toBe(false);
+    expect(releaseAllowed).toBe(true);
+    expect(events).toEqual(["pointerdown", "pointerup"]);
+  });
+
   it("focuses editable elements without replacing them", () => {
     const input = document.createElement("input");
     const clickHandler = vi.fn();
@@ -112,5 +151,41 @@ describe("student preview input runtime helpers", () => {
 
     applyPreviewScroll({ kind: "element", element: scroller }, -999);
     expect(scroller.scrollTop).toBe(0);
+  });
+
+  it("finds and applies horizontal scroll for preview left and right swipes", () => {
+    const rail = document.createElement("div");
+    const tile = document.createElement("button");
+    rail.style.overflowX = "auto";
+    defineScrollMetrics(rail, { scrollWidth: 620, clientWidth: 260, scrollLeft: 80 });
+    rail.appendChild(tile);
+    document.body.appendChild(rail);
+
+    const target = findScrollablePreviewTarget(tile, 60, "x");
+    expect(target).toMatchObject({ kind: "element", element: rail });
+
+    applyPreviewScroll(target, 60, "x");
+    expect(rail.scrollLeft).toBe(140);
+
+    applyPreviewScroll(findScrollablePreviewTarget(tile, -200, "x"), -200, "x");
+    expect(rail.scrollLeft).toBe(0);
+
+    applyPreviewScroll(findScrollablePreviewTarget(tile, 999, "x"), 999, "x");
+    expect(rail.scrollLeft).toBe(360);
+  });
+
+  it("keeps horizontal preview swipes locked to the starting rail when the pointer leaves it", () => {
+    const rail = document.createElement("div");
+    const tile = document.createElement("button");
+    const summary = document.createElement("section");
+    rail.style.overflowX = "auto";
+    defineScrollMetrics(rail, { scrollWidth: 620, clientWidth: 260, scrollLeft: 80 });
+    rail.appendChild(tile);
+    document.body.append(rail, summary);
+
+    const scrolled = applyPreviewDragScroll(tile, summary, { x: 220, y: 40 }, { x: 160, y: 43 });
+
+    expect(scrolled).toBe(true);
+    expect(rail.scrollLeft).toBe(140);
   });
 });

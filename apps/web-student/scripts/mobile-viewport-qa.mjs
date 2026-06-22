@@ -479,17 +479,22 @@ async function assertElementChipRowBalanced(page, label) {
 
 async function assertElementFocusCard(page, label) {
   const metrics = await page.evaluate(() => {
-    const card = document.querySelector(".chapter-element-summary");
-    const tile = document.querySelector(".chapter-element-summary-symbol");
-    const focus = document.querySelector(".chapter-element-summary-focus");
-    const relevance = document.querySelector(".chapter-element-summary-relevance");
-    const detailAction = document.querySelector(".chapter-element-detail-action");
+    const shell = document.querySelector(".family-catalog-shell");
+    const context = document.querySelector(".family-catalog-context");
+    const rail = document.querySelector(".family-element-rail");
+    const activeTile = document.querySelector(".family-element-rail-button.active");
+    const card = document.querySelector(".family-context-summary");
+    const focus = card?.querySelector("strong");
+    const relevance = card?.querySelector(".family-context-summary-note");
+    const detailAction = document.querySelector(".family-element-detail-action");
     const catalogCard = document.querySelector(".catalog-node-card");
-    if (!card || !tile || !focus || !relevance || !detailAction || !catalogCard) return null;
+    if (!shell || !context || !rail || !activeTile || !card || !focus || !relevance || !detailAction || !catalogCard) return null;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
+    const contextRect = context.getBoundingClientRect();
+    const railRect = rail.getBoundingClientRect();
     const cardRect = card.getBoundingClientRect();
-    const tileRect = tile.getBoundingClientRect();
+    const tileRect = activeTile.getBoundingClientRect();
     const focusRect = focus.getBoundingClientRect();
     const relevanceRect = relevance.getBoundingClientRect();
     const detailRect = detailAction.getBoundingClientRect();
@@ -497,9 +502,11 @@ async function assertElementFocusCard(page, label) {
     return {
       viewportWidth,
       viewportHeight,
+      contextHeight: contextRect.height,
+      railHeight: railRect.height,
       tileWidth: tileRect.width,
       tileHeight: tileRect.height,
-      tileInsideCard: tileRect.left >= cardRect.left && tileRect.right <= cardRect.right && tileRect.top >= cardRect.top,
+      tileInsideRail: tileRect.left >= railRect.left - 1 && tileRect.right <= railRect.right + 1 && tileRect.top >= railRect.top - 1,
       focusText: focus.textContent?.trim() || "",
       relevanceText: relevance.textContent?.trim() || "",
       focusRight: focusRect.right,
@@ -510,8 +517,8 @@ async function assertElementFocusCard(page, label) {
   });
 
   if (!metrics) throw new Error(label + ": element focus card was not fully rendered");
-  if (!metrics.tileInsideCard || metrics.tileWidth < 80 || metrics.tileHeight < 80) {
-    throw new Error(label + ": element tile is clipped or too small " + JSON.stringify(metrics));
+  if (!metrics.tileInsideRail || metrics.tileWidth < 36 || metrics.tileHeight < 36) {
+    throw new Error(label + ": active element rail tile is clipped or too small " + JSON.stringify(metrics));
   }
   if (!metrics.focusText || !metrics.relevanceText) {
     throw new Error(label + ": focus or relevance copy is empty");
@@ -519,11 +526,14 @@ async function assertElementFocusCard(page, label) {
   if (metrics.focusRight > metrics.viewportWidth + 1 || metrics.relevanceRight > metrics.viewportWidth + 1) {
     throw new Error(label + ": focus card text overflows viewport " + JSON.stringify(metrics));
   }
-  if (metrics.detailHeight < 40) {
+  if (metrics.detailHeight < 26) {
     throw new Error(label + ": detail action touch target is too small " + metrics.detailHeight);
   }
   if (metrics.catalogTop > metrics.viewportHeight) {
     throw new Error(label + ": first catalog node is not discoverable in the first viewport " + JSON.stringify(metrics));
+  }
+  if (metrics.contextHeight > metrics.viewportHeight * 0.45) {
+    throw new Error(label + ": family context header is too tall " + JSON.stringify(metrics));
   }
 }
 
@@ -909,9 +919,16 @@ async function checkAuthenticatedFlows(page, viewportName) {
     throw new Error(viewportName + ': learning root should not render selected-area chapter cards');
   }
   await page.getByRole('button', { name: 'p区元素' }).click();
-  await page.waitForURL(/\/learn\/area\/p/, { timeout: 10000 });
-  await expectBottomNavHidden(page, viewportName + ': selected area detail');
-  await page.locator('.chapter-entry-card').first().click();
+  await page.waitForURL(/\/learn(?:[?#]|$)/, { timeout: 10000 });
+  await expectRootNav(page, 'learn', viewportName + ': learning root after area popover opens');
+  const areaPopover = page.getByRole('dialog', { name: 'p区元素' });
+  await areaPopover.waitFor({ state: 'visible', timeout: 10000 });
+  await assertNoHorizontalOverflow(page, viewportName + ': learning area popover');
+  await page.touchscreen.tap(Math.floor(page.viewportSize().width / 2), page.viewportSize().height - 110);
+  await areaPopover.waitFor({ state: 'hidden', timeout: 10000 });
+  await page.getByRole('button', { name: 'p区元素' }).click();
+  await areaPopover.waitFor({ state: 'visible', timeout: 10000 });
+  await areaPopover.locator('.chapter-entry-card').first().click();
   await page.waitForURL(/\/chapter\/halogens-17/, { timeout: 10000 });
   await expectBottomNavHidden(page, viewportName + ': chapter detail');
   await page.locator('.chapter-element-summary').first().waitFor({ state: 'visible', timeout: 10000 });

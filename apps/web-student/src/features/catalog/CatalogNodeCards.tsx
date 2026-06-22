@@ -27,17 +27,35 @@ function nodeDescription(node: StudentCatalogNodeCard): string {
 export function CatalogNodeCards({
   nodes,
   breadcrumbs,
+  searchQuery = "",
   onOpenDirectory,
   onOpenPoint,
 }: {
   nodes: StudentCatalogNodeCard[];
   breadcrumbs: StudentCatalogBreadcrumb[];
+  searchQuery?: string;
   onOpenDirectory: (node: StudentCatalogNodeCard) => void;
   onOpenPoint: (node: StudentCatalogNodeCard) => void;
 }) {
+  const query = searchQuery.trim().toLowerCase();
+  const visibleNodes = query
+    ? nodes.filter((node) => {
+        const path = catalogPathLabel([...breadcrumbs, { node_id: node.node_id, title: node.title, node_kind: node.node_kind, chapter_id: node.chapter_id }]);
+        return [node.title, node.summary, nodeMeta(node), path].filter(Boolean).join(" ").toLowerCase().includes(query);
+      })
+    : nodes;
+
+  if (!visibleNodes.length) {
+    return (
+      <div className="catalog-node-empty">
+        <span>未找到匹配目录</span>
+      </div>
+    );
+  }
+
   return (
     <div className="catalog-node-grid">
-      {nodes.map((node) => {
+      {visibleNodes.map((node) => {
         const pointCapable = isPointNode(node);
         const opensDirectory = node.node_kind === "directory";
         const description = nodeDescription(node);

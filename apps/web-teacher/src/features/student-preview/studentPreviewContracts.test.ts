@@ -12,6 +12,8 @@ describe("student device preview contracts", () => {
     expect(pageSource).toContain("<iframe");
     expect(pageSource).toContain("preview_url");
     expect(pageSource).toContain("allowedPreviewUrl");
+    expect(deviceFrameSource).toContain("VITE_STUDENT_APP_BASE_URL");
+    expect(deviceFrameSource).toContain("http://222.200.189.249:5173");
     expect(pageSource).toContain("PreviewGestureSurface");
     expect(inputProtocolSource).toContain("previewTeacherOrigin");
   });

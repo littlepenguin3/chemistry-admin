@@ -8,7 +8,6 @@ export function PageBar({ title, onBack }: { title: string; onBack: () => void }
         <ArrowLeft size={18} />
       </MobileIconButton>
       <h2>{title}</h2>
-      <span />
     </div>
   );
 }

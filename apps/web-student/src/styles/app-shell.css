@@ -124,7 +124,7 @@
 }
 
 .student-app-shell.detail-route .student-route-content {
-  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  padding-top: calc(6px + env(safe-area-inset-top, 0px));
 }
 
 .student-route-content > .learning-panel,
@@ -381,9 +381,24 @@
 
 .detail-page-frame {
   display: grid;
-  gap: 14px;
+  gap: 10px;
   width: min(100%, 720px);
   margin: 0 auto;
+}
+
+.detail-page-frame.family-detail-frame {
+  grid-template-rows: auto minmax(0, 1fr);
+  width: calc(100% + 36px);
+  height: calc(100dvh - 6px - env(safe-area-inset-top, 0px) - max(18px, env(safe-area-inset-bottom, 0px)));
+  margin-right: -18px;
+  margin-left: -18px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.detail-page-frame.family-detail-frame > .pagebar {
+  margin-right: 18px;
+  margin-left: 18px;
 }
 
 .detail-page-actions {
@@ -539,7 +554,9 @@
 }
 
 .pagebar {
-  grid-template-columns: 44px 1fr 44px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 36px;
 }
 
 .learning-topbar p,
@@ -581,8 +598,11 @@
 
 .pagebar h2 {
   overflow-wrap: anywhere;
-  text-align: center;
-  font-size: 21px;
+  min-height: 34px;
+  margin: 0;
+  text-align: left;
+  font-size: 20px;
+  line-height: 34px;
 }
 
 .icon-action {
@@ -596,6 +616,21 @@
   background: rgba(255, 253, 246, 0.86);
   box-shadow: 0 12px 28px rgba(21, 49, 34, 0.12);
   cursor: pointer;
+}
+
+.pagebar .icon-action {
+  align-self: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--ink);
+  background: transparent;
+  box-shadow: none;
+}
+
+.pagebar .icon-action svg {
+  transform: translateY(1px);
 }
 
 .learning-state {

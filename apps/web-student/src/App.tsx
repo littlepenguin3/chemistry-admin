@@ -92,6 +92,10 @@ function App() {
       setChecking(false);
       return;
     }
+    if (user) {
+      setChecking(false);
+      return;
+    }
     if (!getAuthToken()) {
       setPreviewRuntime(false);
       setChecking(false);

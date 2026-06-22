@@ -73,8 +73,12 @@ class Settings:
     auth_secret_key: str = "dev-only-secret"
     access_token_expire_minutes: int = 720
     web_admin_access_token: str = ""
-    student_preview_app_base_url: str = "http://127.0.0.1:5173"
-    student_preview_allowed_origins: tuple[str, ...] = ("http://127.0.0.1:5173", "http://localhost:5173")
+    student_preview_app_base_url: str = "http://222.200.189.249:5173"
+    student_preview_allowed_origins: tuple[str, ...] = (
+        "http://222.200.189.249:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    )
     student_preview_ticket_expire_minutes: int = 10
     student_preview_session_expire_minutes: int = 240
     max_media_upload_mb: int = 1024

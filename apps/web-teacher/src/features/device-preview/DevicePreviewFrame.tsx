@@ -99,13 +99,12 @@ export const devicePresets: DevicePreset[] = [
   },
 ];
 
+const defaultStudentPreviewAppBase = "http://222.200.189.249:5173";
+
 export function inferStudentAppBase(): string {
   const configured = String(import.meta.env.VITE_STUDENT_APP_BASE_URL || "").replace(/\/$/, "");
   if (configured) return configured;
-  if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") {
-    return `${window.location.protocol}//${window.location.hostname}:5173`;
-  }
-  return window.location.origin;
+  return defaultStudentPreviewAppBase;
 }
 
 export function resolveStudentPreviewUrl(previewUrl: string): string {
