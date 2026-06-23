@@ -352,6 +352,21 @@ export type CatalogQuestionBankCounts = {
   directory_count?: number;
 };
 
+export type CatalogQuestionBankEvidenceRefreshResponse = {
+  chapter_id?: string | null;
+  point_node_id?: string | null;
+  force: boolean;
+  target_count: number;
+  queued_count: number;
+  skipped_count: number;
+  skipped: Array<{ node_id: string; reason: string }>;
+  job_ids: string[];
+  qwen_call_estimate: number;
+  processing_started: boolean;
+  process_limit: number;
+  rag_gate?: Record<string, unknown>;
+};
+
 export type CatalogQuestionBankNode = {
   node_id: string;
   parent_id?: string | null;
@@ -403,6 +418,16 @@ export function listCatalogQuestionBank(chapterId?: string): Promise<CatalogQues
   if (chapterId) params.set("chapter_id", chapterId);
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return api<CatalogQuestionBankResponse>(`/api/admin/question-banks/catalog${suffix}`);
+}
+
+export function refreshCatalogQuestionBankEvidence(payload: {
+  chapter_id?: string | null;
+  point_node_id?: string | null;
+  force?: boolean;
+  process_now?: boolean;
+  process_limit?: number;
+}): Promise<CatalogQuestionBankEvidenceRefreshResponse> {
+  return postJson<CatalogQuestionBankEvidenceRefreshResponse>("/api/admin/question-banks/catalog/evidence-refresh", payload);
 }
 
 export function listQuestionBankQuestions(params: URLSearchParams): Promise<ApiList<Question>> {

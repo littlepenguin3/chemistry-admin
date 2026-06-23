@@ -154,6 +154,32 @@ def _merge_candidates(*candidate_lists: list[dict[str, Any]]) -> list[dict[str, 
     return list(merged.values())
 
 
+def _rank_score(source: dict[str, Any]) -> float:
+    return float(source.get("rerank_score") if source.get("rerank_score") is not None else source.get("recall_score") or 0.0)
+
+
+def _candidate_summary(source: dict[str, Any], *, section: str, rank: int) -> dict[str, Any]:
+    section_path = source.get("section_path") if isinstance(source.get("section_path"), list) else []
+    text_preview = " ".join(str(source.get("text") or "").split())[:260]
+    return {
+        "chunk_id": source.get("chunk_id"),
+        "section": section,
+        "rank": rank,
+        "book_title": source.get("book_title"),
+        "chapter": source.get("chapter"),
+        "section_path": section_path,
+        "content_type": source.get("content_type"),
+        "page_start": source.get("page_start"),
+        "page_end": source.get("page_end"),
+        "content_hash": source.get("content_hash"),
+        "recall_source": source.get("recall_source"),
+        "recall_score": source.get("recall_score"),
+        "rerank_score": source.get("rerank_score"),
+        "text_preview": text_preview,
+        "metadata": source.get("metadata") if isinstance(source.get("metadata"), dict) else {},
+    }
+
+
 def retrieve_textbook_evidence(
     *,
     point_context: dict[str, Any],
@@ -271,21 +297,28 @@ def _retrieve_section(
         for candidate, score in zip(rerank_pool, scores):
             candidate["rerank_score"] = score
     min_score = float(config.get("min_rerank_score") or 0.0)
-    final_sources = sorted(
+    sorted_candidates = sorted(
         rerank_pool,
-        key=lambda item: float(item.get("rerank_score") if item.get("rerank_score") is not None else item.get("recall_score") or 0.0),
+        key=_rank_score,
         reverse=True,
-    )[: int(config.get("final_top_k") or 5)]
+    )
+    final_sources = sorted_candidates[: int(config.get("final_top_k") or 5)]
     if min_score:
         final_sources = [
             source
             for source in final_sources
             if float(source.get("rerank_score") if source.get("rerank_score") is not None else 0.0) >= min_score
         ]
+    candidate_limit = int(config.get("candidate_top_k") or config.get("diagnostic_top_k") or 20)
+    candidate_summaries = [
+        _candidate_summary(source, section=section_query.section, rank=rank)
+        for rank, source in enumerate(sorted_candidates[: max(0, candidate_limit)], start=1)
+    ]
     return {
         "section": section_query.section,
         "query": section_query.query,
         "candidate_count": len(candidates),
+        "candidates": candidate_summaries,
         "sources": final_sources,
         "sufficient": bool(final_sources),
         "missing_reason": "" if final_sources else "no_reranked_sources",

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
@@ -18,16 +16,7 @@ from server.app.experiment_admin_schemas import (
     WorkbenchMessageRequest,
     WorkbenchSessionRequest,
 )
-from server.app.hybrid_rag import retrieve_hybrid_context
 from server.app.domains.platform.settings import ai_feature_enabled, effective_ai_settings
-from server.app.domains.platform.settings import effective_textbook_rag_settings
-from server.app.domains.textbook_rag.cache import (
-    clear_textbook_evidence_cache,
-    cleared_cache_metadata,
-    retrieve_textbook_evidence_cached,
-)
-from server.app.repositories import RepositoryProvider, get_repositories
-from server.app.retrieval import keyword_score
 from server.app.domains.catalog.experiments import (
     _ensure_experiment,
     _experiment_video_points,
@@ -55,13 +44,9 @@ from server.app.domains.questions.generation import (
     attach_generation_lineage,
     catalog_point_generation_contexts,
     question_payload_has_catalog_evidence_lineage,
-    _catalog_node_evidence_package,
     _catalog_node_evidence_ready,
-    _load_generation_sources,
     _static_catalog_node_evidence_package,
 )
-from server.app.domains.assistant.rag_sources import _source_evidence_payload, _source_from_chunk
-from server.app.schemas import AgentAskRequest
 
 OBJECTIVE_TYPES = {"single_choice", "true_false", "fill_blank"}
 
@@ -75,24 +60,15 @@ def _json_array(value: Any) -> str:
 
 
 def _question_workbench_rag_gate() -> dict[str, Any]:
-    settings = get_settings()
-    rag_enabled = ai_feature_enabled("rag_access_enabled")
-    textbook_rag = effective_textbook_rag_settings()
+    settings = effective_ai_settings(get_settings())
+    assistant_enabled = ai_feature_enabled("question_bank_assistant")
     runtime = {
-        "rag_enabled": rag_enabled,
-        "hybrid_bge_enabled": bool(settings.rag_hybrid_bge_enabled),
-        "query_generation_enabled": bool(settings.rag_query_generation_enabled),
-        "bge_service_required": bool(rag_enabled and settings.rag_hybrid_bge_enabled),
-        "bge_service_url": settings.rag_bge_service_url,
-        "vector_top_k": int(settings.rag_vector_top_k),
-        "rerank_top_k": int(settings.rag_rerank_top_k),
-        "final_top_k": int(settings.rag_final_top_k),
-        "textbook_rag_enabled": bool(textbook_rag.get("enabled")),
-        "textbook_rag_index": str(textbook_rag.get("index_name") or ""),
-        "textbook_rag_models": {
-            "embedding": str((textbook_rag.get("embedding") or {}).get("model") or ""),
-            "rerank": str((textbook_rag.get("rerank") or {}).get("model") or ""),
-        },
+        "question_bank_assistant_enabled": assistant_enabled,
+        "agent_llm_provider": settings.agent_llm_provider,
+        "agent_llm_base_url_configured": bool(settings.agent_llm_base_url),
+        "agent_llm_model": settings.agent_llm_model,
+        "agent_llm_api_key_configured": bool(settings.agent_llm_api_key),
+        "evidence_source": "precomputed_catalog_node_evidence",
     }
 
     def blocked(reason_code: str, message: str, *, bge_status: str = "not_required", bge_error: str | None = None) -> dict[str, Any]:
@@ -107,69 +83,21 @@ def _question_workbench_rag_gate() -> dict[str, Any]:
             "bge_metrics": None,
         }
 
-    if not rag_enabled:
-        return blocked("rag_disabled", "RAG access is disabled; AI question workbench requires healthy RAG evidence.")
-    if textbook_rag.get("enabled"):
-        embedding = textbook_rag.get("embedding") if isinstance(textbook_rag.get("embedding"), dict) else {}
-        rerank = textbook_rag.get("rerank") if isinstance(textbook_rag.get("rerank"), dict) else {}
-        if not textbook_rag.get("elasticsearch_url"):
-            return blocked("textbook_es_not_configured", "Textbook RAG Elasticsearch URL is not configured.", bge_status="textbook_rag")
-        if not str(embedding.get("model") or "").strip() or not str(embedding.get("api_key") or "").strip():
-            return blocked("textbook_embedding_not_configured", "Textbook RAG embedding model or API key is not configured.", bge_status="textbook_rag")
-        if not str(rerank.get("model") or "").strip() or not str(rerank.get("api_key") or "").strip():
-            return blocked("textbook_rerank_not_configured", "Textbook RAG rerank model or API key is not configured.", bge_status="textbook_rag")
-        return {
-            "healthy": True,
-            "status": "healthy",
-            "reason_code": "",
-            "message": "Qwen + Elasticsearch textbook RAG is configured; AI question workbench can use grounded evidence.",
-            "rag_runtime": {**runtime, "textbook_rag_status": "configured"},
-            "bge_status": "textbook_rag",
-            "bge_error": None,
-            "bge_metrics": {"ok": True, "service": "qwen-es-textbook-rag"},
-        }
-    if not settings.rag_hybrid_bge_enabled:
-        return blocked("hybrid_bge_disabled", "Hybrid BGE RAG is disabled; AI question workbench requires reranked evidence.")
-    if not settings.rag_query_generation_enabled:
-        return blocked("query_generation_disabled", "RAG query generation is disabled; enable it before using AI question workbench.")
-    if not settings.rag_bge_service_url:
-        return blocked("bge_not_configured", "BGE service URL is not configured.", bge_status="not_configured")
-
-    try:
-        with urllib.request.urlopen(
-            f"{settings.rag_bge_service_url.rstrip('/')}/metrics",
-            timeout=min(max(1.0, float(settings.rag_bge_timeout_seconds)), 2.0),
-        ) as response:
-            metrics = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
-        return blocked(
-            "bge_unreachable",
-            "BGE service is unreachable; AI question workbench requires healthy rerank service.",
-            bge_status="unreachable",
-            bge_error=f"{exc.__class__.__name__}: {str(exc)[:160]}",
-        )
-
-    if not isinstance(metrics, dict) or not metrics.get("ok"):
-        return {
-            "healthy": False,
-            "status": "blocked",
-            "reason_code": "bge_degraded",
-            "message": "BGE service responded but is not healthy; AI question workbench is blocked.",
-            "rag_runtime": runtime,
-            "bge_status": "degraded",
-            "bge_error": None,
-            "bge_metrics": metrics if isinstance(metrics, dict) else None,
-        }
-
+    if not assistant_enabled:
+        return blocked("question_bank_assistant_disabled", "题库助手未启用。")
+    if settings.agent_llm_provider == "disabled":
+        return blocked("llm_disabled", "大语言模型未启用，暂时不能使用 AI 出题。")
+    if not settings.agent_llm_model or not settings.agent_llm_api_key:
+        return blocked("llm_not_configured", "DeepSeek/OpenAI 兼容模型或 API Key 尚未配置，暂时不能使用 AI 出题。")
     return {
         "healthy": True,
         "status": "healthy",
         "reason_code": "",
-        "message": "Hybrid BGE RAG is healthy; AI question workbench can use grounded evidence.",
-        "rag_runtime": runtime,
-        "bge_status": "healthy",
+        "message": "AI 出题模型已配置；出题将只读取预绑定教材证据。",
+        "rag_runtime": {**runtime, "textbook_rag_status": "precomputed_required"},
+        "bge_status": "not_required",
         "bge_error": None,
-        "bge_metrics": metrics,
+        "bge_metrics": {"ok": True, "service": "precomputed-catalog-node-evidence"},
     }
 
 
@@ -300,8 +228,8 @@ def _teacher_point_content_context(
             session.execute(
                 text(
                     """
-                    SELECT point_title, principle_mode, principle_equation, principle_text,
-                           phenomenon_explanation, safety_note, content_status, updated_at
+                    SELECT pc.point_title, pc.principle_mode, pc.principle_equation, pc.principle_text,
+                           pc.phenomenon_explanation, pc.safety_note, pc.content_status, pc.updated_at
                     FROM experiment_catalog_nodes n
                     JOIN experiment_catalog_point_content pc
                       ON (
@@ -395,312 +323,6 @@ def _question_coverage_for_context(
     }
 
 
-def _load_workbench_source_refs(
-    session: Any,
-    *,
-    experiment: dict[str, Any],
-    prompt: str,
-    target_question: dict[str, Any] | None,
-    target_points: list[dict[str, str]] | None = None,
-) -> list[dict[str, Any]]:
-    prompt_parts = [
-        prompt,
-        str(target_question.get("stem")) if target_question else "",
-        " ".join(str(point.get("point_title") or point.get("point_key") or "") for point in (target_points or [])),
-    ]
-    source_refs = _load_generation_sources(
-        session,
-        experiment=experiment,
-        prompt=" ".join(item for item in prompt_parts if item),
-        chapter_ids=list((target_question or {}).get("related_chapter_ids") or []),
-        knowledge_point_ids=list((target_question or {}).get("related_knowledge_point_ids") or []),
-    )
-    if not source_refs and target_question:
-        source_refs = list(target_question.get("source_refs") or [])
-    return source_refs
-
-
-def _workbench_chapter_ids(session: Any, experiment: dict[str, Any], target_question: dict[str, Any] | None) -> list[str]:
-    question_chapters = list((target_question or {}).get("related_chapter_ids") or [])
-    if question_chapters:
-        return [str(item) for item in question_chapters if str(item).strip()]
-    return [
-        str(row["chapter_id"])
-        for row in session.execute(
-            text("SELECT chapter_id FROM experiment_chapter_bindings WHERE experiment_id = :experiment_id"),
-            {"experiment_id": experiment["id"]},
-        )
-        .mappings()
-        .all()
-        if str(row.get("chapter_id") or "").strip()
-    ]
-
-
-def _workbench_evidence_prompt(
-    *,
-    experiment: dict[str, Any],
-    prompt: str,
-    target_question: dict[str, Any] | None,
-    target_points: list[dict[str, str]] | None,
-) -> str:
-    parts = [
-        prompt,
-        str(experiment.get("code") or ""),
-        str(experiment.get("title") or ""),
-        str(experiment.get("summary") or ""),
-        str(target_question.get("stem")) if target_question else "",
-        " ".join(str(point.get("point_title") or point.get("point_key") or "") for point in (target_points or [])),
-    ]
-    return " ".join(item for item in parts if item).strip()
-
-
-def _workbench_query_generator(
-    *,
-    experiment: dict[str, Any],
-    target_points: list[dict[str, str]] | None,
-) -> Any:
-    point_text = " ".join(str(point.get("point_title") or point.get("point_key") or "") for point in (target_points or [])).strip()
-    experiment_text = " ".join(str(experiment.get(key) or "") for key in ("code", "title")).strip()
-
-    def generate(question: str) -> tuple[list[str], dict[str, Any]]:
-        queries = _unique_point_keys(
-            question,
-            f"{experiment_text} {point_text} {question}".strip(),
-            f"{experiment_text} {point_text} 实验现象 原理 误区".strip(),
-        )[:3]
-        return queries or [question], {
-            "status": "generated" if len(queries) > 1 else "fallback",
-            "provider": "question_workbench",
-            "queries": queries,
-            "point_count": len(target_points or []),
-        }
-
-    return generate
-
-
-def _retrieve_workbench_context(
-    repositories: RepositoryProvider,
-    question: str,
-    request: AgentAskRequest,
-    limit: int,
-) -> list[dict[str, Any]]:
-    candidates: list[dict[str, Any]] = []
-    seen: set[str] = set()
-
-    def add(item: dict[str, Any]) -> None:
-        item_id = str(item.get("id") or item.get("chunk_id") or "")
-        if item_id and item_id not in seen:
-            seen.add(item_id)
-            candidates.append(item)
-
-    for kp_id in request.knowledge_point_ids:
-        for chunk in repositories.content.related_chunks_for_kp(kp_id, limit=limit):
-            add(chunk)
-    source_chunks = repositories.content.source_chunks()
-    if request.experiment_id:
-        experiment = repositories.content.get_experiment(request.experiment_id)
-        chunk_ids = set((experiment or {}).get("source_chunk_ids") or [])
-        for chunk in source_chunks:
-            if chunk.get("id") in chunk_ids or chunk.get("chunk_id") in chunk_ids:
-                add(chunk)
-    if request.chapter_id:
-        for chunk in source_chunks:
-            if chunk.get("chapter_id") == request.chapter_id:
-                add(chunk)
-    for chunk in source_chunks:
-        add(chunk)
-
-    scored: list[dict[str, Any]] = []
-    for item in candidates:
-        score = keyword_score(
-            question,
-            item,
-            chapter_id=request.chapter_id,
-            experiment_id=request.experiment_id,
-            knowledge_point_ids=request.knowledge_point_ids,
-        )
-        if score > 0.04:
-            scored.append({**item, "_score": score})
-    scored.sort(key=lambda item: item["_score"], reverse=True)
-    return scored[:limit]
-
-
-def _source_refs_from_hybrid_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    refs: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for chunk in chunks:
-        chunk_id = str(chunk.get("chunk_id") or chunk.get("id") or "").strip()
-        if chunk_id and chunk_id in seen:
-            continue
-        if chunk_id:
-            seen.add(chunk_id)
-        try:
-            refs.append(_source_evidence_payload(_source_from_chunk(chunk)))
-        except Exception:
-            refs.append(
-                {
-                    "chunk_id": chunk_id,
-                    "source_file": chunk.get("source_file"),
-                    "page_number": chunk.get("page_number"),
-                    "text_preview": " ".join(str(chunk.get("text") or chunk.get("markdown") or chunk.get("caption") or "").split())[:220],
-                    "content_type": chunk.get("content_type"),
-                    "caption": chunk.get("caption") or chunk.get("title"),
-                    "section_path": chunk.get("section_path") if isinstance(chunk.get("section_path"), list) else [],
-                }
-            )
-    return refs
-
-
-def _textbook_point_context(context: dict[str, Any], *, experiment: dict[str, Any]) -> dict[str, Any]:
-    catalog_path = [str(item) for item in context.get("catalog_path") or [] if str(item or "").strip()]
-    principle = str(context.get("principle") or "").strip()
-    equations = context.get("normalized_equations") if isinstance(context.get("normalized_equations"), list) else []
-    if equations:
-        equation_text = "\n".join(
-            str(row.get("canonical_display") or row.get("raw_text") or "").strip()
-            for row in equations
-            if isinstance(row, dict) and str(row.get("canonical_display") or row.get("raw_text") or "").strip()
-        )
-        principle = "\n".join(item for item in [principle, equation_text] if item)
-    return {
-        "point_title": str(context.get("point_title") or context.get("title") or "").strip(),
-        "experiment_title": catalog_path[0] if catalog_path else str(experiment.get("title") or ""),
-        "textbook_chapter": str(context.get("chapter_id") or ""),
-        "folder_path": " / ".join(catalog_path),
-        "content": {
-            "principle_text": principle,
-            "phenomenon_explanation": str(context.get("phenomenon_explanation") or "").strip(),
-            "safety_note": str(context.get("safety_note") or "").strip(),
-        },
-    }
-
-
-def _source_refs_from_textbook_package(
-    package: dict[str, Any],
-    *,
-    target_point: dict[str, Any],
-) -> list[dict[str, Any]]:
-    node_id = _point_node_id(target_point)
-    canonical_point_id = _canonical_point_id(target_point)
-    refs: list[dict[str, Any]] = []
-    sections = package.get("sections") if isinstance(package.get("sections"), dict) else {}
-    for section, section_package in sections.items():
-        if not isinstance(section_package, dict):
-            continue
-        for source in section_package.get("sources") or []:
-            if not isinstance(source, dict):
-                continue
-            section_path = source.get("section_path") if isinstance(source.get("section_path"), list) else []
-            text_value = " ".join(str(source.get("text") or "").split())
-            refs.append(
-                {
-                    "chunk_id": source.get("chunk_id"),
-                    "source_file": source.get("source_file") or source.get("book_title") or "教材 RAG",
-                    "page_number": source.get("page_start") or source.get("page_end"),
-                    "section_title": " / ".join(str(item) for item in section_path if str(item or "").strip()),
-                    "text": text_value,
-                    "text_preview": text_value[:260],
-                    "content_type": source.get("content_type"),
-                    "evidence_role": section,
-                    "recall_source": source.get("recall_source"),
-                    "recall_score": source.get("recall_score"),
-                    "rerank_score": source.get("rerank_score"),
-                    "point_node_id": node_id,
-                    "point_node_ids": [node_id] if node_id else [],
-                    "canonical_point_id": canonical_point_id,
-                    "canonical_point_ids": [canonical_point_id] if canonical_point_id else [],
-                    "source_boundary": "qwen_es_textbook_rag",
-                }
-            )
-    return refs
-
-
-def _load_textbook_evidence_package(
-    session: Any,
-    *,
-    experiment: dict[str, Any],
-    target_points: list[dict[str, str]] | None,
-    rag_gate: dict[str, Any] | None,
-    textbook_settings: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    point_contexts = catalog_point_generation_contexts(session, target_points=target_points)
-    refs: list[dict[str, Any]] = []
-    packages: list[dict[str, Any]] = []
-    cache_summary = {"hit_count": 0, "miss_count": 0, "stored_count": 0, "cleared_count": 0}
-    settings = textbook_settings or effective_textbook_rag_settings()
-    for point, context in zip(target_points or [], point_contexts, strict=False):
-        point_node_id = _point_node_id(point)
-        canonical_point_id = _canonical_point_id(point)
-        package = retrieve_textbook_evidence_cached(
-            session,
-            point_context=_textbook_point_context(context, experiment=experiment),
-            settings=settings,
-            point_node_id=point_node_id,
-            canonical_point_id=canonical_point_id or None,
-        )
-        cache = package.get("cache") if isinstance(package.get("cache"), dict) else {}
-        if cache.get("hit"):
-            cache_summary["hit_count"] += 1
-        else:
-            cache_summary["miss_count"] += 1
-        if cache.get("stored"):
-            cache_summary["stored_count"] += 1
-        if cache.get("cleared"):
-            cache_summary["cleared_count"] += 1
-        packages.append(
-            {
-                "point_node_id": point_node_id,
-                "canonical_point_id": canonical_point_id,
-                "point_title": point.get("point_title") or context.get("point_title"),
-                "ok": bool(package.get("ok")),
-                "reason_code": package.get("reason_code"),
-                "message": package.get("message"),
-                "supported_sections": package.get("supported_sections") or [],
-                "missing_sections": package.get("missing_sections") or [],
-                "sections": package.get("sections") or {},
-                "cache": cache,
-                "diagnostics": package.get("diagnostics") or {},
-            }
-        )
-        refs.extend(_source_refs_from_textbook_package(package, target_point=point))
-    cache_hit = bool(packages) and cache_summary["hit_count"] == len(packages)
-    evidence_package = _catalog_node_evidence_package(
-        source_refs=refs,
-        target_points=target_points,
-        source_mode="qwen_es_textbook_rag" if refs else "qwen_es_textbook_rag_missing",
-        freshness_status="fresh" if refs else "missing",
-        diagnostics={
-            "rag_gate": rag_gate or {},
-            "source_strategy": "catalog_node_evidence",
-            "dynamic_source_strategy": "qwen_es_textbook_rag",
-            "textbook_rag_packages": packages,
-            "textbook_rag_cache": cache_summary,
-            "requires_catalog_node_evidence": True,
-            "catalog_node_evidence_ready": bool(refs),
-            "evidence_status": "fresh" if refs else "missing",
-            "freshness_status": "fresh" if refs else "missing",
-        },
-    )
-    cache_payload = {
-        "enabled": True,
-        "hit": cache_hit,
-        "stored": bool(packages) and cache_summary["stored_count"] > 0,
-        "hit_count": cache_summary["hit_count"],
-        "miss_count": cache_summary["miss_count"],
-        "stored_count": cache_summary["stored_count"],
-    }
-    cache_times = [
-        package["cache"].get("updated_at") or package["cache"].get("created_at")
-        for package in packages
-        if isinstance(package.get("cache"), dict) and (package["cache"].get("updated_at") or package["cache"].get("created_at"))
-    ]
-    if cache_times:
-        cache_payload["updated_at"] = cache_times[0]
-        cache_payload["created_at"] = cache_times[0]
-    diagnostics = evidence_package.get("diagnostics") if isinstance(evidence_package.get("diagnostics"), dict) else {}
-    return {**evidence_package, "cache": cache_payload, "diagnostics": {**diagnostics, "cache": cache_payload}}
-
-
 def _load_workbench_evidence_package(
     session: Any,
     *,
@@ -710,95 +332,19 @@ def _load_workbench_evidence_package(
     target_points: list[dict[str, str]] | None,
     rag_gate: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    chapter_ids = _workbench_chapter_ids(session, experiment, target_question)
-    knowledge_point_ids = list((target_question or {}).get("related_knowledge_point_ids") or [])
     static_package = _static_catalog_node_evidence_package(session, target_points=target_points)
-    if _catalog_node_evidence_ready(static_package, target_point_node_ids=_unique_point_node_ids(target_points or [])):
-        return static_package
     static_diagnostics = static_package.get("diagnostics") if isinstance(static_package.get("diagnostics"), dict) else {}
-    if static_diagnostics.get("freshness_status") == "stale":
-        return static_package
-    textbook_config = effective_textbook_rag_settings()
-    if textbook_config.get("enabled"):
-        return _load_textbook_evidence_package(
-            session,
-            experiment=experiment,
-            target_points=target_points,
-            rag_gate=rag_gate,
-            textbook_settings=textbook_config,
-        )
-    evidence_prompt = _workbench_evidence_prompt(
-        experiment=experiment,
-        prompt=prompt,
-        target_question=target_question,
-        target_points=target_points,
-    )
-    source_refs: list[dict[str, Any]] = []
-    trace: dict[str, Any] = {}
-    strategy = "hybrid_bge_rag"
-    fallback_reason = ""
-    if rag_gate and rag_gate.get("healthy"):
-        try:
-            settings = get_settings()
-            repositories = get_repositories()
-            request = AgentAskRequest(
-                user_role="teacher",
-                question=evidence_prompt,
-                chapter_id=chapter_ids[0] if chapter_ids else None,
-                experiment_id=str(experiment.get("id") or ""),
-                point_key=str((target_points or [{}])[0].get("point_key") or "") or None,
-                point_node_id=_point_node_id((target_points or [{}])[0]),
-                knowledge_point_ids=[str(item) for item in knowledge_point_ids if str(item).strip()],
-                allow_progress_lookup=False,
-                allow_rag_lookup=True,
-                max_answer_chars=0,
-            )
-            hybrid_result = retrieve_hybrid_context(
-                repositories=repositories,
-                question=evidence_prompt,
-                request=request,
-                settings=settings,
-                legacy_retrieve=lambda lookup_query, lookup_limit: _retrieve_workbench_context(
-                    repositories,
-                    lookup_query,
-                    request,
-                    limit=lookup_limit,
-                ),
-                query_generator=_workbench_query_generator(experiment=experiment, target_points=target_points),
-                limit=max(1, settings.rag_final_top_k),
-            )
-            trace = hybrid_result.trace
-            source_refs = _source_refs_from_hybrid_chunks(hybrid_result.chunks)
-            if not source_refs:
-                fallback_reason = "hybrid_empty"
-        except Exception as exc:
-            fallback_reason = f"{exc.__class__.__name__}: {str(exc)[:160]}"
-    else:
-        strategy = "dynamic_rag_unavailable"
-        fallback_reason = "rag_gate_unhealthy"
-
-    return _catalog_node_evidence_package(
-        source_refs=source_refs,
-        target_points=target_points,
-        source_mode="dynamic_rag_catalog_node_evidence" if source_refs else strategy,
-        freshness_status="fresh" if source_refs else "missing",
-        diagnostics={
-            "rag_gate": rag_gate or {},
-            "rag_trace": trace,
-            "source_strategy": "catalog_node_evidence",
-            "dynamic_source_strategy": trace.get("mode") or strategy,
-            "fallback_reason": fallback_reason,
-            "requires_catalog_node_evidence": True,
-            "catalog_node_evidence_ready": bool(source_refs),
-            "chapter_ids": chapter_ids,
-            "knowledge_point_ids": knowledge_point_ids,
-            "target_point_keys": [point.get("point_key") for point in (target_points or []) if point.get("point_key")],
-            "target_point_node_ids": _unique_point_node_ids(target_points or []),
-            "static_evidence_diagnostics": static_diagnostics,
-            "evidence_status": "fresh" if source_refs else "missing",
-            "freshness_status": "fresh" if source_refs else "missing",
-        },
-    )
+    diagnostics = {
+        **static_diagnostics,
+        "rag_gate": rag_gate or {},
+        "source_strategy": "catalog_node_evidence",
+        "dynamic_source_strategy": "disabled_precomputed_evidence_required",
+        "requires_catalog_node_evidence": True,
+        "catalog_node_evidence_ready": _catalog_node_evidence_ready(static_package, target_point_node_ids=_unique_point_node_ids(target_points or [])),
+        "target_point_keys": [point.get("point_key") for point in (target_points or []) if point.get("point_key")],
+        "target_point_node_ids": _unique_point_node_ids(target_points or []),
+    }
+    return {**static_package, "diagnostics": diagnostics}
 
 
 def _create_or_reopen_workbench_session(
@@ -1141,64 +687,12 @@ def clear_question_workbench_evidence_cache(*, session_id: str, user: Any) -> di
         )
         if not workbench:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workbench session not found")
-        context_snapshot = workbench.get("context_snapshot") if isinstance(workbench.get("context_snapshot"), dict) else {}
-        raw_target_points = context_snapshot.get("target_points") if isinstance(context_snapshot.get("target_points"), list) else []
-        target_points = [dict(point) for point in raw_target_points if isinstance(point, dict)]
-        point_node_ids = _unique_point_node_ids(
-            context_snapshot.get("target_point_node_ids"),
-            context_snapshot.get("source_placement_node_ids"),
-            workbench.get("point_node_ids") if isinstance(workbench.get("point_node_ids"), list) else [],
-            target_points,
-        )
-        canonical_point_ids = [
-            item
-            for item in dict.fromkeys(
-                [
-                    *(context_snapshot.get("target_canonical_point_ids") or []),
-                    *[_canonical_point_id(point) for point in target_points],
-                ]
-            ).keys()
-            if item
-        ]
-        deleted_count = clear_textbook_evidence_cache(
-            session,
-            point_node_ids=point_node_ids,
-            canonical_point_ids=canonical_point_ids,
-        )
-        cache = {**cleared_cache_metadata(), "deleted_count": deleted_count}
-        evidence_package = context_snapshot.get("evidence_package") if isinstance(context_snapshot.get("evidence_package"), dict) else {}
-        evidence_diagnostics = evidence_package.get("diagnostics") if isinstance(evidence_package.get("diagnostics"), dict) else {}
-        updated_evidence_package = {
-            **evidence_package,
-            "cache": {**(evidence_package.get("cache") if isinstance(evidence_package.get("cache"), dict) else {}), **cache},
-            "diagnostics": {
-                **evidence_diagnostics,
-                "cache": {**(evidence_diagnostics.get("cache") if isinstance(evidence_diagnostics.get("cache"), dict) else {}), **cache},
-            },
-        }
-        session.execute(
-            text(
-                """
-                UPDATE experiment_question_workbench_sessions
-                SET context_snapshot = CAST(:context_snapshot AS jsonb), updated_at = now()
-                WHERE id = CAST(:id AS uuid)
-                """
-            ),
-            {
-                "id": session_id,
-                "context_snapshot": _json(
-                    {
-                        **context_snapshot,
-                        "evidence_package": updated_evidence_package,
-                        "textbook_rag_cache": cache,
-                    }
-                ),
-            },
-        )
         return {
-            "deleted_count": deleted_count,
-            "point_node_ids": point_node_ids,
-            "canonical_point_ids": canonical_point_ids,
+            "deleted_count": 0,
+            "point_node_ids": [],
+            "canonical_point_ids": [],
+            "deprecated": True,
+            "message": "教材证据缓存已迁移为点位 evidence bindings；请使用题库页的刷新教材证据按钮。",
             "session": _workbench_session_response(session, session_id),
         }
 

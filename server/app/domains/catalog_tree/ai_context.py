@@ -207,27 +207,36 @@ def build_static_evidence_payload(
 ) -> dict[str, Any]:
     state = evidence_state or _evidence_state(session, node_id=node_id)
     bindings = [_binding_payload(row) for row in _evidence_binding_rows(session, node_id=node_id)]
-    stale = str(state.get("evidence_status") or "") == "stale" or any(item.get("freshness_status") == "stale" for item in bindings)
+    state_status = str(state.get("evidence_status") or "missing")
+    stale = state_status == "stale" or any(item.get("freshness_status") == "stale" for item in bindings)
     if not bindings:
-        status_value = "missing_fallback_evidence"
-        message = "Static fallback evidence is missing; Dynamic RAG remains the primary AI path when runtime health permits it."
+        status_value = "missing_catalog_node_evidence"
+        message = "教材证据尚未绑定；请先刷新该点位的教材证据。"
     elif stale:
-        status_value = "stale_fallback_evidence"
-        message = "Static fallback evidence exists but is stale; refresh RAG evidence before treating it as current."
+        status_value = "stale_catalog_node_evidence"
+        message = "教材证据已过期；请刷新后再出题。"
+    elif state_status in {"failed", "unavailable"}:
+        status_value = "failed_catalog_node_evidence"
+        message = "教材证据刷新失败；请查看刷新诊断或重试。"
+    elif state_status in {"succeeded", "partial", "fresh", "available"}:
+        status_value = "available_catalog_node_evidence"
+        message = "教材证据已绑定，可用于 AI 出题。"
     else:
-        status_value = "available_static_fallback"
-        message = "Static evidence is available as fallback or supplemental AI evidence; it is not student body copy."
+        status_value = "pending_catalog_node_evidence" if state_status in {"pending", "running"} else "available_catalog_node_evidence"
+        message = "教材证据正在刷新。" if state_status in {"pending", "running"} else "教材证据已绑定，可用于 AI 出题。"
     return {
         "node_id": node_id,
         "status": status_value,
         "state": state,
         "bindings": bindings,
+        "candidate_diagnostics": (state.get("diagnostics") or {}).get("candidate_diagnostics") if isinstance(state.get("diagnostics"), dict) else {},
         "selected_chunk_ids": [item["chunk_id"] for item in bindings if item.get("selection_status") == "selected"],
         "binding_count": len(bindings),
         "static_fallback_available": bool(bindings),
         "static_fallback_missing": not bindings,
-        "dynamic_rag_primary": True,
-        "ai_consumable_without_static_binding": True,
+        "catalog_node_evidence_available": status_value == "available_catalog_node_evidence",
+        "dynamic_rag_primary": False,
+        "ai_consumable_without_static_binding": False,
         "message": message,
     }
 
@@ -245,7 +254,7 @@ def catalog_point_static_evidence_package(*, point_node_id: str) -> dict[str, An
     return {
         "enabled": True,
         "evidence_source": "catalog_node_static_evidence",
-        "static_evidence_role": "fallback_or_supplemental",
+        "static_evidence_role": "required_generation_evidence",
         "point_node_id": point_node_id,
         "placement_node_id": point_node_id,
         "canonical_point_id": node.get("canonical_point_id") or point_node_id,
@@ -254,11 +263,12 @@ def catalog_point_static_evidence_package(*, point_node_id: str) -> dict[str, An
         "chunk_ids": [str(item.get("chunk_id")) for item in bindings if item.get("chunk_id")],
         "chunk_roles": {str(item.get("chunk_id")): item.get("evidence_role") for item in bindings if item.get("chunk_id")},
         "static_fallback_missing": bool(payload.get("static_fallback_missing")),
+        "catalog_node_evidence_available": bool(payload.get("catalog_node_evidence_available")),
         "static_evidence_status": payload.get("status"),
         "evidence_state_status": (payload.get("state") or {}).get("evidence_status"),
         "source_count": len(bindings),
         "bindings": bindings,
-        "dynamic_rag_available": True,
+        "dynamic_rag_available": False,
         "message": payload.get("message"),
     }
 
@@ -373,7 +383,8 @@ def _evidence_state(session: Any, *, node_id: str) -> dict[str, Any]:
                 SELECT es.node_id, es.canonical_point_id, es.source_placement_node_id,
                        es.evidence_status, es.source_mode, es.trigger_policy,
                        es.selected_chunk_ids, es.source_refs, es.diagnostics, es.stale_reason,
-                       es.latest_error, es.refreshed_at, es.stale_at, es.last_attempted_at, es.updated_at
+                       es.latest_error, es.content_fingerprint, es.config_fingerprint,
+                       es.refreshed_at, es.stale_at, es.last_attempted_at, es.updated_at
                 FROM experiment_catalog_point_evidence_state es
                 JOIN source ON true
                 WHERE es.node_id = :node_id
@@ -401,6 +412,8 @@ def _evidence_state(session: Any, *, node_id: str) -> dict[str, Any]:
             "diagnostics": {},
             "stale_reason": None,
             "latest_error": None,
+            "content_fingerprint": None,
+            "config_fingerprint": None,
             "refreshed_at": None,
             "stale_at": None,
             "last_attempted_at": None,
@@ -438,6 +451,8 @@ def _evidence_binding_rows(session: Any, *, node_id: str) -> list[dict[str, Any]
                        b.rerank_score,
                        b.source_metadata,
                        b.diagnostics,
+                       b.content_fingerprint,
+                       b.config_fingerprint,
                        b.created_at,
                        b.updated_at,
                        sc.document_id,
@@ -489,21 +504,31 @@ def _binding_payload(row: dict[str, Any]) -> dict[str, Any]:
         "binding_id": str(row.get("binding_id") or ""),
         "chunk_id": str(row.get("chunk_id") or ""),
         "evidence_role": row.get("evidence_role") or "supplemental",
+        "section": source_metadata.get("section") or row.get("evidence_role") or "supplemental",
         "selection_status": row.get("selection_status") or "selected",
         "freshness_status": row.get("freshness_status") or "missing",
         "rank": int(row.get("rank") or 0),
         "score": _float_or_none(row.get("score")),
         "rerank_score": _float_or_none(row.get("rerank_score")),
         "source_title": source_title,
-        "source_file": row.get("source_file") or source_metadata.get("source_file"),
-        "document_id": row.get("document_id") or source_metadata.get("document_id"),
+        "source_file": source_metadata.get("source_file") or row.get("source_file"),
+        "document_id": source_metadata.get("document_id") or row.get("document_id"),
         "document_kind": row.get("document_kind") or document_metadata.get("document_kind"),
         "document_type": row.get("document_type") or document_metadata.get("type"),
-        "page_number": row.get("page_number") or source_metadata.get("page_number"),
-        "section_title": row.get("section_title") or source_metadata.get("section_title"),
-        "chunk_index": row.get("chunk_index"),
+        "page_number": source_metadata.get("page_number") or row.get("page_number"),
+        "page_start": source_metadata.get("page_start"),
+        "page_end": source_metadata.get("page_end"),
+        "section_title": source_metadata.get("section_title") or row.get("section_title"),
+        "section_path": source_metadata.get("section_path") if isinstance(source_metadata.get("section_path"), list) else [],
+        "chunk_index": row.get("chunk_index") or source_metadata.get("chunk_index"),
         "text_preview": _text_preview(row, source_metadata),
+        "text": source_metadata.get("text"),
         "content_type": source_metadata.get("content_type") or chunk_metadata.get("content_type"),
+        "content_hash": source_metadata.get("content_hash"),
+        "source_boundary": source_metadata.get("source_boundary") or diagnostics.get("source_boundary") or "catalog_node_static_evidence",
+        "index_name": source_metadata.get("index_name"),
+        "content_fingerprint": row.get("content_fingerprint") or source_metadata.get("content_fingerprint"),
+        "config_fingerprint": row.get("config_fingerprint") or source_metadata.get("config_fingerprint"),
         "source_metadata": source_metadata,
         "diagnostics": diagnostics,
         "updated_at": _string_or_none(row.get("updated_at")),

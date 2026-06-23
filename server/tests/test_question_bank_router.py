@@ -9,6 +9,7 @@ def test_question_bank_overview_routes_are_registered_once() -> None:
     assert_route("/api/admin/question-banks/assistant/preview", "POST")
     assert_route("/api/admin/question-banks", "GET")
     assert_route("/api/admin/question-banks/catalog", "GET")
+    assert_route("/api/admin/question-banks/catalog/evidence-refresh", "POST")
 
 
 def test_question_bank_question_routes_are_registered_once() -> None:

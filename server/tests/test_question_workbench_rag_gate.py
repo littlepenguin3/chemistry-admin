@@ -7,91 +7,46 @@ import server.app.domains.questions.workbench as question_workbench_service
 from server.app.domains.questions.workbench import _question_workbench_rag_gate
 
 
-def _rag_gate_settings(**overrides):
-    return replace(
-        Settings(),
-        rag_hybrid_bge_enabled=True,
-        rag_query_generation_enabled=True,
-        rag_bge_service_url="http://bge.local",
-        **overrides,
-    )
+def _ai_settings(**overrides):
+    values = {
+        "agent_llm_provider": "openai",
+        "agent_llm_base_url": "https://api.deepseek.com",
+        "agent_llm_model": "deepseek-chat",
+        "agent_llm_api_key": "configured",
+    }
+    values.update(overrides)
+    return replace(Settings(), **values)
 
 
-def test_question_workbench_rag_gate_blocks_when_rag_access_disabled(monkeypatch):
-    monkeypatch.setattr(question_workbench_service, "get_settings", lambda: _rag_gate_settings())
-    monkeypatch.setattr(question_workbench_service, "ai_feature_enabled", lambda name: False if name == "rag_access_enabled" else True)
-
-    gate = _question_workbench_rag_gate()
-
-    assert gate["healthy"] is False
-    assert gate["reason_code"] == "rag_disabled"
-
-
-def test_question_workbench_rag_gate_allows_when_bge_metrics_are_ok(monkeypatch):
-    class FakeResponse:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return None
-
-        def read(self):
-            return b'{"ok": true, "service": "bge-rag"}'
-
-    monkeypatch.setattr(question_workbench_service, "get_settings", lambda: _rag_gate_settings())
-    monkeypatch.setattr(question_workbench_service, "ai_feature_enabled", lambda name: True)
-    monkeypatch.setattr(question_workbench_service.urllib.request, "urlopen", lambda url, timeout: FakeResponse())
-
-    gate = _question_workbench_rag_gate()
-
-    assert gate["healthy"] is True
-    assert gate["bge_status"] == "healthy"
-    assert gate["bge_metrics"]["service"] == "bge-rag"
-
-
-def test_question_workbench_rag_gate_allows_configured_textbook_rag_without_bge_probe(monkeypatch):
-    def fail_urlopen(*args, **kwargs):
-        raise AssertionError("BGE metrics endpoint should not be probed when textbook RAG is configured")
-
-    monkeypatch.setattr(question_workbench_service, "get_settings", lambda: _rag_gate_settings())
-    monkeypatch.setattr(question_workbench_service, "ai_feature_enabled", lambda name: True)
-    monkeypatch.setattr(
-        question_workbench_service,
-        "effective_textbook_rag_settings",
-        lambda: {
-            "enabled": True,
-            "elasticsearch_url": "http://es.local:9200",
-            "index_name": "canonical-rag-chunks-qwen-v1",
-            "embedding": {"model": "text-embedding-v4", "api_key": "configured"},
-            "rerank": {"model": "gte-rerank-v2", "api_key": "configured"},
-        },
-    )
-    monkeypatch.setattr(question_workbench_service.urllib.request, "urlopen", fail_urlopen)
-
-    gate = _question_workbench_rag_gate()
-
-    assert gate["healthy"] is True
-    assert gate["bge_status"] == "textbook_rag"
-    assert gate["bge_metrics"]["service"] == "qwen-es-textbook-rag"
-
-
-def test_question_workbench_rag_gate_blocks_degraded_bge_metrics(monkeypatch):
-    class FakeResponse:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return None
-
-        def read(self):
-            return b'{"ok": false, "service": "bge-rag"}'
-
-    monkeypatch.setattr(question_workbench_service, "get_settings", lambda: _rag_gate_settings())
-    monkeypatch.setattr(question_workbench_service, "ai_feature_enabled", lambda name: True)
-    monkeypatch.setattr(question_workbench_service.urllib.request, "urlopen", lambda url, timeout: FakeResponse())
+def test_question_workbench_gate_blocks_when_question_bank_assistant_disabled(monkeypatch):
+    monkeypatch.setattr(question_workbench_service, "get_settings", lambda: _ai_settings())
+    monkeypatch.setattr(question_workbench_service, "effective_ai_settings", lambda settings: settings)
+    monkeypatch.setattr(question_workbench_service, "ai_feature_enabled", lambda name: False if name == "question_bank_assistant" else True)
 
     gate = _question_workbench_rag_gate()
 
     assert gate["healthy"] is False
-    assert gate["reason_code"] == "bge_degraded"
-    assert gate["bge_status"] == "degraded"
+    assert gate["reason_code"] == "question_bank_assistant_disabled"
+
+
+def test_question_workbench_gate_blocks_when_llm_is_not_configured(monkeypatch):
+    monkeypatch.setattr(question_workbench_service, "get_settings", lambda: _ai_settings(agent_llm_api_key=""))
+    monkeypatch.setattr(question_workbench_service, "effective_ai_settings", lambda settings: settings)
+    monkeypatch.setattr(question_workbench_service, "ai_feature_enabled", lambda name: True)
+
+    gate = _question_workbench_rag_gate()
+
+    assert gate["healthy"] is False
+    assert gate["reason_code"] == "llm_not_configured"
+
+
+def test_question_workbench_gate_allows_generation_without_live_rag_probe(monkeypatch):
+    monkeypatch.setattr(question_workbench_service, "get_settings", lambda: _ai_settings(rag_bge_service_url="http://bge.local"))
+    monkeypatch.setattr(question_workbench_service, "effective_ai_settings", lambda settings: settings)
+    monkeypatch.setattr(question_workbench_service, "ai_feature_enabled", lambda name: True)
+
+    gate = _question_workbench_rag_gate()
+
+    assert gate["healthy"] is True
+    assert gate["bge_status"] == "not_required"
+    assert gate["bge_metrics"]["service"] == "precomputed-catalog-node-evidence"

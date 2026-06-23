@@ -19,12 +19,13 @@ from server.app.domains.catalog_tree.common import (
 )
 from server.app.domains.catalog_tree.equations import reaction_derived_terms, reaction_principle_text, reaction_row_display_text
 from server.app.domains.errors import DomainHTTPException as HTTPException, domain_status as status
-from server.app.hybrid_rag import retrieve_hybrid_context
 from server.app.infrastructure.database import db_session
 from server.app.infrastructure.settings import get_settings
+from server.app.domains.platform.settings import _textbook_rag_runtime_status, ai_feature_enabled, effective_textbook_rag_settings
 from server.app.repositories import RepositoryProvider, get_repositories
 from server.app.retrieval import keyword_score
 from server.app.schemas import AgentAskRequest
+from server.app.domains.textbook_rag.evidence import retrieve_point_textbook_evidence
 
 
 JOB_TYPES = {"es_upsert", "es_delete", "teacher_search_upsert", "teacher_search_delete", "rag_evidence_refresh", "rag_evidence_delete"}
@@ -105,6 +106,8 @@ def _default_evidence_state(node_id: str) -> dict[str, Any]:
         "diagnostics": {},
         "stale_reason": None,
         "latest_error": None,
+        "content_fingerprint": None,
+        "config_fingerprint": None,
         "refreshed_at": None,
         "stale_at": None,
         "last_attempted_at": None,
@@ -385,6 +388,8 @@ def _upsert_evidence_state(
     stale_reason: str | None = None,
     latest_error: str | None = None,
     refreshed: bool = False,
+    content_fingerprint: str | None = None,
+    config_fingerprint: str | None = None,
 ) -> None:
     identity = _point_identity(session, node_id)
     owner_node_id = identity["owner_node_id"]
@@ -394,7 +399,7 @@ def _upsert_evidence_state(
             INSERT INTO experiment_catalog_point_evidence_state (
               node_id, canonical_point_id, source_placement_node_id, evidence_status, source_mode, trigger_policy, selected_chunk_ids,
               source_refs, diagnostics, stale_reason, latest_error, refreshed_at,
-              stale_at, last_attempted_at, updated_at
+              stale_at, last_attempted_at, content_fingerprint, config_fingerprint, updated_at
             )
             VALUES (
               :node_id, :canonical_point_id, :source_placement_node_id, :evidence_status, :source_mode, :trigger_policy, :selected_chunk_ids,
@@ -402,7 +407,9 @@ def _upsert_evidence_state(
               :latest_error,
               CASE WHEN :refreshed THEN now() ELSE NULL END,
               CASE WHEN :evidence_status = 'stale' THEN now() ELSE NULL END,
-              CASE WHEN :evidence_status IN ('running', 'failed', 'unavailable', 'succeeded') THEN now() ELSE NULL END,
+              CASE WHEN :evidence_status IN ('running', 'failed', 'unavailable', 'succeeded', 'partial', 'missing') THEN now() ELSE NULL END,
+              :content_fingerprint,
+              :config_fingerprint,
               now()
             )
             ON CONFLICT (node_id) DO UPDATE SET
@@ -419,9 +426,11 @@ def _upsert_evidence_state(
               refreshed_at = CASE WHEN :refreshed THEN now() ELSE experiment_catalog_point_evidence_state.refreshed_at END,
               stale_at = CASE WHEN :evidence_status = 'stale' THEN now() ELSE experiment_catalog_point_evidence_state.stale_at END,
               last_attempted_at = CASE
-                WHEN :evidence_status IN ('running', 'failed', 'unavailable', 'succeeded') THEN now()
+                WHEN :evidence_status IN ('running', 'failed', 'unavailable', 'succeeded', 'partial', 'missing') THEN now()
                 ELSE experiment_catalog_point_evidence_state.last_attempted_at
               END,
+              content_fingerprint = COALESCE(EXCLUDED.content_fingerprint, experiment_catalog_point_evidence_state.content_fingerprint),
+              config_fingerprint = COALESCE(EXCLUDED.config_fingerprint, experiment_catalog_point_evidence_state.config_fingerprint),
               updated_at = now()
             """
         ),
@@ -438,6 +447,8 @@ def _upsert_evidence_state(
             "stale_reason": stale_reason,
             "latest_error": latest_error,
             "refreshed": bool(refreshed),
+            "content_fingerprint": content_fingerprint,
+            "config_fingerprint": config_fingerprint,
         },
     )
 
@@ -498,6 +509,7 @@ def queue_rag_evidence_refresh_job(
     node_id: str,
     trigger_source: str = "automatic",
     reason: str = "manual_refresh",
+    payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     _upsert_evidence_state(
         session,
@@ -512,7 +524,7 @@ def queue_rag_evidence_refresh_job(
         node_id=node_id,
         job_type="rag_evidence_refresh",
         trigger_source=trigger_source,
-        payload={"reason": reason},
+        payload={"reason": reason, **(payload or {})},
     )
 
 
@@ -581,7 +593,7 @@ def get_point_job_state(session: Any, *, node_id: str) -> dict[str, Any]:
             text(
                 """
                 SELECT node_id, canonical_point_id, source_placement_node_id, evidence_status, source_mode, trigger_policy,
-                       selected_chunk_ids, source_refs, diagnostics, stale_reason,
+                       selected_chunk_ids, source_refs, diagnostics, stale_reason, content_fingerprint, config_fingerprint,
                        latest_error, refreshed_at, stale_at, last_attempted_at, updated_at
                 FROM experiment_catalog_point_evidence_state
                 WHERE canonical_point_id = :canonical_point_id
@@ -852,6 +864,66 @@ def run_point_job_once(worker_id: str = "local-catalog-point-worker") -> bool:
         return False
     process_point_job(job)
     return True
+
+
+def claim_point_job_by_id(job_id: str, worker_id: str = "local-catalog-point-worker") -> CatalogPointJob | None:
+    with db_session() as session:
+        row = (
+            session.execute(
+                text(
+                    """
+                    UPDATE experiment_catalog_point_jobs
+                    SET status = 'running',
+                        attempts = attempts + 1,
+                        worker_id = :worker_id,
+                        locked_at = now(),
+                        started_at = COALESCE(started_at, now()),
+                        updated_at = now()
+                    WHERE id = CAST(:job_id AS uuid)
+                      AND status = 'pending'
+                      AND attempts < max_attempts
+                      AND run_after <= now()
+                    RETURNING id, node_id, job_type, attempts, payload
+                    """
+                ),
+                {"job_id": job_id, "worker_id": worker_id},
+            )
+            .mappings()
+            .first()
+        )
+    if not row:
+        return None
+    payload = row["payload"] if isinstance(row["payload"], dict) else {}
+    return CatalogPointJob(
+        id=str(row["id"]),
+        node_id=str(row["node_id"]),
+        job_type=str(row["job_type"]),
+        attempts=int(row["attempts"] or 0),
+        payload=payload,
+    )
+
+
+def process_point_job_ids(
+    job_ids: list[str],
+    *,
+    worker_id: str = "question-bank-evidence-refresh",
+    limit: int | None = None,
+) -> dict[str, Any]:
+    processed = 0
+    skipped = 0
+    errors: list[dict[str, str]] = []
+    capped_ids = job_ids[: max(0, int(limit))] if limit is not None and int(limit) >= 0 else job_ids
+    for job_id in capped_ids:
+        job = claim_point_job_by_id(str(job_id), worker_id=worker_id)
+        if not job:
+            skipped += 1
+            continue
+        try:
+            process_point_job(job)
+            processed += 1
+        except Exception as exc:
+            errors.append({"job_id": str(job_id), "error": f"{exc.__class__.__name__}: {str(exc)[:240]}"})
+    return {"processed_count": processed, "skipped_count": skipped, "error_count": len(errors), "errors": errors}
 
 
 def process_point_job(job: CatalogPointJob) -> None:
@@ -1162,49 +1234,29 @@ def _process_rag_evidence_refresh(job: CatalogPointJob) -> dict[str, Any]:
     if not gate["healthy"]:
         raise CatalogPointJobUnavailable(str(gate["message"]))
 
-    repositories = get_repositories()
-    queries, query_trace = _catalog_point_queries(context)
-    prompt = queries[0] if queries else context["title"]
-
-    def query_generator(_question: str) -> tuple[list[str], dict[str, Any]]:
-        return queries, query_trace
-
-    request = AgentAskRequest(
-        user_role="teacher",
-        question=prompt,
-        chapter_id=context.get("chapter_id"),
-        point_node_id=job.node_id,
-        catalog_path=context.get("catalog_path") or [],
-        allow_progress_lookup=False,
-        allow_rag_lookup=True,
-        max_answer_chars=0,
+    textbook_settings = effective_textbook_rag_settings()
+    selected_per_section = int((job.payload or {}).get("selected_per_section") or textbook_settings.get("selected_per_section") or 3)
+    candidate_per_section = int((job.payload or {}).get("candidate_per_section") or textbook_settings.get("candidate_per_section") or 20)
+    result = retrieve_point_textbook_evidence(
+        catalog_context=context,
+        settings=textbook_settings,
+        selected_per_section=selected_per_section,
+        candidate_per_section=candidate_per_section,
     )
-    result = retrieve_hybrid_context(
-        repositories=repositories,
-        question=prompt,
-        request=request,
-        settings=settings,
-        legacy_retrieve=lambda lookup_query, lookup_limit: _legacy_retrieve_catalog_context(
-            repositories,
-            context=context,
-            query=lookup_query,
-            limit=lookup_limit,
-        ),
-        query_generator=query_generator,
-        limit=max(1, int(settings.rag_final_top_k)),
-    )
-    source_refs = _source_refs_from_chunks(result.chunks)
-    if not source_refs:
-        raise RuntimeError("No usable source chunks were selected for catalog-node evidence refresh")
+    source_refs = list(result.get("source_refs") or [])
     selected_chunk_ids = [str(item["chunk_id"]) for item in source_refs if item.get("chunk_id")]
     diagnostics = {
         "rag_gate": gate,
-        "query_generation": query_trace,
-        "generated_queries": queries,
-        "rag_trace": result.trace,
+        "textbook_rag": result.get("diagnostics") or {},
+        "candidate_diagnostics": result.get("candidate_diagnostics") or {},
+        "supported_sections": result.get("supported_sections") or [],
+        "missing_sections": result.get("missing_sections") or [],
+        "content_fingerprint": result.get("content_fingerprint"),
+        "config_fingerprint": result.get("config_fingerprint"),
         "catalog_context_fields": context.get("field_contributors") or [],
         "catalog_node_ids": [job.node_id],
     }
+    evidence_status = str(result.get("status") or ("succeeded" if source_refs else "missing"))
     with db_session() as session:
         identity = _point_identity(session, job.node_id)
         _replace_evidence_bindings(
@@ -1214,13 +1266,15 @@ def _process_rag_evidence_refresh(job: CatalogPointJob) -> dict[str, Any]:
             source_placement_node_id=identity["placement_node_id"],
             owner_node_id=identity["owner_node_id"],
             source_refs=source_refs,
-            trace=result.trace,
+            trace=diagnostics,
+            content_fingerprint=str(result.get("content_fingerprint") or ""),
+            config_fingerprint=str(result.get("config_fingerprint") or ""),
         )
         _upsert_evidence_state(
             session,
             node_id=job.node_id,
-            evidence_status="succeeded",
-            source_mode=str(result.trace.get("mode") or "hybrid_bge_rag"),
+            evidence_status=evidence_status,
+            source_mode="qwen_es_textbook_rag" if source_refs else "qwen_es_textbook_rag_missing",
             trigger_policy="stale_until_manual_refresh",
             selected_chunk_ids=selected_chunk_ids,
             source_refs=source_refs,
@@ -1228,13 +1282,18 @@ def _process_rag_evidence_refresh(job: CatalogPointJob) -> dict[str, Any]:
             stale_reason=None,
             latest_error=None,
             refreshed=True,
+            content_fingerprint=str(result.get("content_fingerprint") or ""),
+            config_fingerprint=str(result.get("config_fingerprint") or ""),
         )
     return {
         "action": "rag_evidence_refresh",
         "node_id": job.node_id,
         "source_count": len(source_refs),
         "selected_chunk_ids": selected_chunk_ids,
-        "mode": result.trace.get("mode"),
+        "mode": result.get("mode"),
+        "evidence_status": evidence_status,
+        "supported_sections": result.get("supported_sections") or [],
+        "missing_sections": result.get("missing_sections") or [],
     }
 
 
@@ -1356,60 +1415,25 @@ def _catalog_point_queries(context: dict[str, Any]) -> tuple[list[str], dict[str
 
 
 def _rag_runtime_gate(settings: Any) -> dict[str, Any]:
-    runtime = {
-        "hybrid_bge_enabled": bool(settings.rag_hybrid_bge_enabled),
-        "query_generation_enabled": bool(settings.rag_query_generation_enabled),
-        "bge_service_url": settings.rag_bge_service_url,
-        "vector_top_k": int(settings.rag_vector_top_k),
-        "rerank_top_k": int(settings.rag_rerank_top_k),
-        "final_top_k": int(settings.rag_final_top_k),
-    }
-    if not settings.rag_hybrid_bge_enabled:
+    textbook_rag = effective_textbook_rag_settings()
+    runtime_status = _textbook_rag_runtime_status(
+        textbook_rag,
+        rag_enabled=ai_feature_enabled("rag_access_enabled"),
+    )
+    if runtime_status.get("status") != "healthy":
         return {
             "healthy": False,
-            "status": "unavailable",
-            "reason_code": "hybrid_bge_disabled",
-            "message": "Hybrid BGE RAG is disabled; catalog-node evidence refresh was deferred.",
-            "rag_runtime": runtime,
-        }
-    if not settings.rag_bge_service_url:
-        return {
-            "healthy": False,
-            "status": "unavailable",
-            "reason_code": "bge_not_configured",
-            "message": "BGE service URL is not configured; catalog-node evidence refresh was deferred.",
-            "rag_runtime": runtime,
-        }
-    try:
-        with urllib.request.urlopen(
-            f"{settings.rag_bge_service_url.rstrip('/')}/metrics",
-            timeout=min(max(1.0, float(settings.rag_bge_timeout_seconds)), 2.0),
-        ) as response:
-            metrics = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
-        return {
-            "healthy": False,
-            "status": "unavailable",
-            "reason_code": "bge_unreachable",
-            "message": f"BGE service is unreachable; catalog-node evidence refresh was deferred: {exc.__class__.__name__}: {str(exc)[:160]}",
-            "rag_runtime": runtime,
-        }
-    if not isinstance(metrics, dict) or not metrics.get("ok"):
-        return {
-            "healthy": False,
-            "status": "unavailable",
-            "reason_code": "bge_degraded",
-            "message": "BGE service responded but is not healthy; catalog-node evidence refresh was deferred.",
-            "rag_runtime": runtime,
-            "bge_metrics": metrics if isinstance(metrics, dict) else None,
+            "status": runtime_status.get("status") or "unavailable",
+            "reason_code": runtime_status.get("status") or "textbook_rag_unavailable",
+            "message": runtime_status.get("message") or "教材证据刷新服务不可用。",
+            "rag_runtime": runtime_status,
         }
     return {
         "healthy": True,
         "status": "healthy",
         "reason_code": "",
-        "message": "Hybrid BGE RAG is healthy.",
-        "rag_runtime": runtime,
-        "bge_metrics": metrics,
+        "message": runtime_status.get("message") or "教材证据刷新服务可用。",
+        "rag_runtime": runtime_status,
     }
 
 
@@ -1462,12 +1486,9 @@ def _replace_evidence_bindings(
     owner_node_id: str,
     source_refs: list[dict[str, Any]],
     trace: dict[str, Any],
+    content_fingerprint: str | None = None,
+    config_fingerprint: str | None = None,
 ) -> None:
-    trace_by_chunk = {
-        str(item.get("chunk_id")): item
-        for item in (trace.get("final_evidence") or [])
-        if isinstance(item, dict) and item.get("chunk_id")
-    }
     session.execute(
         text(
             """
@@ -1485,20 +1506,29 @@ def _replace_evidence_bindings(
         chunk_id = str(ref.get("chunk_id") or "").strip()
         if not chunk_id:
             continue
-        candidate = trace_by_chunk.get(chunk_id, {})
+        role = str(ref.get("evidence_role") or ref.get("section") or "dynamic_rag").strip() or "dynamic_rag"
+        candidate = {
+            "chunk_id": chunk_id,
+            "section": role,
+            "recall_score": ref.get("recall_score"),
+            "rerank_score": ref.get("rerank_score"),
+            "source_boundary": ref.get("source_boundary"),
+            "index_name": ref.get("index_name"),
+        }
         session.execute(
             text(
                 """
                 INSERT INTO experiment_catalog_point_evidence_bindings (
                   node_id, canonical_point_id, source_placement_node_id,
                   chunk_id, evidence_role, selection_status, freshness_status,
-                  rank, score, rerank_score, source_metadata, diagnostics, updated_at
+                  rank, score, rerank_score, source_metadata, diagnostics,
+                  content_fingerprint, config_fingerprint, updated_at
                 )
                 VALUES (
                   :node_id, :canonical_point_id, :source_placement_node_id,
-                  :chunk_id, 'dynamic_rag', 'selected', 'fresh',
+                  :chunk_id, :evidence_role, 'selected', 'fresh',
                   :rank, :score, :rerank_score, CAST(:source_metadata AS jsonb),
-                  CAST(:diagnostics AS jsonb), now()
+                  CAST(:diagnostics AS jsonb), :content_fingerprint, :config_fingerprint, now()
                 )
                 ON CONFLICT (node_id, chunk_id, evidence_role) DO UPDATE SET
                   canonical_point_id = EXCLUDED.canonical_point_id,
@@ -1510,6 +1540,8 @@ def _replace_evidence_bindings(
                   rerank_score = EXCLUDED.rerank_score,
                   source_metadata = EXCLUDED.source_metadata,
                   diagnostics = EXCLUDED.diagnostics,
+                  content_fingerprint = EXCLUDED.content_fingerprint,
+                  config_fingerprint = EXCLUDED.config_fingerprint,
                   updated_at = now()
                 """
             ),
@@ -1518,10 +1550,13 @@ def _replace_evidence_bindings(
                 "canonical_point_id": canonical_point_id,
                 "source_placement_node_id": source_placement_node_id,
                 "chunk_id": chunk_id,
+                "evidence_role": role,
                 "rank": rank,
-                "score": candidate.get("score"),
+                "score": candidate.get("recall_score"),
                 "rerank_score": candidate.get("rerank_score"),
                 "source_metadata": _json_param(ref),
                 "diagnostics": _json_param(candidate),
+                "content_fingerprint": content_fingerprint,
+                "config_fingerprint": config_fingerprint,
             },
         )

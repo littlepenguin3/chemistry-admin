@@ -502,6 +502,12 @@
     },
     {
       "method": "POST",
+      "path": "/api/admin/question-banks/catalog/evidence-refresh",
+      "name": "admin_refresh_catalog_question_bank_evidence",
+      "owner": "admin-api"
+    },
+    {
+      "method": "POST",
       "path": "/api/admin/question-banks/assistant/preview",
       "name": "admin_question_bank_assistant_preview",
       "owner": "admin-api"

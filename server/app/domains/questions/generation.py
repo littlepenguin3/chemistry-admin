@@ -426,13 +426,24 @@ def _source_refs_from_static_payload(payload: dict[str, Any], *, node_id: str) -
                 "chunk_id": chunk_id,
                 "source_file": binding.get("source_file") or binding.get("source_title"),
                 "page_number": binding.get("page_number"),
+                "page_start": binding.get("page_start"),
+                "page_end": binding.get("page_end"),
                 "section_title": binding.get("section_title"),
+                "section_path": binding.get("section_path") or [],
+                "section": binding.get("section") or binding.get("evidence_role"),
+                "text": binding.get("text"),
                 "text_preview": binding.get("text_preview"),
+                "content_type": binding.get("content_type"),
+                "content_hash": binding.get("content_hash"),
                 "evidence_role": binding.get("evidence_role"),
-                "source_boundary": "catalog_node_static_evidence",
+                "source_boundary": binding.get("source_boundary") or "catalog_node_static_evidence",
+                "index_name": binding.get("index_name"),
                 "point_node_id": node_id,
                 "freshness_status": binding.get("freshness_status"),
                 "selection_status": binding.get("selection_status"),
+                "rank": binding.get("rank"),
+                "score": binding.get("score"),
+                "rerank_score": binding.get("rerank_score"),
             }
         )
     return refs
@@ -466,9 +477,10 @@ def _static_catalog_node_evidence_package(session: Any, *, target_points: list[d
                 "binding_count": payload.get("binding_count") or 0,
                 "fresh_source_count": len(refs),
                 "state_status": (payload.get("state") or {}).get("evidence_status"),
+                "candidate_diagnostics": payload.get("candidate_diagnostics") or {},
             }
         )
-        if point_status == "stale_fallback_evidence":
+        if point_status == "stale_catalog_node_evidence":
             stale_points.append(node_id)
         elif not refs:
             missing_points.append(node_id)

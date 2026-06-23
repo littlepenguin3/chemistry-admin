@@ -482,13 +482,13 @@ def _map_ai_evidence_state(evidence_state: dict[str, Any] | None) -> str:
     if not evidence_state:
         return "idle"
     status_value = clean(evidence_state.get("evidence_status"))
-    if status_value in {"succeeded", "available", "available_static_fallback"}:
+    if status_value in {"succeeded", "partial", "available", "available_static_fallback", "available_catalog_node_evidence"}:
         return "available"
     if status_value in {"pending", "running", "stale", "failed", "disabled", "unavailable"}:
         return status_value
-    if status_value in {"missing", "missing_fallback_evidence"}:
+    if status_value in {"missing", "missing_fallback_evidence", "missing_catalog_node_evidence"}:
         return "idle"
-    if status_value == "stale_fallback_evidence":
+    if status_value in {"stale_fallback_evidence", "stale_catalog_node_evidence"}:
         return "stale"
     return status_value or "idle"
 

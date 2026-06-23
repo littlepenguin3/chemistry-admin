@@ -17,6 +17,8 @@ from server.app.experiment_admin_schemas import (
     QuestionUpdateRequest,
 )
 from server.app.domains.platform.settings import ai_feature_enabled
+from server.app.infrastructure.settings import get_settings
+from server.app.domains.catalog_tree.jobs import process_point_job_ids, queue_rag_evidence_refresh_job, _rag_runtime_gate
 from server.app.domains.catalog.experiments import _ensure_experiment, _list_experiments
 from server.app.domains.questions.point_identity import collect_question_point_identity, normalize_question_point_identity
 
@@ -1416,6 +1418,110 @@ def list_catalog_question_bank(*, chapter_id: str | None = None) -> dict[str, An
         "total": len(items),
         "totals": totals,
     }
+
+
+def _evidence_refresh_call_estimate(row: dict[str, Any]) -> int:
+    section_count = 0
+    if str(row.get("principle_equation") or row.get("principle_text") or "").strip():
+        section_count += 1
+    if str(row.get("phenomenon_explanation") or "").strip():
+        section_count += 1
+    if str(row.get("safety_note") or "").strip():
+        section_count += 1
+    return section_count * 2
+
+
+def refresh_catalog_question_bank_evidence(
+    *,
+    chapter_id: str | None = None,
+    point_node_id: str | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    gate = _rag_runtime_gate(get_settings())
+    if not gate.get("healthy"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(gate.get("message") or "教材证据刷新服务不可用。"))
+    filters = ["n.node_kind = 'point'", "n.status <> 'archived'"]
+    params: dict[str, Any] = {}
+    if point_node_id:
+        filters.append("n.id = :point_node_id")
+        params["point_node_id"] = point_node_id
+    elif chapter_id:
+        filters.append("n.chapter_id = :chapter_id")
+        params["chapter_id"] = chapter_id
+    where_clause = " AND ".join(filters)
+    with db_session() as session:
+        rows = [
+            dict(row)
+            for row in session.execute(
+                text(
+                    f"""
+                    SELECT n.id AS node_id,
+                           n.canonical_point_id,
+                           n.chapter_id,
+                           n.title,
+                           pc.principle_equation,
+                           pc.principle_text,
+                           pc.phenomenon_explanation,
+                           pc.safety_note,
+                           COALESCE(state.evidence_status, 'missing') AS evidence_status
+                    FROM experiment_catalog_nodes n
+                    LEFT JOIN experiment_catalog_point_content pc
+                      ON pc.node_id = n.id
+                    LEFT JOIN LATERAL (
+                      SELECT evidence_status
+                      FROM experiment_catalog_point_evidence_state es
+                      WHERE es.node_id = n.id OR (
+                        n.canonical_point_id IS NOT NULL AND es.canonical_point_id = n.canonical_point_id
+                      )
+                      ORDER BY es.updated_at DESC
+                      LIMIT 1
+                    ) state ON true
+                    WHERE {where_clause}
+                    ORDER BY n.chapter_id, n.display_order, n.id
+                    """
+                ),
+                params,
+            )
+            .mappings()
+            .all()
+        ]
+        if point_node_id and not rows:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Point node not found")
+        skip_statuses = {"pending", "running", "succeeded", "partial"} if not force else {"pending", "running"}
+        jobs: list[dict[str, Any]] = []
+        skipped: list[dict[str, str]] = []
+        qwen_call_estimate = 0
+        for row in rows:
+            current_status = str(row.get("evidence_status") or "missing")
+            if current_status in skip_statuses:
+                skipped.append({"node_id": str(row["node_id"]), "reason": current_status})
+                continue
+            qwen_call_estimate += _evidence_refresh_call_estimate(row)
+            jobs.append(
+                queue_rag_evidence_refresh_job(
+                    session,
+                    node_id=str(row["node_id"]),
+                    trigger_source="manual",
+                    reason="question_bank_evidence_refresh",
+                    payload={"selected_per_section": 3, "candidate_per_section": 20},
+                )
+            )
+    return {
+        "chapter_id": chapter_id,
+        "point_node_id": point_node_id,
+        "force": force,
+        "target_count": len(rows),
+        "queued_count": len(jobs),
+        "skipped_count": len(skipped),
+        "skipped": skipped[:100],
+        "job_ids": [str(job.get("id")) for job in jobs if job.get("id")],
+        "qwen_call_estimate": qwen_call_estimate,
+        "rag_gate": gate,
+    }
+
+
+def process_question_bank_evidence_refresh_jobs(job_ids: list[str], *, limit: int | None = None) -> dict[str, Any]:
+    return process_point_job_ids(job_ids, worker_id="question-bank-evidence-refresh", limit=limit)
 
 
 def list_questions(

@@ -265,7 +265,7 @@ def test_student_projection_failure_marks_only_student_search_state(monkeypatch)
     assert "student index is down" in calls[1]["error"]
 
 
-def test_rag_runtime_gate_requires_configured_hybrid_bge() -> None:
+def test_rag_runtime_gate_requires_configured_textbook_rag(monkeypatch) -> None:
     settings = type(
         "Settings",
         (),
@@ -278,12 +278,14 @@ def test_rag_runtime_gate_requires_configured_hybrid_bge() -> None:
             "rag_final_top_k": 5,
         },
     )()
+    monkeypatch.setattr(jobs, "ai_feature_enabled", lambda name: True)
+    monkeypatch.setattr(jobs, "effective_textbook_rag_settings", lambda: {"enabled": False})
 
     gate = jobs._rag_runtime_gate(settings)
 
     assert gate["healthy"] is False
-    assert gate["status"] == "unavailable"
-    assert gate["reason_code"] == "hybrid_bge_disabled"
+    assert gate["status"] == "disabled"
+    assert gate["reason_code"] == "disabled"
 
 
 class _FakeDbSession:

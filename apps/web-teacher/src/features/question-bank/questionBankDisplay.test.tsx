@@ -28,10 +28,10 @@ describe("question workbench display helpers", () => {
     expect(gate.healthy).toBe(true);
     expect(gate.tone).toBe("ready");
     expect(gate.route).toContain("canonical-rag-chunks-qwen-v1");
-    expect(gate.message).toContain("点位三段式描述");
+    expect(gate.message).toContain("已绑定教材证据");
   });
 
-  it("blocks AI workbench actions when the textbook index is stale", () => {
+  it("keeps AI workbench actions available when textbook refresh is stale", () => {
     const gate = questionWorkbenchGateFromRuntime(
       runtimeWithRag({
         textbook_rag_status: "index_stale",
@@ -39,9 +39,9 @@ describe("question workbench display helpers", () => {
       }),
     );
 
-    expect(gate.healthy).toBe(false);
-    expect(gate.tone).toBe("blocked");
-    expect(gate.message).toContain("教材 chunk 索引需要重建");
+    expect(gate.healthy).toBe(true);
+    expect(gate.tone).toBe("ready");
+    expect(gate.message).toContain("已绑定教材证据");
   });
 
   it("groups workbench evidence by point and textbook section", () => {
@@ -81,5 +81,19 @@ describe("question workbench display helpers", () => {
       sufficient: false,
       missingReason: "未召回安全提示证据",
     });
+  });
+
+  it("groups workbench evidence from static source refs", () => {
+    const sections = workbenchEvidenceSectionsFromPackage({
+      source_refs: [
+        { chunk_id: "chunk-1", point_node_id: "point-a", evidence_role: "principle", source_file: "textbook.jsonl" },
+        { chunk_id: "chunk-2", point_node_id: "point-a", evidence_role: "principle", source_file: "textbook.jsonl" },
+        { chunk_id: "chunk-3", point_node_id: "point-a", evidence_role: "safety", source_file: "textbook.jsonl" },
+      ],
+    });
+
+    expect(sections).toHaveLength(2);
+    expect(sections[0]).toMatchObject({ pointKey: "point-a", section: "principle", sourceCount: 2 });
+    expect(sections[1]).toMatchObject({ pointKey: "point-a", section: "safety", sourceCount: 1 });
   });
 });

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Path, Query, UploadFile
+from pydantic import BaseModel, Field
 
 from server.app.auth import AuthUser, require_teacher_console_user
 from server.app.experiment_admin_schemas import (
@@ -21,12 +22,22 @@ from server.app.domains.questions.bank import (
     list_question_banks,
     list_questions,
     preview_question_bank_assistant,
+    process_question_bank_evidence_refresh_jobs,
     publish_question,
+    refresh_catalog_question_bank_evidence,
     update_question,
 )
 
 
 router = APIRouter(prefix="/api/admin", tags=["experiment-admin"])
+
+
+class CatalogQuestionBankEvidenceRefreshRequest(BaseModel):
+    chapter_id: str | None = None
+    point_node_id: str | None = None
+    force: bool = False
+    process_now: bool = True
+    process_limit: int = Field(default=200, ge=0, le=1000)
 
 
 @router.get("/question-banks/chapters")
@@ -79,6 +90,27 @@ async def admin_list_catalog_question_bank(
     user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     return list_catalog_question_bank(chapter_id=chapter_id)
+
+
+@router.post("/question-banks/catalog/evidence-refresh")
+async def admin_refresh_catalog_question_bank_evidence(
+    payload: CatalogQuestionBankEvidenceRefreshRequest,
+    background_tasks: BackgroundTasks,
+    user: AuthUser = Depends(require_teacher_console_user),
+) -> dict[str, Any]:
+    result = refresh_catalog_question_bank_evidence(
+        chapter_id=payload.chapter_id,
+        point_node_id=payload.point_node_id,
+        force=payload.force,
+    )
+    job_ids = [str(job_id) for job_id in result.get("job_ids") or [] if str(job_id or "").strip()]
+    if payload.process_now and job_ids:
+        background_tasks.add_task(
+            process_question_bank_evidence_refresh_jobs,
+            job_ids,
+            limit=payload.process_limit,
+        )
+    return {**result, "processing_started": bool(payload.process_now and job_ids), "process_limit": payload.process_limit}
 
 
 @router.get("/question-banks/questions")

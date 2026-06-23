@@ -45,7 +45,7 @@ import type {
   QuestionWorkbenchCandidate,
   QuestionWorkbenchSession,
 } from "../../api/questionBank";
-import { clearQuestionWorkbenchEvidenceCache, listCatalogQuestionBank } from "../../api/questionBank";
+import { listCatalogQuestionBank, refreshCatalogQuestionBankEvidence } from "../../api/questionBank";
 import type { LearningAssistantRuntime } from "../../api/learningAssistant";
 import { PageTitle } from "../../components/PageTitle";
 import { QueryState } from "../../components/QueryState";
@@ -122,24 +122,6 @@ function statusCountLine(node?: CatalogQuestionBankNode | null) {
   return `${counts.question_count || 0} 题 · 选 ${counts.choice_count || 0} · 判 ${counts.true_false_count || 0} · 填 ${counts.fill_blank_count || 0}`;
 }
 
-function cacheTimeLabel(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
-}
-
-function evidenceCacheLabel(cache?: Record<string, unknown> | null) {
-  if (!cache?.enabled) return "";
-  if (cache.cleared) return "缓存已清空，下次生成会重新检索";
-  if (cache.hit) {
-    const time = cacheTimeLabel(cache.updated_at || cache.created_at);
-    return time ? `已缓存 · ${time}` : "已缓存";
-  }
-  if (cache.stored) return "已写入缓存";
-  return "";
-}
-
 function buildQuestionBankTree(nodes: CatalogQuestionBankNode[]): TreeNodeWithTitle[] {
   const childrenByParent = new Map<string | null, CatalogQuestionBankNode[]>();
   nodes.forEach((node) => {
@@ -203,7 +185,7 @@ function draftParams(selectedPoint?: CatalogQuestionBankNode | null) {
 }
 
 export function QuestionBanksPage() {
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp();
   const queryClient = useQueryClient();
   const [chapterId, setChapterId] = useState<string>("CH13");
   const [selectedNodeId, setSelectedNodeId] = useState<string>();
@@ -283,25 +265,38 @@ export function QuestionBanksPage() {
   const workbenchRagGate = workbenchContext.rag_gate;
   const workbenchStatusTone = workbenchRagGate?.healthy === false ? "blocked" : questionWorkbenchGate.tone;
   const workbenchEvidenceSourceCount = workbenchEvidencePackage?.source_count ?? (workbenchContext.source_refs || []).length;
-  const rawWorkbenchEvidenceCache =
-    workbenchEvidencePackage?.cache || (workbenchEvidencePackage?.diagnostics as Record<string, unknown> | undefined)?.cache;
-  const workbenchEvidenceCache =
-    rawWorkbenchEvidenceCache && typeof rawWorkbenchEvidenceCache === "object"
-      ? (rawWorkbenchEvidenceCache as Record<string, unknown>)
-      : null;
-  const workbenchEvidenceCacheText = evidenceCacheLabel(workbenchEvidenceCache);
-  const workbenchEvidenceStatusText = [
-    `已读取 ${workbenchEvidenceSourceCount || 0} 条来源片段`,
-    workbenchEvidenceCacheText,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const workbenchEvidenceStatusText = `已读取 ${workbenchEvidenceSourceCount || 0} 条已绑定教材证据`;
+  const selectedEvidenceReady = Boolean(
+    selectedPoint && ["succeeded", "partial", "fresh", "available"].includes(selectedPoint.evidence_status || ""),
+  );
+  const evidenceBlockedText = selectedPoint ? `${nodeEvidenceLabel(selectedPoint)}，请先刷新教材证据。` : "请先选择一个点位";
 
   const refreshQuestionBank = () => {
     void queryClient.invalidateQueries({ queryKey: ["question-bank-catalog"] });
     void queryClient.invalidateQueries({ queryKey: ["question-bank-catalog-questions"] });
     void queryClient.invalidateQueries({ queryKey: ["question-bank-catalog-drafts"] });
   };
+
+  const refreshEvidence = useMutation({
+    mutationFn: (payload: {
+      chapter_id?: string | null;
+      point_node_id?: string | null;
+      force?: boolean;
+      process_now?: boolean;
+      process_limit?: number;
+    }) => refreshCatalogQuestionBankEvidence(payload),
+    onSuccess: (result) => {
+      message.success(
+        result.queued_count
+          ? `已开始刷新 ${result.queued_count} 个点位证据，预估 ${result.qwen_call_estimate} 次 Qwen 调用`
+          : `没有新点位需要刷新，已跳过 ${result.skipped_count} 个点位`,
+      );
+      refreshQuestionBank();
+      window.setTimeout(refreshQuestionBank, 2500);
+      window.setTimeout(refreshQuestionBank, 8000);
+    },
+    onError: (error) => message.error(`证据刷新失败：${errorMessage(error)}`),
+  });
 
   const startWorkbench = useMutation({
     mutationFn: (payload: {
@@ -339,18 +334,6 @@ export function QuestionBanksPage() {
     onError: (error) => message.error(`拒绝失败：${errorMessage(error)}`),
   });
 
-  const clearEvidenceCache = useMutation({
-    mutationFn: () => {
-      if (!aiWorkbenchSessionId) throw new Error("请先打开 AI 工作台");
-      return clearQuestionWorkbenchEvidenceCache(aiWorkbenchSessionId);
-    },
-    onSuccess: (result) => {
-      queryClient.setQueryData(["question-ai-workbench", aiWorkbenchSessionId], result.session);
-      message.success(result.deleted_count > 0 ? "已清空当前点位证据缓存" : "当前点位暂无可清空的证据缓存");
-    },
-    onError: (error) => message.error(`刷新证据失败：${errorMessage(error)}`),
-  });
-
   const publishDraft = useMutation({
     mutationFn: (draftId: string) => postJson<Question>(`/api/admin/question-banks/drafts/${draftId}/publish`, {}),
     onSuccess: () => {
@@ -381,6 +364,10 @@ export function QuestionBanksPage() {
     }
     if (!questionWorkbenchGate.healthy) {
       message.warning(questionWorkbenchGate.message);
+      return;
+    }
+    if (!selectedEvidenceReady) {
+      message.warning(evidenceBlockedText);
       return;
     }
     setWorkbenchPrompt(`请围绕「${selectedPoint.title}」生成一组可机判的实验题，覆盖实验原理、现象解释和安全提示。`);
@@ -437,6 +424,30 @@ export function QuestionBanksPage() {
     }
   };
 
+  const confirmRefreshEvidence = (scope: "chapter" | "point", force = false) => {
+    if (scope === "point" && !selectedPoint) {
+      message.warning("请先选择一个点位");
+      return;
+    }
+    modal.confirm({
+      title: scope === "chapter" ? "刷新本章教材证据？" : "刷新当前点位教材证据？",
+      content:
+        scope === "chapter"
+          ? "系统会为本章缺失、失败或过期的点位调用 Qwen Embedding 与 Rerank，并把命中的教材 chunk 绑定到点位。已有可用证据默认不会重复付费检索。"
+          : "系统会调用 Qwen Embedding 与 Rerank，为当前点位的实验原理、现象解释和安全提示绑定教材依据。",
+      okText: "开始刷新",
+      cancelText: "取消",
+      onOk: () =>
+        refreshEvidence.mutate({
+          chapter_id: scope === "chapter" ? chapterId : undefined,
+          point_node_id: scope === "point" ? selectedPoint?.node_id : undefined,
+          force,
+          process_now: true,
+          process_limit: scope === "chapter" ? 200 : 1,
+        }),
+    });
+  };
+
   const totals = catalog.data?.totals;
   const selectedCounts = selectedPoint?.counts;
   const visibleQuestions = questions.data?.items || [];
@@ -471,7 +482,20 @@ export function QuestionBanksPage() {
         <Card
           className="question-catalog-panel"
           title="章节目录与点位"
-          extra={<Tag color="green">{points.length} 个点位</Tag>}
+          extra={
+            <Space size={6}>
+              <Button
+                size="small"
+                icon={<ReloadOutlined />}
+                loading={refreshEvidence.isPending}
+                disabled={!chapterId || refreshEvidence.isPending}
+                onClick={() => confirmRefreshEvidence("chapter")}
+              >
+                刷新本章证据
+              </Button>
+              <Tag color="green">{points.length} 个点位</Tag>
+            </Space>
+          }
         >
           <Space orientation="vertical" size={12} className="full">
             <Select
@@ -533,13 +557,29 @@ export function QuestionBanksPage() {
                   </Space>
                 </div>
                 <Space wrap>
-                  <Tooltip title={questionWorkbenchGate.healthy ? "基于该点位三段式内容和教材 RAG 生成候选题" : questionWorkbenchGate.message}>
+                  <Button
+                    icon={<ReloadOutlined />}
+                    loading={refreshEvidence.isPending}
+                    disabled={refreshEvidence.isPending}
+                    onClick={() => confirmRefreshEvidence("point", selectedEvidenceReady)}
+                  >
+                    刷新当前点位证据
+                  </Button>
+                  <Tooltip
+                    title={
+                      !questionWorkbenchGate.healthy
+                        ? questionWorkbenchGate.message
+                        : selectedEvidenceReady
+                          ? "基于该点位三段式内容和已绑定教材证据生成候选题"
+                          : evidenceBlockedText
+                    }
+                  >
                     <Button
                       type="primary"
                       icon={<MessageOutlined />}
                       onClick={openAddSuggestion}
                       loading={startWorkbench.isPending}
-                      disabled={!questionWorkbenchGate.healthy}
+                      disabled={!questionWorkbenchGate.healthy || !selectedEvidenceReady}
                     >
                       AI 出题
                     </Button>
@@ -804,15 +844,7 @@ export function QuestionBanksPage() {
                   <Title level={4}>{selectedPoint?.title || aiWorkbench.data?.experiment_title || "当前点位"}</Title>
                 </div>
                 <Space size={6} wrap>
-                  <Button
-                    size="small"
-                    icon={<ReloadOutlined />}
-                    loading={clearEvidenceCache.isPending}
-                    disabled={!aiWorkbenchSessionId || workbenchStreaming || clearEvidenceCache.isPending}
-                    onClick={() => clearEvidenceCache.mutate()}
-                  >
-                    刷新证据
-                  </Button>
+                  <Tag color={workbenchEvidenceSourceCount ? "green" : "orange"}>{workbenchEvidenceSourceCount || 0} 条证据</Tag>
                   <Tag color="blue">新增会话</Tag>
                 </Space>
               </Flex>
