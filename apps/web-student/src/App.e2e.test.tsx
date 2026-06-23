@@ -6,9 +6,11 @@ import type {
   AuthUser,
   PublicPosttestQuestion,
   PublicPretestQuestion,
+  CatalogPreviewNodeResponse,
   StudentAppConfigResponse,
   StudentCatalogChapterResponse,
   StudentCatalogNodeResponse,
+  StudentHomeVideoFeedResponse,
   StudentLearningHomeResponse,
   StudentLearningPageResponse,
   StudentPointDetailResponse,
@@ -17,6 +19,54 @@ import type {
   StudentPretestResponse,
   StudentVideoLibrarySearchResponse,
 } from "./api";
+
+type ArtplayerTestLayer = {
+  html?: unknown;
+  click?: (component: unknown, event: Event) => void;
+};
+
+type ArtplayerTestControl = {
+  html?: unknown;
+  name?: string;
+  position?: string;
+  mounted?: (this: ArtplayerTestInstance, element: HTMLElement) => void;
+  beforeUnmount?: (this: ArtplayerTestInstance, element: HTMLElement) => void;
+};
+
+type ArtplayerTestOption = {
+  container?: HTMLElement;
+  url?: string;
+  poster?: string | null;
+  playsInline?: boolean;
+  autoplay?: boolean;
+  muted?: boolean;
+  miniProgressBar?: boolean;
+  setting?: boolean;
+  fullscreen?: boolean;
+  fullscreenWeb?: boolean;
+  lock?: boolean;
+  playbackRate?: boolean;
+  layers?: ArtplayerTestLayer[];
+  controls?: ArtplayerTestControl[];
+  moreVideoAttr?: Partial<HTMLVideoElement>;
+};
+
+type ArtplayerTestInstance = {
+  option: ArtplayerTestOption;
+  destroy: ReturnType<typeof vi.fn>;
+  on: ReturnType<typeof vi.fn>;
+  off: ReturnType<typeof vi.fn>;
+  play: () => Promise<void>;
+  pause: () => void;
+  toggle: () => void;
+  video: HTMLVideoElement;
+  isReady: boolean;
+  playing: boolean;
+  duration: number;
+  fullscreenWeb: boolean;
+  seek: number;
+  emit: (name: string, ...args: unknown[]) => void;
+};
 
 const apiMocks = vi.hoisted(() => ({
   authToken: "student-token",
@@ -28,11 +78,13 @@ const apiMocks = vi.hoisted(() => ({
   startStudentPretest: vi.fn(),
   submitStudentPretest: vi.fn(),
   getStudentAppConfig: vi.fn(),
+  getStudentHomeVideoFeed: vi.fn(),
   getStudentLearningHome: vi.fn(),
   getStudentLearningPage: vi.fn(),
   getStudentChapterCatalog: vi.fn(),
   getStudentCatalogNode: vi.fn(),
   getStudentCatalogPointDetail: vi.fn(),
+  getPreviewCatalogNode: vi.fn(),
   getPreviewCatalogPointDetail: vi.fn(),
   searchStudentVideoLibrary: vi.fn(),
   startStudentPosttest: vi.fn(),
@@ -42,6 +94,8 @@ const apiMocks = vi.hoisted(() => ({
   streamStudentAssistantAsk: vi.fn(),
   submitStudentFeedback: vi.fn(),
 }));
+
+const artplayerInstances = vi.hoisted(() => [] as ArtplayerTestInstance[]);
 
 vi.mock("./api", () => ({
   getAuthToken: () => apiMocks.authToken,
@@ -63,11 +117,13 @@ vi.mock("./api", () => ({
   startStudentPretest: apiMocks.startStudentPretest,
   submitStudentPretest: apiMocks.submitStudentPretest,
   getStudentAppConfig: apiMocks.getStudentAppConfig,
+  getStudentHomeVideoFeed: apiMocks.getStudentHomeVideoFeed,
   getStudentLearningHome: apiMocks.getStudentLearningHome,
   getStudentLearningPage: apiMocks.getStudentLearningPage,
   getStudentChapterCatalog: apiMocks.getStudentChapterCatalog,
   getStudentCatalogNode: apiMocks.getStudentCatalogNode,
   getStudentCatalogPointDetail: apiMocks.getStudentCatalogPointDetail,
+  getPreviewCatalogNode: apiMocks.getPreviewCatalogNode,
   getPreviewCatalogPointDetail: apiMocks.getPreviewCatalogPointDetail,
   searchStudentVideoLibrary: apiMocks.searchStudentVideoLibrary,
   startStudentPosttest: apiMocks.startStudentPosttest,
@@ -80,6 +136,155 @@ vi.mock("./api", () => ({
   previewMediaUrl: (path: string) => path,
   errorMessage: (error: unknown) => (error instanceof Error ? error.message : "request failed"),
 }));
+
+vi.mock("artplayer", () => {
+  const Artplayer = vi.fn().mockImplementation(function ArtplayerMock(option: ArtplayerTestOption) {
+    const root = document.createElement("div");
+    root.className = "art-video-player";
+
+    const video = document.createElement("video");
+    Object.defineProperty(video, "paused", { configurable: true, value: true });
+    Object.defineProperty(video, "ended", { configurable: true, value: false });
+    Object.defineProperty(video, "readyState", { configurable: true, value: 1 });
+    if (option.moreVideoAttr?.controls === false) {
+      video.controls = false;
+      video.removeAttribute("controls");
+    }
+    if (option.moreVideoAttr?.playsInline || option.playsInline) {
+      video.setAttribute("playsinline", "");
+    }
+    root.appendChild(video);
+
+    const bottom = document.createElement("div");
+    bottom.className = "art-bottom";
+
+    const indicator = document.createElement("div");
+    indicator.className = "art-progress-indicator";
+    bottom.appendChild(indicator);
+
+    if (option.miniProgressBar) {
+      root.classList.add("art-mini-progress-bar");
+    }
+
+    const controlsLeft = document.createElement("div");
+    controlsLeft.className = "art-controls-left";
+    bottom.appendChild(controlsLeft);
+    root.appendChild(bottom);
+
+    const listeners: Record<string, Array<(...args: unknown[]) => unknown>> = {};
+    const mountedControls: Array<{ control: ArtplayerTestControl; element: HTMLElement }> = [];
+    let isReady = false;
+    let seekValue = 0;
+    let fullscreenWebValue = false;
+    const setPaused = (paused: boolean) => {
+      Object.defineProperty(video, "paused", { configurable: true, value: paused });
+    };
+    const setReady = () => {
+      isReady = true;
+      Object.defineProperty(video, "readyState", { configurable: true, value: 4 });
+    };
+    let instance!: ArtplayerTestInstance;
+    instance = {
+      option,
+      destroy: vi.fn(() => {
+        mountedControls.forEach(({ control, element }) => control.beforeUnmount?.call(instance, element));
+        root.remove();
+      }),
+      on: vi.fn((name: string, fn: (...args: unknown[]) => unknown) => {
+        listeners[name] = [...(listeners[name] || []), fn];
+        return instance;
+      }),
+      off: vi.fn((name: string, fn?: (...args: unknown[]) => unknown) => {
+        if (!listeners[name]) return instance;
+        listeners[name] = fn ? listeners[name].filter((listener) => listener !== fn) : [];
+        return instance;
+      }),
+      play: vi.fn(() => {
+        setReady();
+        setPaused(false);
+        instance.emit("video:play", new Event("play"));
+        instance.emit("video:playing", new Event("playing"));
+        return Promise.resolve();
+      }),
+      pause: vi.fn(() => {
+        setPaused(true);
+        instance.emit("video:pause", new Event("pause"));
+      }),
+      toggle: vi.fn(() => {
+        if (instance.playing) {
+          instance.pause();
+        } else {
+          void instance.play();
+        }
+      }),
+      video,
+      isReady: false,
+      playing: false,
+      duration: 0,
+      fullscreenWeb: false,
+      seek: 0,
+      emit: (name: string, ...args: unknown[]) => {
+        if (name === "ready") {
+          setReady();
+        }
+        listeners[name]?.forEach((fn) => fn(...args));
+      },
+    };
+    Object.defineProperties(instance, {
+      isReady: {
+        get: () => isReady,
+      },
+      playing: {
+        get: () => !video.paused && !video.ended,
+      },
+      duration: {
+        get: () => (Number.isFinite(video.duration) ? video.duration : 0),
+      },
+      fullscreenWeb: {
+        get: () => fullscreenWebValue,
+        set: (value: boolean) => {
+          fullscreenWebValue = value;
+          instance.emit("fullscreenWeb", value);
+        },
+      },
+      seek: {
+        get: () => seekValue,
+        set: (value: number) => {
+          seekValue = value;
+          video.currentTime = value;
+          instance.emit("seek", value, value);
+          instance.emit("video:timeupdate", new Event("timeupdate"));
+        },
+      },
+    });
+
+    option.controls?.forEach((control) => {
+      const controlElement = document.createElement("div");
+      controlElement.className = `art-control art-control-${control.name || "custom"}`;
+      if (control.html instanceof HTMLElement) {
+        controlElement.appendChild(control.html);
+      } else if (typeof control.html === "string") {
+        controlElement.innerHTML = control.html;
+      }
+      controlsLeft.appendChild(controlElement);
+      mountedControls.push({ control, element: controlElement });
+      control.mounted?.call(instance, controlElement);
+    });
+
+    option.layers?.forEach((layer) => {
+      if (!(layer.html instanceof HTMLElement)) return;
+      if (typeof layer.click === "function") {
+        layer.html.addEventListener("click", (event) => layer.click?.({}, event));
+      }
+      root.appendChild(layer.html);
+    });
+
+    option.container?.appendChild(root);
+    artplayerInstances.push(instance);
+    return instance;
+  });
+  return { default: Artplayer };
+});
 
 vi.mock("./features/atom-viewer/AtomViewerZdog", () => ({
   AtomViewerZdog: ({ element, mode }: { element: { name: string }; mode: "bohr" | "orbital" }) => (
@@ -303,8 +508,8 @@ const catalogPointNode: StudentCatalogNodeResponse["children"][number] = {
   actions: ["open_point"],
   has_children: false,
   has_point_content: true,
-  media_count: 0,
-  published_media_count: 0,
+  media_count: 1,
+  published_media_count: 1,
 };
 
 const catalogDirectory: StudentCatalogNodeResponse = {
@@ -371,7 +576,7 @@ const catalogPointDetail: StudentPointDetailResponse = {
       raw_text: "Cl2 + 2 KBr = 2 KCl + Br2",
       canonical_display: "Cl2 + 2 KBr = 2 KCl + Br2",
       canonical_mhchem: "\\ce{Cl2 + 2 KBr -> 2 KCl + Br2}",
-      annotation_text: "condition: organic layer observation",
+      annotation_text: "I- forms H2S during organic layer observation",
       validation_status: "valid",
     },
   ],
@@ -409,6 +614,64 @@ const catalogPointDetail: StudentPointDetailResponse = {
       },
     ],
   },
+};
+
+const catalogPointDetailWithVideo: StudentPointDetailResponse = {
+  ...catalogPointDetail,
+  title: "Separation of a mixed Cr3, Al3, and Mn2 solution with a deliberately long point video title",
+  videos: [
+    {
+      media_id: "media-halogen",
+      title: "Halogen displacement video",
+      mime_type: "video/mp4",
+      stream_path: "/media/halogen.mp4",
+      thumbnail_path: "/media/halogen.jpg",
+    },
+  ],
+  has_video: true,
+  no_video_reason: null,
+};
+
+const homeVideoFeedResponse: StudentHomeVideoFeedResponse = {
+  status: "ok",
+  message: "",
+  items: [
+    {
+      id: "feed:cat-point-halogen",
+      node_id: "cat-point-halogen",
+      placement_node_id: "cat-point-halogen",
+      canonical_point_id: "cat-canon-halogen",
+      chapter_id: "CH17",
+      title: "Orange layer observation",
+      summary: "Chlorine water oxidizes bromide and produces an orange organic layer.",
+      snippet: "Chlorine water + KBr + CCl4",
+      catalog_path: ["Halogen displacement catalog", "Orange layer observation"],
+      badges: ["Halogens", "Experiment video"],
+      reason: "catalog",
+      video: {
+        media_id: "media-halogen",
+        title: "Halogen displacement video",
+        mime_type: "video/mp4",
+        stream_path: "/api/student/media/assets/media-halogen/stream",
+        thumbnail_path: "/api/student/media/assets/media-halogen/thumbnail",
+        duration_seconds: 35,
+      },
+      target: {
+        kind: "point_detail",
+        route: "/point/cat-point-halogen",
+        node_id: "cat-point-halogen",
+        placement_node_id: "cat-point-halogen",
+        canonical_point_id: "cat-canon-halogen",
+        profile_id: "halogens-17",
+        chapter_id: "CH17",
+        catalog_path: ["Halogen displacement catalog", "Orange layer observation"],
+        property_key: "oxidation",
+        property_title: "Oxidation",
+        element_symbol: "Cl",
+        point_title: "Orange layer observation",
+      },
+    },
+  ],
 };
 
 const videoLibraryResponse: StudentVideoLibrarySearchResponse = {
@@ -604,9 +867,13 @@ describe("student app route stack", () => {
   beforeEach(() => {
     apiMocks.authToken = "student-token";
     vi.clearAllMocks();
+    artplayerInstances.length = 0;
     window.sessionStorage.clear();
+    window.localStorage.clear();
     window.history.replaceState({}, "", "/");
     Object.defineProperty(window, "scrollTo", { value: vi.fn(), writable: true });
+    Object.defineProperty(window.HTMLMediaElement.prototype, "play", { value: vi.fn().mockResolvedValue(undefined), writable: true });
+    Object.defineProperty(window.HTMLMediaElement.prototype, "pause", { value: vi.fn(), writable: true });
     apiMocks.exchangeStudentPreviewTicket.mockResolvedValue({
       access_token: "preview-student-token",
       token_type: "bearer",
@@ -627,6 +894,7 @@ describe("student app route stack", () => {
     apiMocks.startStudentPretest.mockResolvedValue(completedPretestResponse);
     apiMocks.submitStudentPretest.mockResolvedValue({ status: "completed", stage: null, questions: [] } satisfies StudentPretestResponse);
     apiMocks.getStudentAppConfig.mockResolvedValue(appConfig);
+    apiMocks.getStudentHomeVideoFeed.mockResolvedValue(homeVideoFeedResponse);
     apiMocks.getStudentLearningHome.mockResolvedValue(learningHome);
     apiMocks.getStudentLearningPage.mockResolvedValue(learningPage);
     apiMocks.getStudentChapterCatalog.mockResolvedValue(catalogChapter);
@@ -634,6 +902,17 @@ describe("student app route stack", () => {
       Promise.resolve(nodeId === "cat-dir-oxidation" ? catalogNestedDirectory : catalogDirectory),
     );
     apiMocks.getStudentCatalogPointDetail.mockResolvedValue(catalogPointDetail);
+    apiMocks.getPreviewCatalogNode.mockImplementation((nodeId: string): Promise<CatalogPreviewNodeResponse> => {
+      if (nodeId === "cat-point-halogen") {
+        return Promise.resolve({ node_kind: "point", directory: null, point: catalogPointDetail, learning_page: null });
+      }
+      return Promise.resolve({
+        node_kind: "directory",
+        directory: nodeId === "cat-dir-oxidation" ? catalogNestedDirectory : catalogDirectory,
+        point: null,
+        learning_page: learningPage,
+      });
+    });
     apiMocks.getPreviewCatalogPointDetail.mockResolvedValue(catalogPointDetail);
     apiMocks.searchStudentVideoLibrary.mockResolvedValue(videoLibraryResponse);
     apiMocks.startStudentPosttest.mockResolvedValue(posttestResponse);
@@ -663,7 +942,10 @@ describe("student app route stack", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/home"));
     expect(activeRoot()).toBe("home");
 
-    fireEvent.click(screen.getByText("实验视频库").closest("button")!);
+    await waitFor(() => expect(apiMocks.getStudentHomeVideoFeed).toHaveBeenCalledWith(16));
+    expect(screen.getByText("今天先看一个现象")).toBeInTheDocument();
+    expect(screen.getByText("Orange layer observation")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "搜索" }));
     await waitFor(() => expect(window.location.pathname).toBe("/video-library"));
     expectBottomNavHidden();
     await waitFor(() => expect(apiMocks.searchStudentVideoLibrary).toHaveBeenCalledWith(""));
@@ -679,6 +961,11 @@ describe("student app route stack", () => {
     act(() => window.history.back());
     await waitFor(() => expect(window.location.pathname).toBe("/home"));
     expect(activeRoot()).toBe("home");
+    fireEvent.click(screen.getByRole("button", { name: "查看实验视频：Orange layer observation" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/point/cat-point-halogen"));
+    expect(new URLSearchParams(window.location.search).get("profileId")).toBe("halogens-17");
+    act(() => window.history.back());
+    await waitFor(() => expect(window.location.pathname).toBe("/home"));
 
     await clickRoot("learn");
     expect(document.querySelector(".periodic-grid")).not.toBeNull();
@@ -687,6 +974,23 @@ describe("student app route stack", () => {
     expect(screen.getByRole("textbox", { name: "搜索元素" })).toBeInTheDocument();
     expect(document.querySelector(".learning-recommendation-card")).not.toBeNull();
     expect(document.querySelector(".chapter-entry-card")).toBeNull();
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".element-cell[title^='Cl ']")!);
+    await waitFor(() => expect(window.location.pathname).toBe("/chapter/halogens-17"));
+    expect(new URLSearchParams(window.location.search).get("elementSymbol")).toBe("Cl");
+    expectBottomNavHidden();
+    act(() => window.history.back());
+    await waitFor(() => expect(window.location.pathname).toBe("/learn"));
+    expect(activeRoot()).toBe("learn");
+    const elementSearch = await screen.findByRole("textbox", { name: "搜索元素" });
+    fireEvent.change(elementSearch, { target: { value: "钾" } });
+    await waitFor(() => expect(window.location.pathname).toBe("/chapter/alkali-alkaline-earth"));
+    expect(new URLSearchParams(window.location.search).get("elementSymbol")).toBe("K");
+    expectBottomNavHidden();
+    act(() => window.history.back());
+    await waitFor(() => expect(window.location.pathname).toBe("/learn"));
+    fireEvent.change(await screen.findByRole("textbox", { name: "搜索元素" }), { target: { value: "不存在元素" } });
+    expect(await screen.findByText("不存在该元素")).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/learn");
     fireEvent.click(screen.getByRole("button", { name: "p区元素" }));
     await waitFor(() => expect(window.location.pathname).toBe("/learn"));
     expect(activeRoot()).toBe("learn");
@@ -706,6 +1010,7 @@ describe("student app route stack", () => {
     expect(document.querySelector(".family-catalog-context")).not.toBeNull();
     expect(document.querySelector(".family-element-rail")).not.toBeNull();
     await waitFor(() => expect(document.querySelector(".chapter-element-summary")).not.toBeNull());
+    expect(screen.queryByRole("searchbox", { name: "查找本章目录内容" })).not.toBeInTheDocument();
     expect(screen.getByText("Experiment focus: oxidizes bromide")).toBeInTheDocument();
     expect(screen.getByText("Links directly to the halogen displacement video.")).toBeInTheDocument();
     expect(screen.queryByText("Chlorine在Halogens中的位置")).not.toBeInTheDocument();
@@ -717,6 +1022,37 @@ describe("student app route stack", () => {
     expect(screen.queryByRole("button", { name: "选章节" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "问 AI" })).not.toBeInTheDocument();
     await waitFor(() => expect(document.querySelector(".catalog-node-card")).not.toBeNull());
+    const catalogHeader = document.querySelector(".family-catalog-browser-head");
+    expect(catalogHeader).not.toBeNull();
+    expect(catalogHeader).not.toHaveTextContent("章节学习目录");
+    expect(catalogHeader).not.toHaveTextContent("章节学习目录下");
+    expect(document.querySelector(".family-catalog-up-action")).toBeNull();
+    expect(document.querySelector(".family-catalog-root-path")).toHaveTextContent("17族（Group 17 Halogens）");
+    expect(document.querySelector(".family-catalog-breadcrumbs")).toBeNull();
+    expect(document.querySelector(".catalog-end-marker")).toHaveTextContent("当前共1目录");
+    expect(document.querySelector(".family-catalog-crumb.is-active")).toHaveTextContent("17族（Group 17 Halogens）");
+
+    fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/search"));
+    expect(new URLSearchParams(window.location.search).get("profileId")).toBe("halogens-17");
+    expect(new URLSearchParams(window.location.search).get("chapterId")).toBe("CH17");
+    expect(new URLSearchParams(window.location.search).get("elementSymbol")).toBe("Cl");
+    expect(screen.getByRole("searchbox", { name: "搜索内容" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("searchbox", { name: "搜索内容" }), { target: { value: "Orange" } });
+    fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+    await waitFor(() => expect(screen.getByText("搜索结果")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Orange layer observation")).toBeInTheDocument());
+    expect(screen.getByText("父目录：Oxidation experiments")).toBeInTheDocument();
+    expect(screen.getByText("17族（Group 17 Halogens） / Halogen displacement catalog")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Orange layer observation").closest("button")!);
+    await waitFor(() => expect(window.location.pathname).toBe("/point/cat-point-halogen"));
+    expect(new URLSearchParams(window.location.search).get("profileId")).toBe("halogens-17");
+    expect(new URLSearchParams(window.location.search).get("elementSymbol")).toBe("Cl");
+    act(() => window.history.back());
+    await waitFor(() => expect(window.location.pathname).toBe("/search"));
+    act(() => window.history.back());
+    await waitFor(() => expect(window.location.pathname).toBe("/chapter/halogens-17"));
+    expectBottomNavHidden();
 
     fireEvent.click(document.querySelector<HTMLButtonElement>(".chapter-element-detail-action")!);
     await waitFor(() => expect(window.location.pathname).toBe("/chapter/halogens-17/element/Cl"));
@@ -734,9 +1070,13 @@ describe("student app route stack", () => {
     expect(window.location.pathname).toBe(familyCatalogPath);
     await waitFor(() => expect(document.querySelector(".family-catalog-shell")).not.toBeNull());
     expect(document.querySelector(".family-detail-frame")).not.toBeNull();
-    expect(document.querySelector<HTMLButtonElement>(".family-catalog-up-action")).not.toBeDisabled();
+    expect(document.querySelector(".family-catalog-up-action")).toBeNull();
+    expect(document.querySelector(".family-catalog-root-path")).toHaveTextContent("17族（Group 17 Halogens）");
+    expect(document.querySelector(".family-catalog-breadcrumbs")).toHaveTextContent("Halogen displacement catalog");
+    expect(document.querySelector(".family-catalog-crumb.is-active")).toHaveTextContent("Halogen displacement catalog");
     fireEvent.click(document.querySelector<HTMLButtonElement>(".family-catalog-more-action")!);
     await waitFor(() => expect(document.querySelector(".family-catalog-more-sheet")).not.toBeNull());
+    expect(document.querySelector(".family-catalog-more-head button")).toBeNull();
     fireEvent.pointerDown(document.querySelector<HTMLElement>(".family-catalog-more-backdrop")!);
     await waitFor(() => expect(document.querySelector(".family-catalog-more-sheet")).toBeNull());
     await waitFor(() => expect(document.querySelector(".catalog-node-card.kind-directory")).not.toBeNull());
@@ -744,20 +1084,33 @@ describe("student app route stack", () => {
     await waitFor(() => expect(apiMocks.getStudentCatalogNode).toHaveBeenLastCalledWith("cat-dir-oxidation"));
     expect(window.location.pathname).toBe(familyCatalogPath);
     await waitFor(() => expect(document.querySelector(".family-catalog-shell")).not.toBeNull());
+    expect(document.querySelector(".family-catalog-root-path")).toHaveTextContent("17族（Group 17 Halogens）");
+    expect(document.querySelector(".family-catalog-breadcrumbs")).toHaveTextContent("Halogen displacement catalog");
+    expect(document.querySelector(".family-catalog-crumb.is-active")).toHaveTextContent("Oxidation experiments");
+    const halogenCrumb = Array.from(document.querySelectorAll<HTMLButtonElement>(".family-catalog-crumb")).find(
+      (button) => button.textContent === "Halogen displacement catalog",
+    );
+    expect(halogenCrumb).toBeTruthy();
+    fireEvent.click(halogenCrumb!);
+    await waitFor(() => expect(document.querySelector(".family-catalog-crumb.is-active")).toHaveTextContent("Halogen displacement catalog"));
+    await waitFor(() => expect(document.querySelector(".catalog-node-card.kind-directory")).not.toBeNull());
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".catalog-node-card-main")!);
+    await waitFor(() => expect(document.querySelector(".family-catalog-crumb.is-active")).toHaveTextContent("Oxidation experiments"));
     await waitFor(() => expect(document.querySelector(".catalog-node-card.kind-point")).not.toBeNull());
+    expect(document.querySelector(".catalog-end-marker")).toHaveTextContent("当前共1实验");
     fireEvent.click(document.querySelector<HTMLButtonElement>(".catalog-node-card-main")!);
     await waitFor(() => expect(window.location.pathname).toBe("/point/cat-point-halogen"));
     expect(new URLSearchParams(window.location.search).get("profileId")).toBe("halogens-17");
     expect(new URLSearchParams(window.location.search).get("elementSymbol")).toBe("Cl");
     expectBottomNavHidden();
 
-    fireEvent.click(document.querySelector<HTMLButtonElement>(".context-assistant-action")!);
+    fireEvent.click(screen.getByRole("button", { name: "问 AI" }));
     await waitFor(() => expect(window.location.pathname).toBe("/ai/chat"));
     expectBottomNavHidden();
     act(() => window.history.back());
     await waitFor(() => expect(window.location.pathname).toBe("/point/cat-point-halogen"));
 
-    fireEvent.click(document.querySelector<HTMLButtonElement>(".finish-action")!);
+    fireEvent.click(screen.getByRole("button", { name: "测一测" }));
     await waitFor(() => expect(window.location.pathname).toBe("/assessment/session/posttest-session-e2e"));
     expectBottomNavHidden();
     await submitVisibleAssessment();
@@ -794,26 +1147,156 @@ describe("student app route stack", () => {
     );
   });
 
+  it("renders playable point videos with custom mobile shell, title below, and active in-player back", async () => {
+    apiMocks.getStudentCatalogPointDetail.mockResolvedValueOnce(catalogPointDetailWithVideo);
+
+    await renderAuthenticatedApp("/point/cat-point-halogen?from=learn&pointTitle=Long%20fallback");
+
+    await waitFor(() => expect(artplayerInstances).toHaveLength(1));
+    expect(document.querySelector(".catalog-point-detail > .pagebar")).toBeNull();
+    expect(document.querySelector(".video-stage")).toBeNull();
+
+    const player = document.querySelector(".point-art-player");
+    const summary = document.querySelector(".catalog-point-summary");
+    expect(player).not.toBeNull();
+    expect(summary).not.toBeNull();
+    expect(document.querySelector(".catalog-point-detail > :first-child")).toBe(player);
+    expect(document.querySelector(".catalog-point-detail > .point-art-player + .catalog-point-summary")).toBe(summary);
+    expect(summary).not.toHaveClass("experiment-detail-card");
+    expect(document.querySelector(".catalog-point-detail > .experiment-detail-card")).toBeNull();
+    expect(player!.compareDocumentPosition(summary!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText(catalogPointDetailWithVideo.title)).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes("Halogen displacement catalog"))).toBeInTheDocument();
+
+    const instance = artplayerInstances[0];
+    expect(instance.option.url).toBe("/media/halogen.mp4");
+    expect(instance.option.poster).toBe("/media/halogen.jpg");
+    expect(instance.option.playsInline).toBe(true);
+    expect(instance.option.autoplay).toBe(true);
+    expect(instance.option.muted).toBe(true);
+    expect(instance.option.miniProgressBar).toBe(false);
+    expect(instance.option.setting).toBe(false);
+    expect(instance.option.fullscreen).toBe(false);
+    expect(instance.option.fullscreenWeb).toBe(false);
+    expect(instance.option.lock).toBe(false);
+    expect(instance.option.playbackRate).toBe(false);
+    expect(instance.option.controls).toBeUndefined();
+    expect(instance.option.layers).toBeUndefined();
+    expect(instance.option.moreVideoAttr?.controls).toBe(false);
+    expect(instance.option.moreVideoAttr?.playsInline).toBe(true);
+    expect(instance.video.controls).toBe(false);
+
+    const shell = document.querySelector<HTMLDivElement>(".point-youtube-shell");
+    expect(shell).not.toBeNull();
+    expect(shell).not.toHaveClass("point-youtube-shell-active");
+    expect(document.querySelector(".point-youtube-inactive-progress")).not.toBeNull();
+    expect(document.querySelector(".point-youtube-progress-thumb")).not.toBeNull();
+    expect(document.querySelector(".point-player-back-layer")).toBeNull();
+    expect(document.querySelector(".point-player-time-capsule")).toBeNull();
+    expect(document.querySelector(".point-art-player .art-video-player.art-mini-progress-bar")).toBeNull();
+
+    Object.defineProperty(instance.video, "duration", { configurable: true, value: 713 });
+    instance.video.currentTime = 34;
+    act(() => instance.emit("video:durationchange", new Event("durationchange")));
+    expect(document.querySelector(".point-youtube-time-capsule")).toHaveTextContent("0:34 / 11:53");
+
+    act(() => instance.emit("ready"));
+    await waitFor(() => expect(instance.play).toHaveBeenCalled());
+    await waitFor(() => expect(document.querySelector(".point-youtube-play")).toHaveAttribute("aria-label", "暂停"));
+
+    const toggleButton = document.querySelector<HTMLButtonElement>(".point-youtube-play");
+    expect(toggleButton).not.toBeNull();
+    vi.useFakeTimers();
+    try {
+      fireEvent.pointerDown(shell!);
+      expect(shell).toHaveClass("point-youtube-shell-active");
+      act(() => vi.advanceTimersByTime(2800));
+      expect(shell).not.toHaveClass("point-youtube-shell-active");
+
+      fireEvent.pointerDown(shell!);
+      expect(shell).toHaveClass("point-youtube-shell-active");
+      fireEvent.click(toggleButton!);
+      expect(instance.pause).toHaveBeenCalled();
+      expect(toggleButton).toHaveAttribute("aria-label", "播放");
+      act(() => vi.advanceTimersByTime(4000));
+      expect(shell).toHaveClass("point-youtube-shell-active");
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const fullscreenButton = document.querySelector<HTMLButtonElement>(".point-youtube-fullscreen");
+    expect(fullscreenButton).not.toBeNull();
+    fireEvent.click(fullscreenButton!);
+    expect(instance.fullscreenWeb).toBe(true);
+
+    Object.defineProperty(instance.video, "duration", { configurable: true, value: 100 });
+    act(() => instance.emit("video:durationchange", new Event("durationchange")));
+    const progressHit = document.querySelector<HTMLDivElement>(".point-youtube-progress-hit");
+    expect(progressHit).not.toBeNull();
+    progressHit!.getBoundingClientRect = () =>
+      ({ left: 0, width: 200, top: 0, right: 200, bottom: 30, height: 30, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    fireEvent.pointerDown(progressHit!, { pointerId: 12, clientX: 100 });
+    expect(instance.seek).toBe(50);
+
+    const backLayer = document.querySelector<HTMLButtonElement>(".point-youtube-back");
+    expect(backLayer).not.toBeNull();
+    expect(backLayer!.querySelector(".point-player-back-icon")).not.toBeNull();
+    expect(backLayer!.querySelector(".student-back-arrow-icon")).not.toBeNull();
+    expect(backLayer!.querySelector(".point-player-back-glyph")).toBeNull();
+    fireEvent.click(backLayer!);
+    await waitFor(() => expect(window.location.pathname).toBe("/learn"));
+  });
+
   it("renders structured point detail content, related links, and the fixed test handoff", async () => {
     await renderAuthenticatedApp("/point/cat-point-halogen?from=chapter&chapterId=CH17&pointTitle=Orange%20layer%20observation");
 
     await waitFor(() => expect(apiMocks.getStudentCatalogPointDetail).toHaveBeenCalledWith("cat-point-halogen"));
+    expect(document.querySelector(".catalog-point-detail > .pagebar")).toBeNull();
+    expect(document.querySelector(".point-art-player-empty")).not.toBeNull();
+    expect(document.querySelector(".catalog-point-detail > :first-child")).toHaveClass("point-art-player-empty");
+    expect(document.querySelector(".catalog-point-summary")).not.toHaveClass("experiment-detail-card");
     expect(screen.getByText("暂无可播放视频")).toBeInTheDocument();
     expect(screen.getByText("实验原理")).toBeInTheDocument();
     expect(screen.getByText("暂无可播放视频")).toBeInTheDocument();
     expect(screen.getByText("实验原理")).toBeInTheDocument();
-    expect(screen.getByText((content) => content.includes("Cl2 + 2 KBr = 2 KCl + Br2"))).toBeInTheDocument();
-    expect(screen.getByText((content) => content.includes("说明：condition: organic layer observation"))).toBeInTheDocument();
+    expect(document.querySelector(".point-equation-list .point-chem-equation .katex")).not.toBeNull();
+    expect(document.querySelector(".point-equation-list .point-chem-equation .katex-display")).toBeNull();
+    expect(document.querySelector(".point-equation-list .point-chem-equation")).toHaveClass("chem-equation-inline");
+    expect(document.querySelector(".point-equation-list .chem-equation-fallback")).toBeNull();
+    expect(document.querySelector(".point-equation-note")?.textContent).toContain("organic layer observation");
+    expect(document.querySelector(".point-equation-note .chem-equation-inline .katex")).toBeNull();
     expect(screen.getByText("现象解释")).toBeInTheDocument();
     expect(screen.getByText("安全提示")).toBeInTheDocument();
     expect(screen.getByText("现象解释")).toBeInTheDocument();
     expect(screen.getByText("安全提示")).toBeInTheDocument();
     expect(screen.queryByText("Halogen evidence")).not.toBeInTheDocument();
+    const summary = document.querySelector(".catalog-point-summary");
+    const titleActions = document.querySelector(".point-title-actions");
+    const phenomenon = document.querySelector(".phenomenon-section");
+    const principle = document.querySelector(".principle-section");
+    const safety = document.querySelector(".safety-section");
+    const related = document.querySelector(".related-point-section");
+    expect(summary).not.toBeNull();
+    expect(titleActions).not.toBeNull();
+    expect(phenomenon).not.toBeNull();
+    expect(principle).not.toBeNull();
+    expect(safety).not.toBeNull();
+    expect(related).not.toBeNull();
+    expect(document.querySelector(".point-detail-actions")).toBeNull();
+    expect(summary!.compareDocumentPosition(titleActions!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(titleActions!.compareDocumentPosition(phenomenon!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(phenomenon!.compareDocumentPosition(principle!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(principle!.compareDocumentPosition(safety!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(safety!.compareDocumentPosition(related!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelector(".related-point-thumb")).not.toBeNull();
+    expect(document.querySelector(".related-point-copy")).not.toBeNull();
+    expect(document.querySelector(".point-equation-index")).not.toBeNull();
+    expect(screen.queryByText((content) => content.includes("补充说明："))).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Iodine comparison").closest("button")!);
     await waitFor(() => expect(window.location.pathname).toBe("/point/cat-point-iodine"));
 
-    fireEvent.click(screen.getByRole("button", { name: "开始练习" }));
+    fireEvent.click(screen.getByRole("button", { name: "测一测" }));
     await waitFor(() => expect(window.location.pathname).toBe("/assessment/session/posttest-session-e2e"));
     expectBottomNavHidden();
   });
@@ -831,6 +1314,37 @@ describe("student app route stack", () => {
     expect(document.querySelector(".finish-action")).toBeNull();
     expect(apiMocks.submitStudentPosttest).not.toHaveBeenCalled();
     expect(apiMocks.submitStudentFeedback).not.toHaveBeenCalled();
+  });
+
+  it("renders teacher preview directory nodes and navigates within the preview token scope", async () => {
+    window.history.replaceState({}, "", "/preview/catalog/nodes/cat-dir-halogen?preview_token=teacher-preview-token");
+    render(<App />);
+
+    await waitFor(() => expect(apiMocks.getPreviewCatalogNode).toHaveBeenCalledWith("cat-dir-halogen", "teacher-preview-token"));
+    expect(apiMocks.loadCurrentUser).not.toHaveBeenCalled();
+    expect(apiMocks.getStudentLearningPage).not.toHaveBeenCalled();
+    expect(apiMocks.getStudentChapterCatalog).not.toHaveBeenCalled();
+    expect(apiMocks.getStudentCatalogNode).not.toHaveBeenCalled();
+    expect(document.querySelector(".student-app-shell")).toBeNull();
+    expect(document.querySelector(".family-catalog-shell")).not.toBeNull();
+    expect(document.querySelector(".preview-catalog-directory")).toBeNull();
+    expect(document.querySelector(".catalog-directory-panel")).toBeNull();
+    expect(await screen.findByText("Oxidation experiments")).toBeInTheDocument();
+    expect(screen.getAllByText("Halogen displacement catalog").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByText("Oxidation experiments").closest("button")!);
+    await waitFor(() => expect(window.location.pathname).toBe("/preview/catalog/nodes/cat-dir-oxidation"));
+    await waitFor(() => expect(apiMocks.getPreviewCatalogNode).toHaveBeenCalledWith("cat-dir-oxidation", "teacher-preview-token"));
+    expect(screen.getByText("Orange layer observation")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Orange layer observation").closest("button")!);
+    await waitFor(() => expect(window.location.pathname).toBe("/preview/catalog/nodes/cat-point-halogen"));
+    await waitFor(() => expect(apiMocks.getPreviewCatalogNode).toHaveBeenCalledWith("cat-point-halogen", "teacher-preview-token"));
+    expect(document.querySelector(".catalog-point-detail")).not.toBeNull();
+    expect(screen.queryByText("蠑蟋狗ｻ・ｹ")).not.toBeInTheDocument();
+
+    fireEvent.click(document.querySelector(".point-player-empty-back") as HTMLButtonElement);
+    await waitFor(() => expect(window.location.pathname).toBe("/preview/catalog/nodes/cat-dir-oxidation"));
   });
 
   it("bootstraps a full teacher preview session without overwriting normal login flow", async () => {
@@ -927,6 +1441,79 @@ describe("student app route stack", () => {
     expect(screen.queryByRole("dialog", { name: "预览模式提示" })).not.toBeInTheDocument();
   });
 
+  it("renders the AI root as direct chat and restores local history for follow-up turns", async () => {
+    await renderAuthenticatedApp("/ai");
+
+    await waitFor(() => expect(window.location.pathname).toBe("/ai"));
+    expect(activeRoot()).toBe("ai");
+    expect(document.querySelector(".student-app-shell.root-route.root-ai")).not.toBeNull();
+    expect(document.querySelector(".student-app-shell.root-ai > .student-app-header")).toBeNull();
+    expect(document.querySelector(".student-app-shell.root-ai .student-route-content > .ai-root-page")).not.toBeNull();
+    expect(document.querySelector(".ai-chat-panel.root")).not.toBeNull();
+    expect(document.querySelector(".ai-chat-panel.root .ai-chat-head.root")).not.toBeNull();
+    expect(document.querySelector(".ai-chat-panel.root .ai-chat-empty.root")).not.toBeNull();
+    expect(document.querySelector(".ai-chat-panel.root .ai-chat-compose textarea")).not.toBeNull();
+    expect(document.querySelector(".ai-chat-panel.root .ai-chat-compose button")).not.toBeNull();
+    expect(screen.getByRole("textbox", { name: "向 AI 提问" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看 AI 历史记录" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建 AI 对话" })).toBeInTheDocument();
+    expect(document.querySelector(".ai-chat-panel.root .ai-root-actions .ai-history-action")).not.toBeNull();
+    expect(document.querySelector(".ai-chat-panel.root .ai-root-actions .ai-new-chat-action")).not.toBeNull();
+    expect(document.querySelector(".ai-starter-surface")).toBeNull();
+    expect(document.querySelector(".ai-starter-card")).toBeNull();
+    expect(document.querySelector('.ai-chat-panel.root input[type="file"]')).toBeNull();
+    expect(
+      Array.from(document.querySelectorAll<HTMLButtonElement>(".ai-chat-panel.root button"))
+        .map((button) => button.textContent || "")
+        .join(" "),
+    ).not.toMatch(/上传|附件|模型|语音|图片/);
+
+    fireEvent.click(screen.getByRole("button", { name: "查看 AI 历史记录" }));
+    expect(await screen.findByRole("dialog", { name: "AI 历史记录" })).toHaveTextContent("还没有历史记录");
+    fireEvent.click(screen.getByRole("button", { name: "关闭 AI 历史记录" }));
+
+    fireEvent.change(screen.getByRole("textbox", { name: "向 AI 提问" }), {
+      target: { value: "为什么 CCl4 层会变橙色？" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送问题" }));
+    await waitFor(() => expect(apiMocks.streamStudentAssistantAsk).toHaveBeenCalledTimes(1));
+    expect(apiMocks.streamStudentAssistantAsk).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        question: "为什么 CCl4 层会变橙色？",
+        context_type: "learning_home",
+        conversation_history: [],
+      }),
+      expect.any(Function),
+    );
+    await waitFor(() => expect(screen.getByText("Route answer")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "新建 AI 对话" }));
+    await waitFor(() => expect(screen.queryByText("Route answer")).not.toBeInTheDocument());
+    expect(document.querySelector(".ai-chat-panel.root .ai-chat-empty.root")).not.toBeNull();
+
+    cleanup();
+    await renderAuthenticatedApp("/ai");
+    fireEvent.click(screen.getByRole("button", { name: "查看 AI 历史记录" }));
+    await screen.findByRole("dialog", { name: "AI 历史记录" });
+    fireEvent.click(screen.getByText("为什么 CCl4 层会变橙色？").closest("button")!);
+    await waitFor(() => expect(screen.getByText("Route answer")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByRole("textbox", { name: "向 AI 提问" }), {
+      target: { value: "继续解释氧化还原关系" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送问题" }));
+    await waitFor(() => expect(apiMocks.streamStudentAssistantAsk).toHaveBeenCalledTimes(2));
+    expect(apiMocks.streamStudentAssistantAsk).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        question: "继续解释氧化还原关系",
+        conversation_history: [
+          { role: "user", content: "为什么 CCl4 层会变橙色？" },
+          { role: "assistant", content: "### Route answer\n\n- $\\ce{Cl2}$ oxidizes bromide." },
+        ],
+      }),
+      expect.any(Function),
+    );
+  });
+
   it("serves direct root and detail client routes with route-level navigation visibility", async () => {
     await renderAuthenticatedApp("/learn");
     await waitFor(() => expect(window.location.pathname).toBe("/learn"));
@@ -941,10 +1528,30 @@ describe("student app route stack", () => {
     await waitFor(() => expect(document.querySelector(".chapter-card-panel")).not.toBeNull());
     cleanup();
 
+    await renderAuthenticatedApp("/ai");
+    await waitFor(() => expect(window.location.pathname).toBe("/ai"));
+    expect(activeRoot()).toBe("ai");
+    expect(document.querySelector(".student-app-shell.root-route.root-ai")).not.toBeNull();
+    expect(document.querySelector(".student-app-shell.root-ai > .student-app-header")).toBeNull();
+    expect(document.querySelector(".ai-chat-panel.root")).not.toBeNull();
+    expect(document.querySelector(".ai-chat-panel.root .ai-chat-empty.root")).not.toBeNull();
+    expect(screen.getByRole("textbox", { name: "向 AI 提问" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看 AI 历史记录" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建 AI 对话" })).toBeInTheDocument();
+    cleanup();
+
     await renderAuthenticatedApp("/ai/chat");
     await waitFor(() => expect(window.location.pathname).toBe("/ai/chat"));
     expectBottomNavHidden();
-    expect(document.querySelector(".ai-chat-panel")).not.toBeNull();
+    expect(document.querySelector(".student-app-shell.detail-route")).not.toBeNull();
+    expect(document.querySelector(".ai-root-page")).toBeNull();
+    expect(document.querySelector(".ai-chat-panel.root")).toBeNull();
+    expect(document.querySelector(".ai-chat-panel.detail")).not.toBeNull();
+    expect(document.querySelector(".ai-chat-panel.detail .ai-history-action")).toBeNull();
+    expect(document.querySelector(".ai-chat-panel.detail .ai-new-chat-action")).toBeNull();
+    expect(screen.getByRole("textbox", { name: "向 AI 提问" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查看 AI 历史记录" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "新建 AI 对话" })).not.toBeInTheDocument();
     cleanup();
 
     await renderAuthenticatedApp("/video-library");
@@ -1013,6 +1620,17 @@ describe("student app route stack", () => {
 
     await clickRoot("ai");
     expect(screen.getByText("AI 学习助手暂未开放")).toBeInTheDocument();
+    expect(document.querySelector(".ai-chat-panel")).toBeNull();
+    cleanup();
+
+    await renderAuthenticatedApp("/ai/chat");
+    await waitFor(() => expect(window.location.pathname).toBe("/ai/chat"));
+    expectBottomNavHidden();
+    expect(document.querySelector(".ai-chat-panel")).toBeNull();
+    expect(document.querySelector(".empty-learning-card")).not.toBeNull();
+    cleanup();
+
+    await renderAuthenticatedApp("/profile");
     await clickRoot("profile");
     expect(screen.getByText("反馈入口已关闭")).toBeInTheDocument();
   });

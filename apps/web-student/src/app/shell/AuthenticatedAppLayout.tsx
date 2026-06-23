@@ -26,6 +26,7 @@ export function AuthenticatedAppLayout() {
   const activeRoot = rootIdForPath(location.pathname);
   const routeRole = routeRoleForPath(location.pathname);
   const isRootRoute = routeRole === "root";
+  const isCatalogDetailRoute = /^\/chapter\/[^/]+$/.test(location.pathname) || /^\/catalog\/[^/]+$/.test(location.pathname);
   const [appConfig, setAppConfig] = useState<StudentAppConfigResponse>(defaultStudentAppConfig);
   const [configError, setConfigError] = useState("");
   const [posttestLoading, setPosttestLoading] = useState(false);
@@ -117,6 +118,7 @@ export function AuthenticatedAppLayout() {
   );
 
   const headerMeta = activeRoot ? rootHeaderMeta[activeRoot] : null;
+  const shouldRenderHeader = Boolean(headerMeta && !(isRootRoute && activeRoot === "ai"));
 
   return (
     <StudentRuntimeProvider value={runtime}>
@@ -124,13 +126,15 @@ export function AuthenticatedAppLayout() {
         className={[
           "student-app-shell",
           isRootRoute ? "root-route" : "detail-route",
+          isCatalogDetailRoute ? "catalog-detail-route" : "",
+          activeRoot ? `root-${activeRoot}` : "",
           navCompressed && isRootRoute ? "nav-compressed" : "",
         ]
           .filter(Boolean)
           .join(" ")}
         aria-label="学生学习应用"
       >
-        {headerMeta ? <StudentAppHeader title={headerMeta.title} subtitle={headerMeta.subtitle} /> : null}
+        {shouldRenderHeader && headerMeta ? <StudentAppHeader title={headerMeta.title} subtitle={headerMeta.subtitle} /> : null}
         {configError ? <div className="form-hint app-config-hint">配置刷新失败，当前页面会继续使用上一次配置：{configError}</div> : null}
         <div className="student-route-content">
           {routeBlocked ? (

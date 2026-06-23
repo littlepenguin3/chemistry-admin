@@ -7,6 +7,7 @@ import { ChapterStudyPage } from "../../routes/learn/ChapterStudyPage";
 import { CatalogDirectoryPage } from "../../routes/learn/CatalogDirectoryPage";
 import { ElementDetailPage } from "../../routes/learn/ElementDetailPage";
 import { ExperimentPointPage } from "../../routes/learn/ExperimentPointPage";
+import { PreviewCatalogNodePage } from "../../routes/learn/PreviewCatalogNodePage";
 import { PreviewCatalogPointPage } from "../../routes/learn/PreviewCatalogPointPage";
 import { AiRootPage } from "../../routes/ai/AiRootPage";
 import { AiChatPage } from "../../routes/ai/AiChatPage";
@@ -15,6 +16,7 @@ import { AssessmentSessionPage } from "../../routes/assessment/AssessmentSession
 import { AssessmentReportPage } from "../../routes/assessment/AssessmentReportPage";
 import { ProfileRootPage } from "../../routes/profile/ProfileRootPage";
 import { FeedbackPage } from "../../routes/profile/FeedbackPage";
+import { UnifiedSearchPage } from "../../routes/search/UnifiedSearchPage";
 import { VideoLibraryPage } from "../../routes/video-library/VideoLibraryPage";
 import { parseStudentRouteSearch } from "./routeTypes";
 
@@ -90,11 +92,24 @@ const previewPointRoute = createRoute({
   component: PreviewCatalogPointPage,
 });
 
+const previewNodeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/preview/catalog/nodes/$nodeId",
+  component: PreviewCatalogNodePage,
+});
+
 const videoLibraryRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/video-library",
   validateSearch: parseStudentRouteSearch,
   component: VideoLibraryPage,
+});
+
+const searchRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: "/search",
+  validateSearch: parseStudentRouteSearch,
+  component: UnifiedSearchPage,
 });
 
 const aiRoute = createRoute({
@@ -144,6 +159,7 @@ const feedbackRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
+  previewNodeRoute,
   previewPointRoute,
   authenticatedRoute.addChildren([
     indexRoute,
@@ -154,6 +170,7 @@ const routeTree = rootRoute.addChildren([
     elementRoute,
     catalogNodeRoute,
     pointRoute,
+    searchRoute,
     videoLibraryRoute,
     aiRoute,
     aiChatRoute,

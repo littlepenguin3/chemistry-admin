@@ -1,7 +1,7 @@
 # student-chat-guardrails Specification
 
 ## Purpose
-TBD - created by archiving change student-chat-guardrails. Update Purpose after archive.
+Define policy, retrieval, feature-switch, and student-facing presentation guardrails for the student learning assistant across H5 chat surfaces.
 ## Requirements
 ### Requirement: Student chat policy scope
 The student learning assistant SHALL apply guardrails only to student learning-page chat requests and SHALL NOT change teacher AI workflows.
@@ -142,7 +142,7 @@ The student learning assistant SHALL classify policy decisions using resolved mu
 - **AND** inherited context SHALL NOT override the risky-request policy.
 
 ### Requirement: Student H5 assistant presentation
-The student H5 assistant SHALL present starter guidance, model answers, point context, chat status, and source summaries in a student-readable form while preserving existing student guardrail enforcement.
+The student H5 assistant SHALL present a direct mobile chat shell, model answers, optional point context, chat status, history entry, and source summaries in a student-readable form while preserving existing student guardrail enforcement.
 
 #### Scenario: Student chat renders chemistry answer
 - **WHEN** the student assistant streams a markdown or chemistry-formatted answer
@@ -156,16 +156,21 @@ The student H5 assistant SHALL present starter guidance, model answers, point co
 - **AND** it MUST show a compact source or evidence summary suitable for students
 - **AND** it MUST NOT show raw retrieval traces, rerank scores, guardrail arrays, runtime health, or JSON diagnostics in the student chat surface.
 
-#### Scenario: Student chat starts from global context
+#### Scenario: Student chat starts from global AI root
 - **WHEN** a student opens the assistant from the bottom navigation without a current chapter, experiment, or point handoff
-- **THEN** the H5 app MUST submit assistant requests with a valid `learning_home` context
-- **AND** the page MUST provide starter guidance for ordinary course questions before the first turn.
+- **THEN** the `/ai` root page MUST render a direct composer-first chat shell using the default `learning_home` context
+- **AND** the student MUST be able to type and send a course question without first choosing a prompt, point, model, attachment, or voice option.
 
-#### Scenario: Student chat starts from point context
-- **WHEN** a student opens the assistant from a property section or experiment point
-- **THEN** the H5 app MUST include the selected chapter, experiment, point, and context summary in the request
-- **AND** quick prompts or starter intents MUST be relevant to the active property or point
-- **AND** the active context MUST be visible and dismissible rather than trapping the student in that point.
+#### Scenario: Student chat starts from point or page context
+- **WHEN** a student opens the assistant from a property section, experiment point, video result, chapter, or assessment report
+- **THEN** the `/ai/chat` detail page MUST include the selected context in the request where available
+- **AND** the active context MUST be visible and dismissible rather than trapping the student in that point
+- **AND** the page MUST use contextual detail-page chrome instead of the `/ai` root history chrome.
+
+#### Scenario: Unsupported generic AI controls are absent
+- **WHEN** the student views either the root AI chat shell or contextual AI chat detail page
+- **THEN** the UI MUST NOT show attachment upload, model selection, or voice-input controls
+- **AND** all visible controls MUST map to implemented student assistant behavior.
 
 #### Scenario: Student chat shows streaming progress
 - **WHEN** the student assistant request is running and no final answer has arrived

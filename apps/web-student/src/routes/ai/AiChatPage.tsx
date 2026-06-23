@@ -16,7 +16,7 @@ export function AiChatPage() {
   return (
     <DetailPageFrame title="AI 对话" source={search.from || "ai"}>
       {canUseAssistant ? (
-        <StudentAiChatTab context={context} onResetContext={() => undefined} />
+        <StudentAiChatTab context={context} onResetContext={() => undefined} variant="detail" />
       ) : (
         <section className="learning-panel">
           <MobileEmptyState className="empty-learning-card" icon={<MessageCircle size={20} />}>

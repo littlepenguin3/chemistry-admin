@@ -262,6 +262,48 @@ const mockLearningHome = {
   ],
 };
 
+const mockHomeVideoFeed = {
+  status: "ok",
+  message: "",
+  items: [
+    {
+      id: "feed:cat-point-halogen",
+      node_id: "cat-point-halogen",
+      placement_node_id: "cat-point-halogen",
+      canonical_point_id: "cat-canon-halogen",
+      chapter_id: "CH17",
+      title: "卤素置换观察",
+      summary: "氯水与溴离子的置换反应，观察有机层颜色变化。",
+      snippet: "氯水 + KBr + CCl4",
+      catalog_path: ["卤素置换目录", "卤素置换观察"],
+      badges: ["卤素", "实验视频"],
+      reason: "catalog",
+      video: {
+        media_id: "media-halogen",
+        title: "卤素置换视频",
+        mime_type: "video/mp4",
+        stream_path: "/api/student/media/assets/media-halogen/stream",
+        thumbnail_path: "/api/student/media/assets/media-halogen/thumbnail",
+        duration_seconds: 35,
+      },
+      target: {
+        kind: "point_detail",
+        route: "/point/cat-point-halogen",
+        node_id: "cat-point-halogen",
+        placement_node_id: "cat-point-halogen",
+        canonical_point_id: "cat-canon-halogen",
+        profile_id: "halogens-17",
+        chapter_id: "CH17",
+        catalog_path: ["卤素置换目录", "卤素置换观察"],
+        property_key: "oxidation",
+        property_title: "氧化性",
+        element_symbol: "Cl",
+        point_title: "卤素置换观察",
+      },
+    },
+  ],
+};
+
 const mockVideoLibrary = {
   query: "",
   status: "ok",
@@ -770,6 +812,7 @@ async function installMockApi(page) {
       }),
     ),
   );
+  await page.route("**/api/student/home-video-feed**", (route) => route.fulfill(jsonResponse(mockHomeVideoFeed)));
   await page.route("**/api/student/learning-home", (route) => route.fulfill(jsonResponse(mockLearningHome)));
   await page.route("**/api/student/learning-page**", (route) => route.fulfill(jsonResponse(mockLearningPage)));
   await page.route("**/api/student/chapters/CH17/catalog", (route) => route.fulfill(jsonResponse(mockCatalogChapter)));
@@ -779,6 +822,19 @@ async function installMockApi(page) {
     route.fulfill(jsonResponse({ ...mockCatalogPointDetail, node_id: "cat-point-iodine", canonical_node_id: "cat-point-iodine", title: "碘的置换观察" })),
   );
   await page.route("**/api/student/video-library/search**", (route) => route.fulfill(jsonResponse(mockVideoLibrary)));
+  await page.route("**/api/student/media/assets/**/thumbnail**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "image/svg+xml; charset=utf-8",
+      body: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720"><rect width="1280" height="720" fill="#10231b"/><rect x="72" y="68" width="1136" height="584" rx="32" fill="#f8f4e8"/><circle cx="478" cy="328" r="72" fill="#006930" opacity=".92"/><circle cx="626" cy="328" r="72" fill="#d88d1f" opacity=".8"/><circle cx="774" cy="328" r="72" fill="#006930" opacity=".72"/><text x="92" y="132" fill="#006930" font-family="Arial, sans-serif" font-size="44" font-weight="700">实验视频</text><text x="92" y="612" fill="#0c2c21" font-family="Arial, sans-serif" font-size="54" font-weight="800">卤素置换观察</text></svg>`,
+    }),
+  );
+  await page.route("**/api/student/media/assets/**/stream**", (route) =>
+    route.fulfill({
+      status: 204,
+      contentType: "video/mp4",
+    }),
+  );
   await page.route("**/api/student/posttest/start", (route) => route.fulfill(jsonResponse(mockPosttest)));
   await page.route("**/api/student/posttest/submit", (route) =>
     route.fulfill(jsonResponse({ status: "completed", report: mockReport })),
@@ -892,7 +948,9 @@ async function checkAuthenticatedFlows(page, viewportName) {
   }
 
   await clickRoot(page, 'home');
-  await page.locator('.video-library-entry').first().click();
+  await page.locator('.home-video-card').first().waitFor({ state: 'visible', timeout: 10000 });
+  await assertNoHorizontalOverflow(page, viewportName + ': home video feed');
+  await page.locator('.home-feed-topbar button').first().click();
   await page.waitForURL(/\/video-library/, { timeout: 10000 });
   await expectBottomNavHidden(page, viewportName + ': video library detail');
   await page.locator('.video-library-page').first().waitFor({ state: 'visible', timeout: 10000 });
@@ -910,6 +968,12 @@ async function checkAuthenticatedFlows(page, viewportName) {
   await page.goBack({ waitUntil: 'networkidle' });
   await page.waitForURL(/\/home/, { timeout: 10000 });
   await expectRootNav(page, 'home', viewportName + ': back to home from video library');
+  await page.locator('.home-video-media-button').first().click();
+  await page.waitForURL(/\/point\/cat-point-halogen/, { timeout: 10000 });
+  await expectBottomNavHidden(page, viewportName + ': home feed point detail');
+  await assertStructuredPointDetail(page, viewportName + ': home feed point detail');
+  await page.goBack({ waitUntil: 'networkidle' });
+  await page.waitForURL(/\/home/, { timeout: 10000 });
 
   await clickRoot(page, 'learn');
   await page.locator('.periodic-grid').first().waitFor({ state: 'visible', timeout: 10000 });
@@ -965,10 +1029,10 @@ async function checkAuthenticatedFlows(page, viewportName) {
 
   await page.locator('.catalog-node-card-main').first().waitFor({ state: 'visible', timeout: 10000 });
   await page.locator('.catalog-node-card-main').first().click();
-  await page.waitForURL(/\/catalog\/cat-dir-halogen/, { timeout: 10000 });
-  await page.locator('.catalog-directory-panel .catalog-node-card-main').first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.locator('.family-catalog-up-action:not([disabled])').first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.locator('.catalog-node-card.kind-point .catalog-node-card-main').first().waitFor({ state: 'visible', timeout: 10000 });
   await assertCatalogCardsDistinctAndTouchable(page, viewportName + ': directory point cards', { directory: false, point: true });
-  await page.locator('.catalog-directory-panel .catalog-node-card-main').first().click();
+  await page.locator('.catalog-node-card.kind-point .catalog-node-card-main').first().click();
   await page.waitForURL(/\/point\/cat-point-halogen/, { timeout: 10000 });
   await expectBottomNavHidden(page, viewportName + ': point detail');
   await assertStructuredPointDetail(page, viewportName + ': point detail');
@@ -1027,7 +1091,7 @@ async function checkAuthenticatedFlows(page, viewportName) {
     { path: '/home', root: 'home', selector: '.home-root-page' },
     { path: '/learn', root: 'learn', selector: '.periodic-grid' },
     { path: '/learn/area/p', detail: true, selector: '.chapter-card-panel' },
-    { path: '/ai', root: 'ai', selector: '.assistant-intro-card' },
+    { path: '/ai', root: 'ai', selector: '.ai-root-page' },
     { path: '/assessment', root: 'assessment', selector: '.assessment-home-panel' },
     { path: '/profile', root: 'profile', selector: '.profile-card' },
     { path: '/chapter/halogens-17', detail: true, selector: '.chapter-element-summary' },

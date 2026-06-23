@@ -1,7 +1,7 @@
 # student-h5-mobile-design-system Specification
 
 ## Purpose
-TBD - created by archiving change student-h5-mobile-design-system. Update Purpose after archive.
+Define mobile-browser H5 design primitives, viewport safety, touch ergonomics, overlay governance, and mobile QA expectations shared by student-facing screens.
 ## Requirements
 ### Requirement: Student web remains mobile-browser H5
 The student frontend SHALL remain a phone-first mobile browser / WebView H5 application unless a separate future change explicitly introduces a native mini-program package.
@@ -30,10 +30,10 @@ The student frontend SHALL provide or adopt reusable mobile primitives for repea
 - **AND** screens MUST avoid duplicating incompatible values for the same mobile behavior
 
 ### Requirement: Phone viewport compatibility
-The student frontend SHALL be verified against common phone viewport sizes before student-web changes are considered complete.
+The student frontend SHALL be verified against common phone viewport sizes before `web-student` changes are considered complete.
 
 #### Scenario: Required viewport sizes pass
-- **WHEN** viewport QA runs for student-web
+- **WHEN** viewport QA runs for `web-student`
 - **THEN** primary student flows MUST be checked at 360x780, 390x844, and 430x932 CSS pixels
 - **AND** each checked viewport MUST avoid page-level horizontal scrolling
 - **AND** primary content MUST remain readable without clipped headings, clipped actions, or broken card layout
@@ -57,17 +57,17 @@ The student frontend SHALL account for mobile safe areas and keyboard-sensitive 
 - **AND** the UI MUST avoid relying on desktop-only fixed heights that hide the focused input
 
 ### Requirement: Floating overlay governance
-The student frontend SHALL coordinate bottom navigation, fixed controls, dialogs, sheets, and any remaining overlays through a shared mobile layering rule.
+The student frontend SHALL coordinate bottom navigation, fixed controls, dialogs, sheets, anchored popovers, and any remaining overlays through a shared mobile layering rule.
 
 #### Scenario: Fixed and overlay controls do not overlap
-- **WHEN** dialogs, sheets, chat pages, feedback forms, assessment actions, or other fixed controls are shown
+- **WHEN** dialogs, sheets, anchored popovers, chat pages, feedback forms, assessment actions, or other fixed controls are shown
 - **THEN** conflicting controls MUST be hidden, disabled, or repositioned so they do not overlap the active interaction
 - **AND** the active interaction MUST stay within the visible phone viewport width.
 
 #### Scenario: Bottom actions remain reachable
-- **WHEN** a page contains the bottom tab bar and also contains an in-content primary action
-- **THEN** the page MUST provide enough bottom spacing for the in-content action to scroll clear of the tab bar
-- **AND** the tab bar MUST NOT block completion, submit, back, logout, chat composer, feedback, or video actions.
+- **WHEN** a page contains the bottom tab bar and also contains an in-content primary action or anchored learning-selection popover
+- **THEN** the page MUST provide enough bottom spacing or overlay collision handling for the action to remain reachable
+- **AND** the tab bar MUST NOT block completion, submit, back, logout, chat composer, feedback, video actions, or learning-selection popover rows.
 
 ### Requirement: Optional mobile component library governance
 The student frontend SHALL treat third-party mobile UI libraries as optional providers of generic primitives, not as a replacement for the chemistry learning UI.
@@ -111,8 +111,8 @@ The student H5 mobile layout SHALL make within-family element selection and expe
 - **THEN** each chip MUST use a phone-appropriate hit area
 - **AND** the active element state MUST be visually clear without relying on hover.
 
-#### Scenario: Student opens an experiment point
-- **WHEN** experiment-point cards are displayed below the chemistry context
+#### Scenario: Student opens a catalog point
+- **WHEN** catalog point cards are displayed below the chemistry context
 - **THEN** each card MUST be tappable without hover or precise pointer input
 - **AND** the bottom navigation, assistant tab, profile feedback form, or completion action MUST NOT block the point card, back action, completion action, or assessment entry.
 
@@ -124,92 +124,92 @@ The student H5 mobile layout SHALL keep chemistry context compact enough that th
 - **THEN** the layout MUST use compact summaries, carousels, accordions, tabs, or equivalent progressive disclosure
 - **AND** it MUST avoid making experiment-point learning feel secondary to an encyclopedia-style fact page.
 
-### Requirement: Sticky segmented chapter switcher
-The student frontend SHALL provide a phone-first sticky segmented switcher for local facts/experiments switching inside a selected chapter.
+### Requirement: Chapter catalog browser controls
+The student frontend SHALL provide phone-first catalog browser controls inside a selected family or chapter instead of a fixed two-mode chapter switcher.
 
-#### Scenario: Switcher appears on chapter page
+#### Scenario: Catalog browser appears on chapter page
 - **WHEN** the student opens a selected family/chapter learning page
-- **THEN** the page MUST render a two-option segmented switcher for facts/common properties and experiment videos
-- **AND** the switcher MUST be visually associated with the current chapter rather than the global app navigation
+- **THEN** the page MUST render compact family or element context above the chapter catalog browser
+- **AND** the catalog browser MUST be the primary path to directories and point video/detail learning
+- **AND** the page MUST NOT render a fixed two-option facts/common-properties versus experiment-videos segmented switcher.
 
-#### Scenario: Switcher remains quickly reachable
-- **WHEN** the student scrolls the chapter page on a phone viewport
-- **THEN** the segmented switcher MUST remain sticky or quickly reachable according to the page layout
-- **AND** it MUST NOT be placed in the bottom navigation area where it would conflict with global navigation, AI, feedback, or finish actions
+#### Scenario: Catalog browser controls remain reachable
+- **WHEN** the student browses catalog entries on a phone viewport
+- **THEN** search, more actions, root breadcrumb, and directory breadcrumb controls MUST remain reachable according to the catalog layout
+- **AND** those controls MUST NOT be placed in the bottom navigation area where they would conflict with global navigation, AI, feedback, video, or finish actions.
 
-#### Scenario: Switcher supports touch use
+#### Scenario: Catalog browser supports touch use
 - **WHEN** a student uses touch input on a 360px to 430px CSS-pixel-wide viewport
-- **THEN** each segmented option MUST have a phone-appropriate hit area, clear active state, and readable label
-- **AND** switching views MUST NOT require hover, keyboard shortcuts, or undiscoverable gestures
+- **THEN** catalog rows, breadcrumb chips, search, more actions, element rail buttons, and element-detail affordances MUST have phone-appropriate hit areas, clear active state where applicable, and readable labels
+- **AND** navigating catalog depth MUST NOT require hover, keyboard shortcuts, or undiscoverable gestures.
 
-#### Scenario: Optional swipe gesture exists
-- **WHEN** an implementation supports horizontal swipe between facts and experiments
-- **THEN** the visible segmented buttons MUST remain the primary discoverable switching mechanism
-- **AND** swipe support MUST NOT interfere with vertical scrolling, point-card taps, video controls, AI, or feedback
+### Requirement: Catalog browser overlay governance
+The chapter catalog browser controls SHALL coexist with the authenticated app shell, safe areas, and detail-page actions without visual or interaction overlap.
 
-### Requirement: Segmented switcher overlay governance
-The segmented switcher SHALL coexist with the authenticated app shell, safe areas, and bottom actions without visual or interaction overlap.
-
-#### Scenario: Bottom navigation is visible
-- **WHEN** the student is on a chapter page with the bottom tab bar available
-- **THEN** the segmented switcher MUST remain a local chapter control above the content
-- **AND** it MUST NOT be placed in or visually merge with the bottom app navigation.
+#### Scenario: Detail page is open
+- **WHEN** the student is on a chapter, catalog directory, element detail, search, or point video detail route
+- **THEN** bottom navigation MUST remain hidden according to route-role semantics
+- **AND** chapter-local catalog controls MUST remain inside the page content rather than merging with app-level navigation.
 
 #### Scenario: Safe-area and browser chrome are present
 - **WHEN** the H5 app runs in a mobile browser or WebView with safe-area insets or browser chrome
-- **THEN** the segmented switcher and its sticky offset MUST account for the app's safe-area and compact header layout
-- **AND** it MUST avoid clipped labels, clipped active indicators, and horizontal overflow.
+- **THEN** catalog browser controls, sticky element rails, and second-level back affordances MUST account for the app's safe-area and compact header layout
+- **AND** they MUST avoid clipped labels, clipped active indicators, and horizontal overflow.
 
-#### Scenario: Mobile QA covers A/B switching
+#### Scenario: Mobile QA covers catalog navigation
 - **WHEN** mobile viewport QA runs for this change
-- **THEN** it MUST cover facts-to-experiments switching, experiments-to-facts switching, element switching, experiment point list, point detail, assistant tab entry, profile feedback entry, and assessment handoff
+- **THEN** it MUST cover area-to-chapter navigation, element switching, catalog directory navigation, catalog search, point video detail, assistant tab entry, profile feedback entry, and assessment handoff
 - **AND** it MUST check 360x780, 390x844, and 430x932 CSS-pixel viewports.
 
 ### Requirement: Mobile learning-entry state cues
-The student H5 mobile design system SHALL use distinct visual cues for selected area state, recommended guidance, and chapter navigation entries on the periodic-table learning entry.
+The student H5 mobile design system SHALL keep selected area state, recommendation guidance, and chapter navigation entries visually distinct by separating periodic-table selection from smart recommendation content.
 
 #### Scenario: Selected periodic-table area is highlighted
 - **WHEN** an area is selected on the periodic-table entry
 - **THEN** the selected area's element cells MUST be visually emphasized without relying on heavy dark per-cell borders
 - **AND** non-selected area cells MUST remain visible but visually secondary
+- **AND** the selected-state treatment MUST NOT be confused with recommendation styling.
 
-#### Scenario: Recommended area is visible
-- **WHEN** the selected or unselected area matches the recommended profile's area
-- **THEN** that area control MUST show a compact recommendation cue
-- **AND** the cue MUST NOT replace or obscure the selected-state affordance
-- **AND** the cue MUST NOT resize the area control's label text
-- **AND** the cue MUST visually sit above the selected-area border without the border reading through the cue
+#### Scenario: Recommendation is shown below the table
+- **WHEN** the learning root has a recommended profile
+- **THEN** recommendation guidance MUST render in a separate smart card below the periodic table
+- **AND** the periodic-table area controls MUST NOT show yellow recommendation badges
+- **AND** periodic-table element cells MUST NOT show gold recommendation outlines
+- **AND** the recommendation card MUST fit the phone layout without leaving the lower half of the learning root visually empty.
 
 #### Scenario: Chapter entry cards remain tappable rows
 - **WHEN** chapter cards are shown on a phone viewport
 - **THEN** each card MUST read as a tappable navigation row
-- **AND** recommendation styling MUST be limited to a label or similarly compact cue
+- **AND** recommendation styling MUST be limited to a label or similarly compact cue outside the periodic-table selector
 - **AND** the label MUST NOT consume a standalone row that pushes the chapter title down
 - **AND** recommendation styling MUST NOT use the same visual treatment as selected cards, active tabs, or pressed controls
-- **AND** area-level chapter card titles MUST prefer the learning object label such as `碱金属和碱土金属` rather than repeating the selected area prefix such as `s区`
+- **AND** area-level chapter card titles MUST prefer the learning object label such as `碱金属和碱土金属` rather than repeating the selected area prefix such as `s区`.
 
 #### Scenario: Learnable element symbols fit selected cells
 - **WHEN** selected periodic-table cells show profile-backed element symbols
 - **THEN** the symbols MUST fit inside the small cell without changing the periodic-table grid dimensions
 - **AND** the symbols MUST add a learnable cue without reintroducing heavy dark selected-cell borders
+- **AND** removing recommendation outlines MUST NOT make learnable symbols unreadable.
 
-#### Scenario: Recommended profile is visible across area, elements, and chapter card
-- **WHEN** the periodic-table entry has a recommended profile
-- **THEN** the recommended area control MUST show a compact recommendation cue whose secondary text describes the recommended profile, using `17族` for valid IUPAC family recommendations and a short category label such as `过渡金属` for area-level recommendations
-- **AND** long recommendation cue labels such as `氢和稀有气体` and `碱金属和碱土金属` MUST be width-constrained so they do not overflow phone-sized area controls
-- **AND** IUPAC group numbers MUST remain plain numbering labels and MUST NOT be used as the recommendation indicator
-- **AND** element cells whose symbols belong to the recommended profile MUST show a subtle gold-border recommendation cue
-- **AND** the recommended chapter card MUST NOT show a separate family-number badge when the recommendation label is already present
-- **AND** when the recommended chapter title includes a family number and nickname, the chapter card title MUST preserve the complete form such as `17族（卤素）`
-
-#### Scenario: Student periodic table aligns with resource overview
+#### Scenario: Student periodic table aligns with accepted areas
 - **WHEN** the student H5 periodic-table entry is shown
 - **THEN** the area controls MUST show six learning areas in a two-row, three-column grid
-- **AND** the six areas MUST be `p区元素`, `s区元素`, `ds区元素`, `d区元素`, `f区元素`, and `氢和稀有气体`
-- **AND** the periodic table MUST include a left-side period label column for `一` through `七`, `镧系`, and `锕系`
-- **AND** the group 18 display column MUST only show the hydrogen/noble-gas learning-area cells for noble gases such as He, Ne, Ar, Kr, Xe, Rn, and Og
-- **AND** f-block lanthanide and actinide rows MUST render as detached rows that do not occupy the group 18 display column
-- **AND** profile-backed element symbols MUST be smaller than the previous symbol cue size so two-letter symbols fit comfortably
+- **AND** the six areas MUST be `氢元素`, `p区元素`, `s区元素`, `ds区元素`, `d区元素`, and `f区元素`
+- **AND** the combined `氢和稀有气体` area control MUST NOT be shown
+- **AND** the student entry MUST NOT expose a `通识资源` area.
+
+#### Scenario: Student periodic table maps special elements correctly
+- **WHEN** the student H5 periodic-table entry is shown
+- **THEN** the H cell MUST use the hydrogen area color and route target
+- **AND** noble-gas cells in group 18 MUST use the p-area color and route target
+- **AND** f-block lanthanide and actinide cells MUST use the f-area color and route target
+- **AND** f-block lanthanide and actinide rows MUST render as detached rows that do not occupy the group 18 display column.
+
+#### Scenario: Student f-block layout remains phone-safe
+- **WHEN** the student H5 periodic-table entry is rendered at common phone widths
+- **THEN** the f-block rows MUST include La-Lu and Ac-Lr in order where cells are rendered
+- **AND** the detached rows MUST preserve the left-side period label column for `镧系` and `锕系`
+- **AND** profile-backed element symbols MUST be small enough that two-letter symbols fit comfortably.
 
 ### Requirement: Mobile QA covers feedback attachments
 The student frontend SHALL cover feedback screenshot attachment behavior from the `我的` profile destination in repeatable mobile QA.
@@ -233,24 +233,24 @@ The student H5 mobile QA evidence SHALL cover the element detail atom model geom
 - **AND** it MUST fail if the atom viewer height-to-width ratio or bounded height indicates the tall-canvas layout regression
 - **AND** it MUST keep bottom navigation hidden because the element detail route is a second-level page
 
-### Requirement: Embedded atom model mobile layout
-The student H5 mobile design system SHALL support an embedded atom model card inside the chapter facts view without breaking phone viewport layout.
+### Requirement: Element detail atom model mobile layout
+The student H5 mobile design system SHALL support a full atom model card inside the element detail second-level route without breaking phone viewport layout.
 
 #### Scenario: Atom model card fits phone widths
-- **WHEN** the atom model card is rendered at 360px, 390px, or 430px CSS-pixel viewport widths
+- **WHEN** the element detail route renders the atom model card at 360px, 390px, or 430px CSS-pixel viewport widths
 - **THEN** the card MUST fit without page-level horizontal scrolling
 - **AND** its element tile, title, mode controls, compact facts, and canvas MUST not overlap each other
 - **AND** long facts such as electron configuration and density MUST wrap or truncate in a readable mobile-safe way
 
-#### Scenario: Atom model card does not hide primary tasks
-- **WHEN** the facts view contains the atom model card, family common properties, property summaries, and experiment handoff content
-- **THEN** the card MUST remain compact enough that the rest of the learning content is discoverable on a phone
-- **AND** it MUST not reintroduce an encyclopedia-style stack of large fact cards before the experiment-point learning task area
+#### Scenario: Chapter page keeps catalog primary
+- **WHEN** the chapter page shows compact selected-element context and catalog navigation
+- **THEN** the full atom model MUST remain available through the element detail route rather than expanding the chapter page into an encyclopedia-style facts screen
+- **AND** the chapter catalog browser MUST remain the primary path to point video/detail learning.
 
 #### Scenario: Atom model coexists with app shell controls
-- **WHEN** the app bottom navigation, local facts/experiments switcher, assistant handoff, feedback/profile flow, or finish-learning action is present
-- **THEN** the atom model card MUST not be obscured by those controls
-- **AND** it MUST not obscure those controls
+- **WHEN** the element detail route is open
+- **THEN** bottom navigation MUST remain hidden because the element detail route is a second-level page
+- **AND** the PageBar back affordance, model controls, assistant handoff, and any scrollable facts content MUST not obscure one another.
 
 ### Requirement: Touch-safe atom canvas interaction
 The student H5 mobile design system SHALL make atom canvas interaction touch-friendly without interfering with page scrolling.
@@ -268,7 +268,7 @@ The student H5 mobile design system SHALL make atom canvas interaction touch-fri
 - **AND** labels MUST remain readable on the smallest supported viewport
 
 ### Requirement: Mobile animation governance for atom viewer
-The student H5 mobile design system SHALL govern embedded atom animation so it remains responsive and battery-conscious on phones.
+The student H5 mobile design system SHALL govern atom animation so it remains responsive and battery-conscious on phones.
 
 #### Scenario: Atom animation is hidden or paused
 - **WHEN** the page becomes hidden, the card unmounts, or the student pauses the model
@@ -285,10 +285,10 @@ The student H5 mobile QA suite SHALL cover the atom model card as part of the au
 
 #### Scenario: Mobile QA covers atom model
 - **WHEN** mobile viewport QA runs after this change
-- **THEN** it MUST cover navigating to a selected chapter facts view
+- **THEN** it MUST cover navigating from a selected chapter or family page into an element detail route
 - **AND** it MUST verify the atom model card is visible
-- **AND** it MUST verify element chip switching still works
-- **AND** it MUST verify the local facts/experiments switcher remains reachable
+- **AND** it MUST verify model mode controls still work
+- **AND** it MUST verify returning to the chapter page restores the chapter catalog browser context where browser history allows
 - **AND** it MUST verify no horizontal overflow occurs at 360x780, 390x844, and 430x932 CSS-pixel viewports
 
 #### Scenario: Canvas QA has practical fallback
@@ -319,7 +319,7 @@ The student H5 mobile layout SHALL render the selected-element focus card as a c
 #### Scenario: Detail action is touch reachable
 - **WHEN** the focus card includes an action to view element details
 - **THEN** the action MUST be reachable by touch without hover or desktop-only interaction
-- **AND** it MUST NOT visually compete with the facts/experiments segmented switcher, experiment-point card actions, AI entry, feedback entry, or completion action
+- **AND** it MUST NOT visually compete with the chapter catalog browser, point actions, AI entry, feedback entry, or completion action
 
 #### Scenario: Mobile viewport QA covers redesigned card
 - **WHEN** implementation verification runs for the redesigned selected-element card
@@ -356,78 +356,6 @@ The student H5 mobile design system SHALL support feedback screenshot attachment
 - **WHEN** the student focuses the feedback text input on a phone viewport
 - **THEN** the input and submit action MUST remain usable with the mobile keyboard expected
 - **AND** the bottom navigation MUST NOT cover the submit action.
-
-### Requirement: Assistant point starter mobile layout
-The student H5 mobile design system SHALL support a point-aware assistant starter layout that remains readable and reachable on supported phone viewports.
-
-#### Scenario: Point starter renders on narrow phones
-- **WHEN** the student opens experiment/video-point starter mode on a 360px to 430px CSS-pixel-wide viewport
-- **THEN** experiment group, experiment, point, template, preview, composer, and launch controls MUST remain within the viewport width
-- **AND** the page MUST avoid horizontal scrolling caused by long Chinese experiment or point labels.
-
-#### Scenario: Point starter uses progressive disclosure
-- **WHEN** the point starter contains multiple experiment groups, experiments, or video points
-- **THEN** the UI MUST present them through stacked sections, segmented controls, accordions, sheets, or equivalent phone-first disclosure
-- **AND** it MUST NOT require a desktop three-column grid to use the starter.
-
-#### Scenario: Long point labels are rendered
-- **WHEN** experiment titles, point titles, candidate labels, template descriptions, or preview questions are longer than one short phrase
-- **THEN** the UI MUST wrap, clamp, or otherwise constrain text so controls remain usable
-- **AND** selected states MUST remain visually clear without relying on hover.
-
-### Requirement: Assistant point starter touch and safe-area behavior
-The student H5 mobile design system SHALL keep assistant point starter actions reachable around the fixed bottom navigation, safe areas, and the chat composer.
-
-#### Scenario: Starter and bottom navigation coexist
-- **WHEN** point starter controls, composer, starter launch action, and bottom tab navigation are all visible
-- **THEN** the composer and launch action MUST remain reachable by touch
-- **AND** bottom navigation MUST NOT cover the active input, selected controls, send button, or launch action.
-
-#### Scenario: Student scrolls point starter
-- **WHEN** the point starter content is taller than the available chat panel space
-- **THEN** the starter content MUST scroll inside the assistant panel or otherwise remain reachable
-- **AND** the page MUST NOT create nested scrolling that traps the composer or bottom navigation offscreen.
-
-#### Scenario: Student focuses the composer in point mode
-- **WHEN** the student focuses the assistant composer while point starter mode is active
-- **THEN** the input and submit action MUST remain usable when the mobile keyboard is expected to appear
-- **AND** point starter controls MUST not overlap the focused input.
-
-### Requirement: Assistant point starter loading and empty states
-The student H5 mobile design system SHALL present point starter loading, empty, and error states without blocking global course asking.
-
-#### Scenario: Point starter is loading data
-- **WHEN** the app is loading experiment groups, experiments, or point detail for the point starter
-- **THEN** it MUST show compact mobile-readable loading feedback in the relevant point-starter section
-- **AND** it MUST keep the global course starter or free-form composer usable whenever possible.
-
-#### Scenario: No point choices are available
-- **WHEN** the selected group or experiment has no visible point choices
-- **THEN** the UI MUST show a compact empty state that explains the point choices are unavailable
-- **AND** it MUST provide a way to choose another group/experiment or ask a global/free-form question.
-
-#### Scenario: Point starter request fails
-- **WHEN** an optional point starter data request fails
-- **THEN** the UI MUST show a student-readable error or retry affordance
-- **AND** it MUST NOT break the rest of the assistant tab.
-
-### Requirement: Assistant point starter mobile QA coverage
-The student H5 mobile QA workflow SHALL verify the point-aware assistant starter across supported phone viewports.
-
-#### Scenario: Mobile viewport QA covers point starter
-- **WHEN** mobile viewport QA runs for student-web
-- **THEN** it MUST cover point starter mode at 360x780, 390x844, and 430x932 CSS-pixel viewports
-- **AND** it MUST check that there is no horizontal overflow, no blocked composer, no blocked launch action, and no bottom-navigation overlap.
-
-#### Scenario: Mobile QA covers point starter launch
-- **WHEN** mobile viewport QA exercises the assistant point starter
-- **THEN** it MUST select a student-visible group, experiment or point option, and question template
-- **AND** it MUST verify that the generated point starter request transitions into normal chat.
-
-#### Scenario: Mobile QA confirms bottom status removal
-- **WHEN** mobile viewport QA sends an assistant message
-- **THEN** it MUST verify that per-turn assistant status remains visible
-- **AND** it MUST verify that the redundant bottom status row below the composer is not rendered.
 
 ### Requirement: Assistant starter mobile layout
 The student H5 mobile design system SHALL support an assistant starter layout that fits phone viewports without horizontal overflow, clipped text, or blocked actions.
@@ -469,16 +397,282 @@ The student H5 assistant composer SHALL remain usable with mobile keyboards and 
 The student H5 mobile QA workflow SHALL verify the assistant starter and chat interaction across supported phone viewports.
 
 #### Scenario: Mobile viewport QA runs for assistant starter
-- **WHEN** mobile viewport QA runs for student-web
+- **WHEN** mobile viewport QA runs for `web-student`
 - **THEN** it MUST cover the global assistant starter at 360x780, 390x844, and 430x932 CSS-pixel viewports
 - **AND** it MUST check that there is no horizontal page overflow.
 
 #### Scenario: Mobile viewport QA covers context handoff
-- **WHEN** mobile viewport QA runs for student-web
-- **THEN** it MUST cover at least one assistant launch from a learning chapter or experiment point context
+- **WHEN** mobile viewport QA runs for `web-student`
+- **THEN** it MUST cover at least one assistant launch from a learning chapter or catalog point context
 - **AND** it MUST verify that the merged context cue, starter intents, composer, and bottom navigation remain reachable.
 
 #### Scenario: Feature-disabled assistant remains covered
 - **WHEN** assistant feature flags are disabled
-- **THEN** student-web tests or QA MUST verify that the assistant tab remains hidden, disabled, or redirected according to the current app-config behavior.
+- **THEN** `web-student` tests or QA MUST verify that the assistant tab remains hidden, disabled, or redirected according to the current app-config behavior.
 
+### Requirement: Collapsing family headers preserve mobile content space
+The student H5 mobile design system SHALL allow a family context header to collapse into a compact sticky header without harming catalog readability.
+
+#### Scenario: Detail page chrome is compact
+- **WHEN** a student opens a second-level detail page
+- **THEN** the page bar MUST use a plain left arrow and a left-aligned title
+- **AND** the page bar MUST NOT reserve a decorative square button background or mirrored right spacer only for centering
+- **AND** the vertical padding MUST stay compact enough to preserve room for the content below.
+
+#### Scenario: Expanded family header renders on phone
+- **WHEN** a family catalog shell is rendered at common phone widths from 360px to 430px
+- **THEN** the expanded header MUST use stable dimensions, line clamping, and horizontal overflow where needed
+- **AND** text, element tiles, buttons, and catalog cards MUST not overlap
+- **AND** the header MUST avoid decorative height that prevents catalog discovery.
+
+#### Scenario: Compact family header sticks during scroll
+- **WHEN** the family context collapses while the student scrolls catalog content
+- **THEN** the compact header MUST remain readable and tappable
+- **AND** it MUST keep touch targets usable without growing taller than the intended compact row
+- **AND** it MUST contrast with catalog content without hiding list rows behind translucent artifacts.
+
+#### Scenario: Motion is used for collapse
+- **WHEN** the expanded header transitions into the compact header
+- **THEN** the animation MUST be short, natural, and responsive to scroll
+- **AND** it MUST NOT use delayed follower behavior, idle timers, or continuous expensive re-rendering.
+
+### Requirement: Fullscreen assistant canvas layout
+The student H5 mobile design system SHALL support root-level fullscreen assistant canvases that are not visually framed as cards.
+
+#### Scenario: Assistant root uses full-bleed canvas
+- **WHEN** the authenticated student opens the `AI` root on a 360px, 390px, or 430px CSS-pixel-wide viewport
+- **THEN** the assistant root MUST avoid a bordered floating panel/card appearance
+- **AND** it MUST avoid nested cards inside the first-screen assistant canvas
+- **AND** it MUST avoid horizontal page overflow
+- **AND** the root assistant canvas MUST be allowed to suppress the generic root app header so route content begins at the top of the phone page frame.
+
+#### Scenario: Root assistant title bar replaces generic page header
+- **WHEN** the `AI` root renders as a fullscreen assistant canvas
+- **THEN** the generic root page header MUST NOT reserve vertical space above the chat canvas
+- **AND** the assistant title, history action, new-chat action, and any top-level assistant identity MUST live inside the assistant canvas top bar
+- **AND** root assistant top-bar actions MUST be icon-only controls that visually merge with the background rather than framed card buttons
+- **AND** explanatory context copy such as global-course descriptions MUST NOT appear in that top bar.
+
+#### Scenario: Composer and bottom navigation coexist
+- **WHEN** the root assistant composer and bottom navigation are both visible
+- **THEN** the composer bottom edge MUST sit above the bottom navigation top edge
+- **AND** the send action MUST remain reachable by touch
+- **AND** the send action MUST be visually embedded within the composer container rather than placed as an external square button
+- **AND** the bottom navigation MUST NOT cover the active input, send button, starter prompt, or visible chat messages.
+
+#### Scenario: Root and detail assistant variants remain distinct
+- **WHEN** the root assistant route and contextual assistant detail route are rendered
+- **THEN** root styling MUST be scoped to the root variant
+- **AND** detail styling MUST preserve route-stack pagebar/back behavior and hidden bottom navigation
+- **AND** root-only actions such as history MUST NOT leak into contextual detail routes.
+
+### Requirement: Mobile chat empty-state rhythm
+The student H5 mobile design system SHALL support sparse AI chat empty states with large breathing room before the first turn.
+
+#### Scenario: Empty chat uses low prompt placement
+- **WHEN** a root AI chat has no messages
+- **THEN** the first-screen prompt or starter copy MUST sit closer to the composer than to the top identity area
+- **AND** the middle of the screen MUST remain visually calm and uncluttered
+- **AND** the UI MUST NOT fill the empty state with multiple stacked cards or dense prompt grids
+- **AND** the first screen MUST NOT include a separate explanatory assistant intro block above the calm middle canvas.
+
+#### Scenario: Empty chat keeps course atmosphere
+- **WHEN** the sparse AI root empty state renders
+- **THEN** the visual treatment MAY use the existing chemistry green, subtle grid, and paper-like surface
+- **AND** those treatments MUST behave as background/canvas treatments rather than card borders around the whole assistant.
+
+### Requirement: Branded edge-to-edge point video player controls
+The student H5 mobile design system SHALL support a branded, touch-safe, edge-to-edge point video player control layer for point video detail pages, and playable point videos SHALL use a single custom mobile shell rather than ArtPlayer's default visible chrome.
+
+#### Scenario: Player controls are inactive
+- **WHEN** the point detail video player is visible, playable, and its custom shell is inactive
+- **THEN** the player MUST prioritize the video frame or poster
+- **AND** the player MUST appear as the page header rather than as a card inside a card-like content stack
+- **AND** browser native video controls MUST NOT be visible
+- **AND** ArtPlayer's default bottom toolbar, default progress control, default time display, default play control, default settings control, default fullscreen control, and default mask/state chrome MUST NOT be visible as the student-facing product UI
+- **AND** the playable player-owned return arrow MUST NOT be visible or touchable
+- **AND** the inactive shell MUST expose no persistent toolbar except a faint bottom progress indicator when progress data is available.
+
+#### Scenario: Student activates player controls
+- **WHEN** the student taps or otherwise activates the playable video player on a touch viewport
+- **THEN** the player MUST reveal the custom active shell inside the player footprint
+- **AND** the active shell MUST include a touch-reachable route return action, a central play/pause control, time feedback where duration is available, an interactive progress/seek control, and a fullscreen or equivalent player affordance where supported
+- **AND** those controls MUST hide or de-emphasize again according to normal player inactivity behavior
+- **AND** those controls MUST remain inside the player footprint rather than using the generic detail-page header
+- **AND** the player-owned return action MUST become visible and touchable only while the custom shell is active
+- **AND** the player-owned return action MUST render the same shared filled-outline back-arrow path as ordinary second-level page headers.
+
+#### Scenario: Custom shell owns visible playback actions
+- **WHEN** a playable point video renders visible playback controls
+- **THEN** every visible custom playback control MUST call a real playback, seek, fullscreen, mute, settings, or route action
+- **AND** display-only playback controls MUST NOT be rendered as if they control playback
+- **AND** the custom shell MUST use ArtPlayer or the underlying `HTMLVideoElement` as the playback source of truth for current time, duration, playing state, buffering/loading state, error state, and fullscreen state
+- **AND** the shell MUST clean up timers and event listeners when the ArtPlayer instance is destroyed or the source changes.
+
+#### Scenario: Progress is custom and touch safe
+- **WHEN** playable point-video progress is shown in the custom shell
+- **THEN** the inactive progress indicator MUST be a quiet bottom-pinned line without a draggable thumb or full toolbar
+- **AND** the active progress control MUST provide a phone-safe hit target larger than the visible line
+- **AND** the active progress control MUST use a colored branded played track and a small circular SYSU progress thumb
+- **AND** the inactive progress indicator MUST NOT show the SYSU thumb or colored active seek treatment
+- **AND** dragging or tapping the active progress control MUST seek the ArtPlayer media to the corresponding playback time
+- **AND** seeking MUST NOT accidentally trigger route back or simple tap-to-toggle behavior.
+
+#### Scenario: SYSU progress branding is restrained
+- **WHEN** a playable point video renders custom progress branding
+- **THEN** any SYSU logo or SYSU-logo-derived progress treatment MUST be scoped to the point video player
+- **AND** the SYSU progress thumb MUST appear only with the active progress/seek control
+- **AND** the branding MUST NOT make the inactive state visually noisy
+- **AND** the branding MUST NOT obscure the progress hit target, central play/pause control, time capsule, or player-owned return action
+- **AND** unrelated student controls MUST NOT be restyled by the player branding.
+
+#### Scenario: Empty video state keeps visible route return
+- **WHEN** the point video header renders the no-playable-video placeholder
+- **THEN** the placeholder MUST keep a visible shared return affordance immediately available
+- **AND** the placeholder return affordance MUST use the same shared filled-outline back-arrow geometry as playable player chrome
+- **AND** the placeholder MUST NOT show fake play, progress, time, fullscreen, or settings controls
+- **AND** the placeholder MUST remain visually distinct from an inactive playable video, because inactive playable videos can still reveal controls by tapping the player.
+
+#### Scenario: Phone viewport layout is verified
+- **WHEN** the point video detail page is viewed at 360px, 390px, or 430px CSS-pixel widths
+- **THEN** the player, custom shell, flat title section, learning content sections, and finish-learning action MUST avoid horizontal scrolling and incoherent overlap
+- **AND** the player controls MUST remain reachable by touch without relying on hover or desktop keyboard shortcuts
+- **AND** playable-video inactive state MUST show no persistent toolbar except the faint bottom progress indicator
+- **AND** playable-video active state MUST keep the back arrow, centered playback control, time feedback, progress, and supported fullscreen/settings controls inside the player footprint
+- **AND** chemistry equations inside learning content MUST render at body-copy scale and wrap within the phone content area whenever the rendering engine permits
+- **AND** large display-math equation styling MUST NOT be the default student mobile treatment.
+
+#### Scenario: Detail page opts out of card-grid styling
+- **WHEN** a point video detail route is displayed in the student H5 shell or teacher student-preview phone frame
+- **THEN** the detail content MUST remove the paper grid background used by other experiment learning views
+- **AND** the player MUST have square outer corners at the page edge
+- **AND** the title and learning sections MUST be separated by full-width bands or dividers rather than nested cards
+- **AND** the custom player shell MUST clip to the video header footprint and MUST NOT create page-level overlays outside the player frame.
+
+#### Scenario: Student preview matches real H5 player interaction
+- **WHEN** the point video detail route is rendered inside the teacher student-preview phone frame
+- **THEN** tapping the playable video MUST reveal the same custom active player shell as normal student H5
+- **AND** inactive-player shell hiding MUST match the normal student H5 behavior
+- **AND** progress tapping or dragging in student preview MUST seek through the same shell logic as real H5
+- **AND** no preview-only player controls or preview-only event paths MAY replace the student shell behavior.
+
+### Requirement: Mobile home feed preserves horizontal video clarity
+The student H5 mobile design system SHALL support horizontal 16:9 video feed cards that remain clear and usable on phone viewports.
+
+#### Scenario: Home feed renders on common phone widths
+- **WHEN** the home video feed is viewed at common phone widths from 360px to 430px CSS pixels
+- **THEN** video cards MUST fit the viewport without horizontal scrolling
+- **AND** title, catalog path, tags, actions, media controls, and bottom navigation MUST NOT overlap
+
+#### Scenario: Video card loads before playback
+- **WHEN** a feed card is not active or video metadata is still loading
+- **THEN** the card MUST preserve a stable 16:9 media box
+- **AND** poster, loading, or fallback states MUST NOT shift the surrounding feed layout
+
+#### Scenario: Feed reaches bottom navigation
+- **WHEN** the student scrolls near the bottom of the home feed
+- **THEN** the final card content MUST remain readable above the app bottom navigation and safe-area inset
+- **AND** the bottom navigation MUST not obscure primary feed actions
+
+### Requirement: Viewport-contained anchored learning popover
+The student H5 mobile design system SHALL support anchored learning-selection popovers that remain inside the visible phone viewport and do not affect root page layout.
+
+#### Scenario: Popover opens from a periodic-table trigger
+- **WHEN** a student taps a periodic-table area control or element cell on a supported phone viewport
+- **THEN** the popover MUST appear visually related to the tapped trigger
+- **AND** it MUST render above the page as a fixed or portaled overlay rather than inline content
+- **AND** opening it MUST NOT change the document flow, stretch the periodic-table card, or increase the root page's layout height.
+
+#### Scenario: Popover avoids viewport clipping
+- **WHEN** the tapped trigger is near the top, bottom, left, or right edge of the visible viewport
+- **THEN** the popover MUST flip, shift, or otherwise reposition so its actionable rows remain visible
+- **AND** it MUST respect viewport padding and mobile safe-area constraints
+- **AND** it MUST NOT be clipped behind the bottom navigation, browser chrome, or rounded phone preview frame in the supported QA viewports.
+
+#### Scenario: Area chapter list fits normal phone viewports
+- **WHEN** an area chapter list such as the p-area list is opened at 360x780, 390x844, or 430x932 CSS pixels
+- **THEN** the popover SHOULD show the complete list without internal scrolling
+- **AND** if the visual viewport is unusually short, the popover MUST clamp its max height and keep rows reachable through internal scrolling rather than expanding the page.
+
+#### Scenario: Popover rows are touch safe
+- **WHEN** chapter rows are shown inside the popover
+- **THEN** each row MUST have a phone-appropriate touch target
+- **AND** row titles, element symbol summaries, and trailing navigation icons MUST fit without horizontal overflow
+- **AND** the selected row action MUST be reachable without hover, long press, or desktop keyboard shortcuts.
+
+#### Scenario: Popover dismissal is predictable
+- **WHEN** the popover is open
+- **THEN** outside tap, Escape, route transition, and row selection MUST dismiss it
+- **AND** dismissal MUST restore interaction to the periodic-table root without visual overlap or stuck focus state.
+
+### Requirement: Unified second-level back arrow geometry
+The student H5 mobile design system SHALL provide one shared vector geometry for second-level back arrows instead of allowing each screen to independently choose an icon, copied SVG, or bitmap-derived asset.
+
+#### Scenario: Shared back arrow source is used
+- **WHEN** a student H5 second-level back arrow is rendered in React UI or injected into player HTML chrome
+- **THEN** the visible glyph MUST come from the shared student mobile back-arrow source
+- **AND** ordinary detail headers, unified search back controls, point-video player chrome, and point-video empty states MUST NOT maintain separate hand-copied arrow paths for the same back affordance.
+
+#### Scenario: Arrow is filled-outline SVG
+- **WHEN** the shared back arrow glyph is implemented
+- **THEN** it MUST be drawn as one closed SVG path filled with `currentColor`
+- **AND** it MUST use the shared `24x24` viewBox filled-outline geometry equivalent to `M7.414 13l5.043 5.04-1.414 1.42L3.586 12l7.457-7.46 1.414 1.42L7.414 11H21v2H7.414z`
+- **AND** it MUST NOT use independent `line`, `polyline`, stroke-width-driven arrow segments, tip patch polygons, copied per-screen SVG strings, or bitmap screenshot assets for the same back affordance.
+
+#### Scenario: Geometry follows measured reference proportions
+- **WHEN** the shared arrow is rendered at the standard second-level glyph size
+- **THEN** the visible arrow MUST read wider than Lucide's default `ArrowLeft` shape
+- **AND** the horizontal tail MUST extend to the right edge of the filled-outline silhouette without relying on stroke caps
+- **AND** the arrow head MUST be defined by the closed path outline rather than by joined stroke segments
+- **AND** the arrow joint MUST avoid square burrs, split tips, protruding artifacts, or anti-aliased seams at the left point.
+
+#### Scenario: Touch target remains phone-safe
+- **WHEN** the back arrow visual is moved or resized
+- **THEN** its tappable control MUST remain phone-appropriate and SHOULD preserve the existing `44px` hit area where practical
+- **AND** the implementation MUST NOT shrink the accessible target merely to make the visible glyph closer to the screen edge.
+
+### Requirement: Second-level back arrow placement matches mobile reference spacing
+The student H5 mobile design system SHALL position the visible second-level back arrow with reference-like left whitespace rather than the current overly-loose left margin.
+
+#### Scenario: Reference-derived left whitespace is used
+- **WHEN** a second-level student page is rendered near the current preview width of `406px`
+- **THEN** the first visible arrow pixel MUST use the tuned compact-left standard validated by phone preview
+- **AND** ordinary page headers MUST keep a `44px` tappable icon button while using a compact `38px` back column and about `4px` title gap
+- **AND** ordinary page-header titles MUST sit about one Chinese character away from the arrow rather than being pushed by the full touch-target width
+- **AND** the visual left whitespace MUST be materially smaller than the previous wide-left-padding implementation without overcorrecting to the screen edge.
+
+#### Scenario: Adopted placement constants are preserved
+- **WHEN** the current student H5 second-level back standard is implemented
+- **THEN** normal `PageBar` back controls MUST use the adopted compact placement equivalent to `margin-left: 12px`, a `38px` back column, a `4px` title gap, and `translateX(-8px)` on the icon button
+- **AND** unified search back controls MUST use the same `translateX(-8px)` visual placement standard
+- **AND** point-video playable chrome and empty-video back controls MUST use the adopted player placement equivalent to `4px` left and `6px` top so the apparent position aligns with ordinary second-level PageBar arrows
+- **AND** all of those controls MUST preserve phone-safe hit targets.
+
+#### Scenario: Standard applies to every second-level page
+- **WHEN** any current or future student H5 second-level page needs a visible back affordance
+- **THEN** the page MUST reuse the shared second-level back-arrow geometry and the matching placement family from this requirement
+- **AND** ordinary pages MUST use the PageBar placement family, search-like pages MUST use the search-bar placement family, and video-player pages MUST place the same shared arrow inside player chrome
+- **AND** a new back-arrow style, copied icon, bitmap-derived glyph, or unrelated left-spacing value MUST require a future OpenSpec change before implementation.
+
+#### Scenario: Common phone widths remain aligned
+- **WHEN** second-level back arrows are rendered on `360px`, `390px`, or `430px` wide phone viewports
+- **THEN** the visible arrow left edge MUST remain in a compact reference-like band rather than drifting back to the previous wide-left-padding look
+- **AND** the page MUST avoid horizontal scrolling or clipped titles caused by the placement adjustment.
+
+#### Scenario: Video and non-video arrows feel related
+- **WHEN** comparing a normal second-level detail page, a unified search detail-style page, a point-video page with player controls visible, and a point-video empty state
+- **THEN** the back arrow glyph geometry MUST be the same
+- **AND** the apparent left spacing MUST feel consistent even though the video page places the arrow inside the player frame rather than inside a page header.
+
+### Requirement: Back arrow regression coverage
+The student H5 mobile design system SHALL include regression coverage that protects the shared arrow geometry and placement contract.
+
+#### Scenario: Source-level guard prevents drift
+- **WHEN** `web-student` regression tests run
+- **THEN** they MUST verify that the shared back-arrow module or equivalent shared source is used by PageBar-style detail headers, unified search, and point-video player back controls
+- **AND** they MUST catch reintroduction of independent copied SVG strings or direct Lucide-only `ArrowLeft` geometry for the student second-level back affordance.
+
+#### Scenario: Geometry constants are protected
+- **WHEN** the shared back-arrow implementation changes
+- **THEN** tests or equivalent checks MUST guard the intended `24x24` viewBox, shared filled-outline path, `fill="currentColor"` rendering, and absence of old stroke/line/polyline/polygon-patch arrow construction
+- **AND** placement checks MUST guard against restoring the previous excessive video-player left/top offsets or equivalent wide-left-padding behavior.

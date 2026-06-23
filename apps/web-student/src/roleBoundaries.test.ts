@@ -7,6 +7,10 @@ import assistantPanelSource from "./features/assistant/StudentAiChatPanel.tsx?ra
 import authenticatedAppLayoutSource from "./app/shell/AuthenticatedAppLayout.tsx?raw";
 import previewInputRuntimeSource from "./app/preview/input/PreviewInputRuntime.tsx?raw";
 import periodicTableSource from "./features/periodic-table/PeriodicTable.tsx?raw";
+import pointVideoPlayerSource from "./features/catalog/PointVideoPlayer.tsx?raw";
+import unifiedSearchSource from "./routes/search/UnifiedSearchPage.tsx?raw";
+import backArrowIconSource from "./shared/mobile/BackArrowIcon.tsx?raw";
+import pagebarSource from "./shared/mobile/PageBar.tsx?raw";
 import studentPackageSource from "../package.json?raw";
 import { periodicElements } from "./periodic";
 import {
@@ -43,6 +47,7 @@ describe("student console role boundaries", () => {
 
   it("keeps raw teacher-preview checks inside preview runtime boundaries", () => {
     const allowedPreviewAwareFiles = new Set([
+      "routes/learn/PreviewCatalogNodePage.tsx",
       "routes/learn/PreviewCatalogPointPage.tsx",
       "features/catalog/CatalogPointDetailPanel.tsx",
     ]);
@@ -167,5 +172,170 @@ describe("student console role boundaries", () => {
     expect(periodicCssSource).not.toContain("muted-area");
     expect(periodicCssSource).not.toContain("recommended-area");
     expect(periodicCssSource).not.toContain("recommended-element");
+  });
+
+  it("keeps point video player chrome aligned with mobile detail page controls", async () => {
+    // @ts-expect-error The frontend tsconfig intentionally omits Node types, but Vitest runs this contract in Node.
+    const { readFileSync } = await import("node:fs");
+    const cwd = (globalThis as unknown as { process: { cwd: () => string } }).process.cwd();
+    const experimentsCssSource = readFileSync(`${cwd}/src/styles/experiments.css`, "utf8");
+    const pointDetailBlock = experimentsCssSource.match(/\.catalog-point-detail\s*\{[^}]*\}/)?.[0] || "";
+    const playerBlock = experimentsCssSource.match(/\.point-art-player\s*\{[^}]*\}/)?.[0] || "";
+    const defaultChromeHideBlock =
+      experimentsCssSource.match(
+        /\.point-art-player \.art-bottom,[\s\S]*?\.point-art-player \.art-layer-auto-playback\s*\{[^}]*\}/,
+      )?.[0] || "";
+    const shellBlock = experimentsCssSource.match(/\.point-youtube-shell\s*\{[^}]*\}/)?.[0] || "";
+    const controlsBlock = experimentsCssSource.match(/\.point-youtube-controls\s*\{[^}]*\}/)?.[0] || "";
+    const activeControlsBlock =
+      experimentsCssSource.match(/\.point-youtube-shell-active \.point-youtube-controls\s*\{[^}]*\}/)?.[0] || "";
+    const backButtonBlock = experimentsCssSource.match(/\.point-youtube-back,\s*\.point-player-empty-back\s*\{[^}]*\}/)?.[0] || "";
+    const playableBackBlock = experimentsCssSource.match(/\.point-youtube-back\s*\{[^}]*\}/)?.[0] || "";
+    const emptyBackBlock = experimentsCssSource.match(/\.point-player-empty-back\s*\{[^}]*position: absolute;[^}]*\}/)?.[0] || "";
+    const backIconBlock = experimentsCssSource.match(/\.point-player-back-icon\s*\{[^}]*\}/)?.[0] || "";
+    const playerVarsBlock =
+      experimentsCssSource.match(/\.point-art-player \.art-video-player\s*\{[^}]*--art-theme[^}]*\}/)?.[0] || "";
+    const inactiveProgressBlock = experimentsCssSource.match(/\.point-youtube-inactive-progress\s*\{[^}]*\}/)?.[0] || "";
+    const activeProgressBlock =
+      experimentsCssSource.match(/\.point-youtube-active-progress\s*\{[^}]*height: 30px;[^}]*\}/)?.[0] || "";
+    const progressHitBlock = experimentsCssSource.match(/\.point-youtube-progress-hit\s*\{[^}]*\}/)?.[0] || "";
+    const progressThumbBlock = experimentsCssSource.match(/\.point-youtube-progress-thumb\s*\{[^}]*\}/)?.[0] || "";
+    const timeCapsuleBlock = experimentsCssSource.match(/\.point-youtube-time-capsule\s*\{[^}]*\}/)?.[0] || "";
+    const learningCopyBlock = experimentsCssSource.match(/\.point-learning-section > p\s*\{[^}]*\}/)?.[0] || "";
+    const equationListBlock = experimentsCssSource.match(/\.point-equation-list\s*\{[^}]*\}/)?.[0] || "";
+    const equationRowBlock = experimentsCssSource.match(/\.point-equation-row\s*\{[^}]*\}/)?.[0] || "";
+    const equationNoteBlock = experimentsCssSource.match(/\.point-equation-note\s*\{[^}]*\}/)?.[0] || "";
+    const safetyCopyBlock = experimentsCssSource.match(/\.safety-section > p\s*\{[^}]*\}/)?.[0] || "";
+    const actionAreaBlock = experimentsCssSource.match(/\.point-detail-actions\s*\{[^}]*\}/)?.[0] || "";
+
+    expect(pointVideoPlayerSource).toContain("point-player-back-icon");
+    expect(pointVideoPlayerSource).toContain("BackArrowIcon");
+    expect(pointVideoPlayerSource).toContain('<BackArrowIcon className="point-player-back-icon" />');
+    expect(pointVideoPlayerSource).toContain("autoplay: true");
+    expect(pointVideoPlayerSource).toContain("muted: true");
+    expect(pointVideoPlayerSource).toContain("miniProgressBar: false");
+    expect(pointVideoPlayerSource).toContain("setting: false");
+    expect(pointVideoPlayerSource).toContain("lock: false");
+    expect(pointVideoPlayerSource).toContain("playbackRate: false");
+    expect(pointVideoPlayerSource).toContain("controls: false");
+    expect(pointVideoPlayerSource).toContain("point-youtube-shell");
+    expect(pointVideoPlayerSource).toContain("point-youtube-inactive-progress");
+    expect(pointVideoPlayerSource).toContain("point-youtube-progress-thumb");
+    expect(pointVideoPlayerSource).not.toContain('name: "point-time"');
+    expect(pointVideoPlayerSource).not.toContain("point-player-back-layer");
+    expect(pointVideoPlayerSource).not.toContain("xgplayer");
+    expect(pointVideoPlayerSource).not.toContain("import { ArrowLeft");
+    expect(pointVideoPlayerSource).not.toContain('const backIconSvg =\\n  \'<svg');
+    expect(pointVideoPlayerSource).not.toContain("point-player-back-glyph");
+    expect(pointDetailBlock).toContain("padding-top: min(62.5vw, 280px);");
+    expect(playerBlock).toContain("position: fixed;");
+    expect(playerBlock).toContain("top: 0;");
+    expect(playerBlock).toContain("left: 50%;");
+    expect(playerBlock).toContain("width: min(100vw, var(--mobile-content-max));");
+    expect(playerBlock).toContain("aspect-ratio: 16 / 10;");
+    expect(playerBlock).toContain("transform: translateX(-50%);");
+    expect(playerBlock).toContain("--point-player-active-progress: linear-gradient");
+    expect(defaultChromeHideBlock).toContain("display: none !important;");
+    expect(defaultChromeHideBlock).toContain("pointer-events: none !important;");
+    expect(defaultChromeHideBlock).toContain(".point-art-player .art-lock");
+    expect(defaultChromeHideBlock).toContain(".point-art-player .art-layers");
+    expect(shellBlock).toContain("position: absolute;");
+    expect(shellBlock).toContain("inset: 0;");
+    expect(controlsBlock).toContain("opacity: 0;");
+    expect(controlsBlock).toContain("pointer-events: none;");
+    expect(activeControlsBlock).toContain("opacity: 1;");
+    expect(activeControlsBlock).toContain("pointer-events: auto;");
+    expect(backButtonBlock).toContain("width: 44px;");
+    expect(backButtonBlock).toContain("height: 44px;");
+    expect(backButtonBlock).toContain("background: transparent;");
+    expect(backButtonBlock).not.toContain("border-radius: 999px");
+    expect(playableBackBlock).toContain("position: absolute;");
+    expect(playableBackBlock).toContain("top: 6px;");
+    expect(playableBackBlock).toContain("left: 4px;");
+    expect(emptyBackBlock).toContain("top: 6px;");
+    expect(emptyBackBlock).toContain("left: 4px;");
+    expect(backIconBlock).not.toContain("translateX(");
+    expect(playerVarsBlock).toContain("--art-theme: #006934;");
+    expect(experimentsCssSource).not.toContain("margin: 8px 0 0 18px;");
+    expect(experimentsCssSource).not.toContain("left: 18px;");
+    expect(experimentsCssSource).not.toContain("transform: translateY(-4px);");
+    expect(experimentsCssSource).not.toContain("art-mini-progress-bar");
+    expect(experimentsCssSource).not.toContain("art-control-point-time");
+    expect(inactiveProgressBlock).toContain("height: 2px;");
+    expect(inactiveProgressBlock).toContain("background: var(--point-player-inactive-track);");
+    expect(activeProgressBlock).toContain("height: 30px;");
+    expect(progressHitBlock).toContain("height: 30px;");
+    expect(progressHitBlock).toContain("touch-action: none;");
+    expect(progressThumbBlock).toContain("width: 24px;");
+    expect(progressThumbBlock).toContain("height: 24px;");
+    expect(progressThumbBlock).toContain("background: #ffffff var(--point-player-logo)");
+    expect(timeCapsuleBlock).toContain("border-radius: 999px;");
+    expect(timeCapsuleBlock).toContain("white-space: nowrap;");
+    expect(learningCopyBlock).toContain("font-weight: 640;");
+    expect(equationListBlock).toContain("background: transparent;");
+    expect(equationRowBlock).toContain("grid-template-columns: 22px minmax(0, 1fr);");
+    expect(equationNoteBlock).toContain("font-weight: 650;");
+    expect(equationNoteBlock).not.toContain("font-family: ui-monospace");
+    expect(safetyCopyBlock).toContain("border-left: 3px solid");
+    expect(actionAreaBlock).toContain("padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));");
+  });
+
+  it("keeps secondary-page back arrows shared, flatter, and left-aligned", async () => {
+    // @ts-expect-error The frontend tsconfig intentionally omits Node types, but Vitest runs this contract in Node.
+    const { readFileSync } = await import("node:fs");
+    const cwd = (globalThis as unknown as { process: { cwd: () => string } }).process.cwd();
+    const appShellCssSource = readFileSync(`${cwd}/src/styles/app-shell.css`, "utf8");
+    const learningCssSource = readFileSync(`${cwd}/src/styles/learning.css`, "utf8");
+    const pagebarButtonBlock = appShellCssSource.match(/\.pagebar \.icon-action\s*\{[^}]*\}/)?.[0] || "";
+    const pagebarBlock = appShellCssSource.match(/\.pagebar\s*\{[^}]*minmax\(0, 1fr\)[^}]*\}/)?.[0] || "";
+    const searchBackBlock = learningCssSource.match(/\.unified-search-back\s*\{[^}]*\}/)?.[0] || "";
+
+    expect(backArrowIconSource).toContain('studentBackArrowViewBox = "0 0 24 24"');
+    expect(backArrowIconSource).toContain(
+      'studentBackArrowPath =\n  "M7.414 13l5.043 5.04-1.414 1.42L3.586 12l7.457-7.46 1.414 1.42L7.414 11H21v2H7.414z"',
+    );
+    expect(backArrowIconSource).toContain('fill="currentColor"');
+    expect(backArrowIconSource).toContain("<path d={studentBackArrowPath} />");
+    expect(backArrowIconSource).toContain("createBackArrowSvg");
+    expect(backArrowIconSource).not.toContain("studentBackArrowStrokeWidth");
+    expect(backArrowIconSource).not.toContain("studentBackArrowTipPatchPoints");
+    expect(backArrowIconSource).not.toContain("<line");
+    expect(backArrowIconSource).not.toContain("<polygon");
+    expect(backArrowIconSource).not.toMatch(/base64|\\.png|\\.jpg|\\.jpeg|\\.webp/i);
+    expect(pagebarSource).toContain("BackArrowIcon");
+    expect(pagebarSource).not.toContain("ArrowLeft");
+    expect(unifiedSearchSource).toContain("BackArrowIcon");
+    expect(unifiedSearchSource).not.toContain("ArrowLeft");
+    expect(pagebarBlock).toContain("grid-template-columns: 38px minmax(0, 1fr);");
+    expect(pagebarBlock).toContain("gap: 4px;");
+    expect(pagebarButtonBlock).toContain("width: 44px;");
+    expect(pagebarButtonBlock).toContain("height: 44px;");
+    expect(appShellCssSource).toContain("margin-left: 12px;");
+    expect(pagebarButtonBlock).toContain("transform: translateX(-8px);");
+    expect(searchBackBlock).toContain("width: 44px;");
+    expect(searchBackBlock).toContain("height: 44px;");
+    expect(searchBackBlock).toContain("transform: translateX(-8px);");
+
+    [
+      "routes/learn/LearningAreaPage.tsx",
+      "routes/learn/ChapterStudyPage.tsx",
+      "routes/learn/CatalogDirectoryPage.tsx",
+      "routes/learn/ElementDetailPage.tsx",
+      "routes/video-library/VideoLibraryPage.tsx",
+      "routes/ai/AiChatPage.tsx",
+      "routes/assessment/AssessmentSessionPage.tsx",
+      "routes/assessment/AssessmentReportPage.tsx",
+      "routes/profile/FeedbackPage.tsx",
+    ].forEach((file) => {
+      const source = routeAndFeatureSources[`./${file}`] || "";
+      expect(source).toContain("DetailPageFrame");
+      expect(source).not.toContain("ArrowLeft");
+      expect(source).not.toContain("ChevronLeft");
+    });
+
+    expect(routeAndFeatureSources["./routes/search/UnifiedSearchPage.tsx"]).toContain("BackArrowIcon");
+    expect(routeAndFeatureSources["./routes/search/UnifiedSearchPage.tsx"]).not.toContain("DetailPageFrame");
+    expect(routeAndFeatureSources["./routes/learn/ExperimentPointPage.tsx"]).toContain("CatalogPointDetailPanel");
+    expect(routeAndFeatureSources["./routes/learn/ExperimentPointPage.tsx"]).not.toContain("DetailPageFrame");
   });
 });
