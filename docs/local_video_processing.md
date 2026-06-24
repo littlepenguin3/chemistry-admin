@@ -28,6 +28,8 @@ Back up Postgres and `data/media` together. A database-only backup preserves met
 
 The admin web uses Uppy with tus support when `VITE_TUS_ENDPOINT` is configured. The browser can stream a SHA-256 precheck with `hash-wasm`; the backend remains authoritative and recomputes or verifies SHA-256 after the local upload handoff.
 
+Original video uploads are limited by `MAX_MEDIA_UPLOAD_MB` (local default: 8192 MB). The teacher frontend reads the effective policy from the backend and rejects files above that size before hashing or tus upload starts. The backend still enforces the same limit for direct uploads and tus finalization.
+
 Exact duplicates are byte-identical only. Different encodings of similar content are not exact duplicates and are never auto-skipped.
 
 For local teacher-console builds, copy `apps/web-teacher/.env.example` to `apps/web-teacher/.env` or provide `VITE_TUS_ENDPOINT=http://127.0.0.1:10980/files/` in the build environment.
@@ -91,6 +93,8 @@ Start local services:
 ```powershell
 docker compose up -d --build backend tusd video-worker postgres
 ```
+
+Restart the `backend` service after changing `MAX_MEDIA_UPLOAD_MB`; the teacher frontend displays the backend runtime policy, so it updates after the backend reloads the environment.
 
 After the stack exists, rebuild only `video-worker` for worker code or dependency changes:
 

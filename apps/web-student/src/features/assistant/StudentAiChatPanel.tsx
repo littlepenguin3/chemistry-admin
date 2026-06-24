@@ -9,18 +9,34 @@ import {
   useRef,
   useState,
 } from "react";
-import { Atom, CheckCircle2, Copy, LoaderCircle, Plus, RotateCcw, Send, ThumbsDown, ThumbsUp, X, XCircle } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { Atom, CheckCircle2, Copy, FlaskConical, LoaderCircle, Plus, RotateCcw, Send, ThumbsDown, ThumbsUp, X, XCircle } from "lucide-react";
 import LottieImport, { type LottieRefCurrentProps } from "lottie-react";
 import { type StudentAssistantStreamEvent, StudentAssistantFinalMetadata, errorMessage, streamStudentAssistantAsk } from "../../api";
+import atomThinkingVariant1Animation from "../../assets/lottie/atom-thinking-variant-1.json";
+import atomThinkingVariant2Animation from "../../assets/lottie/atom-thinking-variant-2.json";
 import atomThinkingAnimation from "../../assets/lottie/atom-thinking.json";
 import { MobileTextArea } from "../../mobile/primitives";
-import { AiMarkdownBlock } from "../../shared/markdown/AiMarkdownBlock";
+import { AiMessageMarkdown } from "../../shared/markdown/AiMessageMarkdown";
+import type { AiRichContentArtifact } from "../../shared/markdown/aiRichContentArtifacts";
+import { useSmoothAssistantStream } from "../../shared/markdown/useSmoothAssistantStream";
 import { AtomContextPickerSheet } from "./AtomContextPickerSheet";
-import { assistantContextPathLabel, defaultAssistantContext, isPointAssistantContext, type AssistantContext } from "./assistantContext";
-import { assistantContextHint, assistantContextTypeLabel, isGlobalAssistantContext } from "./assistantStarter";
+import { defaultAssistantContext, isPointAssistantContext, type AssistantContext } from "./assistantContext";
+import {
+  assistantContextHint,
+  assistantContextTypeLabel,
+  assistantStarterIntents,
+  buildStarterQuestion,
+  isGlobalAssistantContext,
+  type AssistantStarterIntentId,
+} from "./assistantStarter";
 import {
   buildStudentAiHistoryEntry,
+  clearActiveStudentAiHistoryId,
   createStudentAiHistoryId,
+  createStudentAiMessageId,
+  saveActiveStudentAiHistoryId,
+  sanitizeStudentAiHistoryTitle,
   type StudentAiChatMessage,
   type StudentAiHistoryEntry,
   type StudentAiHistorySource,
@@ -37,8 +53,10 @@ export type StudentAiChatPanelVariant = "root" | "detail";
 
 type StudentAiChatPanelProps = {
   context: AssistantContext;
+  resetContext?: AssistantContext;
   onResetContext: () => void;
   variant?: StudentAiChatPanelVariant;
+  fullControls?: boolean;
   historyEntry?: StudentAiHistoryEntry | null;
   onOpenHistory?: () => void;
   onHistoryChange?: () => void;
@@ -59,7 +77,62 @@ type AssistantStreamPhase = {
 
 const ASSISTANT_THINKING_PHASE_MIN_VISIBLE_MS = 1400;
 const ASSISTANT_THINKING_TRANSITION_MS = 420;
-const ATOM_THINKING_LOTTIE_SPEED = 0.618;
+const ATOM_THINKING_STROKE_COLOR = [0, 0.345, 0.149, 1];
+
+type AtomThinkingAnimationId = "core" | "pulse" | "orbit";
+type AtomThinkingAnimationDefinition = {
+  id: AtomThinkingAnimationId;
+  label: string;
+  speed: number;
+  animationData: unknown;
+};
+
+function cloneLottieWithStrokeColor<T>(animationData: T): T {
+  const cloned = JSON.parse(JSON.stringify(animationData)) as T;
+  const tintStroke = (value: unknown) => {
+    if (!value || typeof value !== "object") return;
+    const record = value as { ty?: unknown; c?: { k?: unknown } };
+    if (record.ty === "st" && record.c && Array.isArray(record.c.k)) {
+      record.c.k = ATOM_THINKING_STROKE_COLOR;
+    }
+    for (const child of Object.values(value as Record<string, unknown>)) {
+      if (Array.isArray(child)) child.forEach(tintStroke);
+      else tintStroke(child);
+    }
+  };
+  tintStroke(cloned);
+  return cloned;
+}
+
+const ATOM_THINKING_ANIMATIONS: readonly AtomThinkingAnimationDefinition[] = [
+  {
+    id: "core",
+    label: "基础轨道",
+    speed: 0.618,
+    animationData: cloneLottieWithStrokeColor(atomThinkingAnimation),
+  },
+  {
+    id: "pulse",
+    label: "脉冲收束",
+    speed: 1.43,
+    animationData: cloneLottieWithStrokeColor(atomThinkingVariant1Animation),
+  },
+  {
+    id: "orbit",
+    label: "轨道旋转",
+    speed: 1.013,
+    animationData: cloneLottieWithStrokeColor(atomThinkingVariant2Animation),
+  },
+];
+
+function randomAtomThinkingAnimationId(): AtomThinkingAnimationId {
+  const index = Math.floor(Math.random() * ATOM_THINKING_ANIMATIONS.length);
+  return ATOM_THINKING_ANIMATIONS[index]?.id ?? "core";
+}
+
+function atomThinkingAnimationById(animationId?: string): AtomThinkingAnimationDefinition {
+  return ATOM_THINKING_ANIMATIONS.find((animation) => animation.id === animationId) || ATOM_THINKING_ANIMATIONS[0];
+}
 
 function assistantStreamPhase(status: string, hasAnswer: boolean): AssistantStreamPhase {
   if (hasAnswer) return { key: "outputting", label: "正在输出回答" };
@@ -104,11 +177,17 @@ function normalizeAssistantMetadata(value: unknown): StudentAssistantFinalMetada
   return value as StudentAssistantFinalMetadata;
 }
 
-function suggestedPromptsFromMetadata(metadata?: StudentAssistantFinalMetadata): string[] {
+function assistantMessageMetadata(metadata?: StudentAssistantFinalMetadata): StudentAssistantFinalMetadata | undefined {
+  if (!metadata) return undefined;
+  const { conversation_title: _conversationTitle, ...messageMetadata } = metadata;
+  return messageMetadata;
+}
+
+function suggestedPromptsFromMetadata(metadata?: StudentAssistantFinalMetadata): QuickPrompt[] {
   const rawPrompts = metadata?.suggested_prompts;
   if (!Array.isArray(rawPrompts)) return [];
   const seen = new Set<string>();
-  const prompts: string[] = [];
+  const prompts: QuickPrompt[] = [];
   for (const rawPrompt of rawPrompts) {
     if (typeof rawPrompt !== "string") continue;
     const prompt = rawPrompt.trim();
@@ -116,17 +195,42 @@ function suggestedPromptsFromMetadata(metadata?: StudentAssistantFinalMetadata):
     const key = prompt.replace(/\s+/g, "").toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    prompts.push(prompt);
+    prompts.push({ label: prompt, question: prompt });
     if (prompts.length >= 5) break;
   }
   return prompts;
 }
 
-function latestSuggestedPrompts(messages: StudentAiChatMessage[], loading: boolean, status: string): string[] {
+function latestSuggestedPrompts(messages: StudentAiChatMessage[], loading: boolean, status: string): QuickPrompt[] {
   if (loading || status === "error") return [];
   const latestAssistantMessage = [...messages].reverse().find((message) => message.role === "assistant");
   if (latestAssistantMessage?.state === "error") return [];
   return suggestedPromptsFromMetadata(latestAssistantMessage?.metadata);
+}
+
+const boundContextPromptOrder = ["observe", "phenomenon", "principle", "design", "compare", "mistake"];
+const boundContextPromptLabels: Partial<Record<AssistantStarterIntentId, string>> = {
+  observe: "该实验中观察什么",
+  phenomenon: "该实验中现象说明什么",
+  principle: "该实验背后原理",
+  design: "该实验为什么这样设计",
+  compare: "和其他点位对比",
+  mistake: "该实验易错点",
+};
+
+function boundContextStarterPrompts(context: AssistantContext): QuickPrompt[] {
+  const intents = assistantStarterIntents(context);
+  return boundContextPromptOrder
+    .map((id) => intents.find((intent) => intent.id === id))
+    .filter((intent): intent is NonNullable<typeof intent> => Boolean(intent?.buildQuestion))
+    .map((intent) => ({ label: boundContextPromptLabels[intent.id] || intent.label, question: buildStarterQuestion(intent, context) }))
+    .filter((prompt) => Boolean(prompt.question));
+}
+
+function experimentPlaceholderTitle(title: string): string {
+  const trimmed = title.trim();
+  if (!trimmed) return "这个实验";
+  return trimmed.endsWith("实验") ? trimmed : `${trimmed}实验`;
 }
 
 function streamEventDebugSnapshot(event?: StudentAssistantStreamEvent): Record<string, unknown> | undefined {
@@ -298,24 +402,31 @@ function usePrefersReducedMotion() {
   return prefersReducedMotion;
 }
 
-function AtomThinkingMark() {
+function AtomThinkingMark({ animationId }: { animationId?: string }) {
   const prefersReducedMotion = usePrefersReducedMotion();
   const atomLottieRef = useRef<LottieRefCurrentProps>(null);
+  const animation = atomThinkingAnimationById(animationId);
 
   useEffect(() => {
     if (prefersReducedMotion) return;
-    atomLottieRef.current?.setSpeed(ATOM_THINKING_LOTTIE_SPEED);
-  }, [prefersReducedMotion]);
+    atomLottieRef.current?.setSpeed(animation.speed);
+  }, [animation.id, animation.speed, prefersReducedMotion]);
 
   return (
-    <span className="ai-thinking-atom-mark" aria-hidden="true" data-motion={prefersReducedMotion ? "reduced" : "looping"}>
+    <span
+      className="ai-thinking-atom-mark"
+      aria-hidden="true"
+      data-animation-id={animation.id}
+      data-motion={prefersReducedMotion ? "reduced" : "looping"}
+    >
       {prefersReducedMotion ? (
         <Atom className="ai-thinking-atom-static" size={30} strokeWidth={2.15} />
       ) : (
         <Lottie
+          key={animation.id}
           lottieRef={atomLottieRef}
           className="ai-thinking-lottie"
-          animationData={atomThinkingAnimation}
+          animationData={animation.animationData}
           loop
           autoplay
         />
@@ -324,7 +435,7 @@ function AtomThinkingMark() {
   );
 }
 
-function AssistantThinkingLine({ phase }: { phase: AssistantStreamPhase }) {
+function AssistantThinkingLine({ phase, animationId }: { phase: AssistantStreamPhase; animationId?: string }) {
   const [currentPhase, setCurrentPhase] = useState(phase);
   const [outgoingPhase, setOutgoingPhase] = useState<AssistantStreamPhase | null>(null);
   const currentPhaseRef = useRef(phase);
@@ -402,7 +513,7 @@ function AssistantThinkingLine({ phase }: { phase: AssistantStreamPhase }) {
 
   return (
     <div className="ai-thinking-line" role="status" aria-live="polite" aria-atomic="true" aria-label={currentPhase.label}>
-      <AtomThinkingMark />
+      <AtomThinkingMark animationId={animationId} />
       <span className="ai-thinking-text-stack" aria-hidden="true">
         {outgoingPhase ? (
           <span className="ai-thinking-text outgoing" key={`out-${outgoingPhase.key}`}>
@@ -444,6 +555,11 @@ type ComposerTextareaMetrics = {
   maxHeight: number;
   scrollable: boolean;
   expanded: boolean;
+};
+
+type QuickPrompt = {
+  label: string;
+  question: string;
 };
 
 function initialComposerTextareaMetrics(variant: StudentAiChatPanelVariant): ComposerTextareaMetrics {
@@ -518,12 +634,15 @@ function RootNewChatIcon() {
 
 export function StudentAiChatPanel({
   context,
+  resetContext,
   onResetContext,
   variant = "detail",
+  fullControls,
   historyEntry = null,
   onOpenHistory,
   onHistoryChange,
 }: StudentAiChatPanelProps) {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<StudentAiChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -540,8 +659,11 @@ export function StudentAiChatPanel({
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const compactMeasureTextareaRef = useRef<HTMLTextAreaElement>(null);
   const copyResetTimeoutRef = useRef<number | undefined>(undefined);
+  const rootGlowExitTimeoutRef = useRef<number | undefined>(undefined);
+  const previousRootFirstResponseLoadingRef = useRef(false);
   const [composerContextActive, setComposerContextActive] = useState(false);
-  const [composerTextareaMetrics, setComposerTextareaMetrics] = useState(() => initialComposerTextareaMetrics(variant));
+  const [composerTextareaMetrics, setComposerTextareaMetrics] = useState(() => initialComposerTextareaMetrics(fullControls ? "root" : variant));
+  const [rootGlowExitActive, setRootGlowExitActive] = useState(false);
 
   const contextPath = activeContext.catalog_path?.filter(Boolean).join(" / ") || "";
   const contextMeta = [
@@ -553,58 +675,95 @@ export function StudentAiChatPanel({
     .filter(Boolean)
     .join(" · ");
   const isRootVariant = variant === "root";
+  const usesModernAtomSurface = isRootVariant || Boolean(fullControls);
+  const surfaceVariant = usesModernAtomSurface ? "root" : variant;
+  const modernSurfaceClassName = usesModernAtomSurface && !isRootVariant ? " root" : "";
+  const boundPointContext = usesModernAtomSurface && isPointAssistantContext(activeContext) ? activeContext : null;
+  const hasBoundPointContext = Boolean(boundPointContext);
   const hasComposerText = input.trim().length > 0;
-  const showRootWelcome = isRootVariant && !messages.length && !hasComposerText;
-  const rootLayoutState = isRootVariant ? (messages.length || loading ? "conversation" : hasComposerText ? "draft" : "empty") : "";
+  const showRootWelcome = usesModernAtomSurface && !messages.length && !hasComposerText;
+  const rootLayoutState = usesModernAtomSurface ? (messages.length || loading ? "conversation" : hasComposerText ? "draft" : "empty") : "";
   const rootLayoutSemanticState =
     rootLayoutState === "empty" ? "is-empty" : rootLayoutState === "draft" ? "has-draft" : rootLayoutState === "conversation" ? "has-messages" : "";
-  const rootLayoutClassName = rootLayoutState ? ` root-state-${rootLayoutState} ${rootLayoutSemanticState}` : "";
+  const isRootFirstResponseLoading =
+    usesModernAtomSurface && loading && messages.length === 2 && messages[0]?.role === "user" && messages[1]?.role === "assistant";
+  const rootFirstResponseClassName = isRootFirstResponseLoading ? " root-first-response-loading" : "";
+  const rootGlowExitClassName = rootGlowExitActive ? " root-first-response-ending" : "";
+  const boundPointLayoutClassName = hasBoundPointContext ? " has-bound-point-context" : "";
+  const rootLayoutClassName = rootLayoutState
+    ? ` root-state-${rootLayoutState} ${rootLayoutSemanticState}${rootFirstResponseClassName}${rootGlowExitClassName}${boundPointLayoutClassName}`
+    : "";
+  const rootResponsePhase = isRootFirstResponseLoading ? "first-response-loading" : rootGlowExitActive ? "first-response-ending" : undefined;
   const isGlobalContext = isGlobalAssistantContext(activeContext);
-  const boundPointContext = isRootVariant && isPointAssistantContext(activeContext) ? activeContext : null;
   const hasSubmittedUserMessage = messages.some((message) => message.role === "user");
-  const contextBindingLocked = isRootVariant && (hasSubmittedUserMessage || loading);
-  const canEditBoundPoint = isRootVariant && Boolean(boundPointContext) && !contextBindingLocked;
-  const boundPointPath = boundPointContext ? assistantContextPathLabel(boundPointContext) : "";
-  const rootComposerMode = composerTextareaMetrics.expanded ? "is-expanded" : "is-compact";
-  const composerPlaceholder = isRootVariant ? "问实验现象、步骤或原理" : "围绕当前内容提问";
+  const contextBindingLocked = usesModernAtomSurface && (hasSubmittedUserMessage || loading);
+  const canEditBoundPoint = usesModernAtomSurface && Boolean(boundPointContext) && !contextBindingLocked;
+  const rootComposerMode = composerTextareaMetrics.expanded || hasBoundPointContext ? "is-expanded" : "is-compact";
+  const composerPlaceholder =
+    usesModernAtomSurface && boundPointContext
+      ? `问“${experimentPlaceholderTitle(boundPointContext.context_title)}”的现象、步骤或原理`
+      : usesModernAtomSurface
+        ? "问实验现象、步骤或原理"
+        : "围绕当前内容提问";
   const composerTextareaStyle: CSSProperties = {
     height: `${composerTextareaMetrics.height}px`,
     maxHeight: `${composerTextareaMetrics.maxHeight}px`,
     overflowY: composerTextareaMetrics.scrollable ? "auto" : "hidden",
   };
-  const quickPrompts = latestSuggestedPrompts(messages, loading, status);
+  const suggestedQuickPrompts = latestSuggestedPrompts(messages, loading, status);
+  const boundStarterQuickPrompts =
+    usesModernAtomSurface && boundPointContext && !hasComposerText && !hasSubmittedUserMessage && !loading ? boundContextStarterPrompts(boundPointContext) : [];
+  const showBoundStarterPrompts = !suggestedQuickPrompts.length && boundStarterQuickPrompts.length > 0;
+  const quickPrompts = suggestedQuickPrompts.length ? suggestedQuickPrompts : boundStarterQuickPrompts;
+
+  const updateLatestAssistantContent = useCallback((content: string) => {
+    setMessages((current) => {
+      const updated = [...current];
+      const last = updated[updated.length - 1];
+      if (last?.role === "assistant") updated[updated.length - 1] = { ...last, content };
+      return updated;
+    });
+  }, []);
+
+  const {
+    append: appendSmoothAnswer,
+    flush: flushSmoothAnswer,
+    replace: replaceSmoothAnswer,
+    reset: resetSmoothAnswer,
+    stop: stopSmoothAnswer,
+  } = useSmoothAssistantStream({ onDisplayText: updateLatestAssistantContent });
 
   const syncComposerTextareaMetrics = useCallback(() => {
     const textarea = composerTextareaRef.current;
     if (!textarea) return;
 
-    const minHeight = isRootVariant ? ROOT_COMPOSER_COMPACT_INPUT_HEIGHT : DETAIL_COMPOSER_MIN_HEIGHT;
+    const minHeight = usesModernAtomSurface ? ROOT_COMPOSER_COMPACT_INPUT_HEIGHT : DETAIL_COMPOSER_MIN_HEIGHT;
     const visualViewportHeight = window.visualViewport?.height || window.innerHeight || minHeight;
     const panel = textarea.closest(".ai-chat-panel") as HTMLElement | null;
     const panelHeight = panel?.getBoundingClientRect().height || 0;
     const effectiveHeight = panelHeight > minHeight ? panelHeight : visualViewportHeight;
 
     const naturalHeight = measureTextareaScrollHeight(textarea, minHeight);
-    const compactNaturalHeight = isRootVariant
+    const compactNaturalHeight = usesModernAtomSurface
       ? measureRootCompactScrollHeight(compactMeasureTextareaRef.current, composerFormRef.current, input, naturalHeight)
       : naturalHeight;
 
     const textRequiresExpandedMode = input.trim().length > 0 && (input.includes("\n") || compactNaturalHeight > ROOT_COMPOSER_COMPACT_THRESHOLD);
     const maxComposerHeight = Math.floor(effectiveHeight * ROOT_COMPOSER_MAX_HEIGHT_RATIO);
-    const maxHeight = isRootVariant
+    const maxHeight = usesModernAtomSurface
       ? Math.max(
           ROOT_COMPOSER_EXPANDED_MIN_INPUT_HEIGHT,
           maxComposerHeight - ROOT_COMPOSER_EXPANDED_PADDING_TOP - ROOT_COMPOSER_WORKBENCH_HEIGHT - ROOT_COMPOSER_EXPANDED_PADDING_BOTTOM,
         )
       : DETAIL_COMPOSER_MAX_HEIGHT;
-    const nextExpanded = isRootVariant ? textRequiresExpandedMode : false;
+    const nextExpanded = usesModernAtomSurface ? textRequiresExpandedMode || hasBoundPointContext : false;
     const nextHeight = nextExpanded
       ? Math.min(Math.max(naturalHeight, ROOT_COMPOSER_EXPANDED_MIN_INPUT_HEIGHT), maxHeight)
-      : isRootVariant
+      : usesModernAtomSurface
         ? ROOT_COMPOSER_COMPACT_INPUT_HEIGHT
         : Math.min(Math.max(naturalHeight, minHeight), maxHeight);
-    const nextMaxHeight = nextExpanded || !isRootVariant ? maxHeight : ROOT_COMPOSER_COMPACT_INPUT_HEIGHT;
-    const nextScrollable = isRootVariant ? nextExpanded && naturalHeight > maxHeight + 1 : naturalHeight > maxHeight + 1;
+    const nextMaxHeight = nextExpanded || !usesModernAtomSurface ? maxHeight : ROOT_COMPOSER_COMPACT_INPUT_HEIGHT;
+    const nextScrollable = usesModernAtomSurface ? nextExpanded && naturalHeight > maxHeight + 1 : naturalHeight > maxHeight + 1;
     setComposerTextareaMetrics((current) => {
       if (
         current.height === nextHeight &&
@@ -615,7 +774,7 @@ export function StudentAiChatPanel({
         return current;
       return { height: nextHeight, maxHeight: nextMaxHeight, scrollable: nextScrollable, expanded: nextExpanded };
     });
-  }, [input, isRootVariant]);
+  }, [hasBoundPointContext, input, usesModernAtomSurface]);
 
   useLayoutEffect(() => {
     syncComposerTextareaMetrics();
@@ -637,17 +796,53 @@ export function StudentAiChatPanel({
   useEffect(() => {
     return () => {
       if (copyResetTimeoutRef.current) window.clearTimeout(copyResetTimeoutRef.current);
+      if (rootGlowExitTimeoutRef.current) window.clearTimeout(rootGlowExitTimeoutRef.current);
+      stopSmoothAnswer();
     };
-  }, []);
+  }, [stopSmoothAnswer]);
 
   useEffect(() => {
-    if (!isRootVariant) return undefined;
+    if (!usesModernAtomSurface) {
+      previousRootFirstResponseLoadingRef.current = false;
+      setRootGlowExitActive(false);
+      if (rootGlowExitTimeoutRef.current) {
+        window.clearTimeout(rootGlowExitTimeoutRef.current);
+        rootGlowExitTimeoutRef.current = undefined;
+      }
+      return;
+    }
+
+    const wasFirstResponseLoading = previousRootFirstResponseLoadingRef.current;
+    if (wasFirstResponseLoading && !isRootFirstResponseLoading && rootLayoutState === "conversation") {
+      if (rootGlowExitTimeoutRef.current) window.clearTimeout(rootGlowExitTimeoutRef.current);
+      setRootGlowExitActive(true);
+      rootGlowExitTimeoutRef.current = window.setTimeout(() => {
+        setRootGlowExitActive(false);
+        rootGlowExitTimeoutRef.current = undefined;
+      }, 420);
+    } else if (rootLayoutState !== "conversation" || isRootFirstResponseLoading) {
+      if (rootGlowExitTimeoutRef.current) {
+        window.clearTimeout(rootGlowExitTimeoutRef.current);
+        rootGlowExitTimeoutRef.current = undefined;
+      }
+      setRootGlowExitActive(false);
+    }
+
+    previousRootFirstResponseLoadingRef.current = isRootFirstResponseLoading;
+  }, [isRootFirstResponseLoading, rootLayoutState, usesModernAtomSurface]);
+
+  useEffect(() => {
+    if (!usesModernAtomSurface) return undefined;
     const shell = composerFormRef.current?.closest(".student-app-shell");
     shell?.classList.toggle("context-picker-active", contextPickerOpen);
+    document.documentElement.classList.toggle("atom-context-picker-active", contextPickerOpen);
+    document.body.classList.toggle("atom-context-picker-active", contextPickerOpen);
     return () => {
       shell?.classList.remove("context-picker-active");
+      document.documentElement.classList.remove("atom-context-picker-active");
+      document.body.classList.remove("atom-context-picker-active");
     };
-  }, [contextPickerOpen, isRootVariant]);
+  }, [contextPickerOpen, usesModernAtomSurface]);
 
   useEffect(() => {
     if (historyEntry) {
@@ -659,6 +854,7 @@ export function StudentAiChatPanel({
       setStatus("idle");
       setActiveThinking(null);
       setLoading(false);
+      resetSmoothAnswer();
       setAssistantTurnFeedback({});
       setCopiedTurnKey(null);
       setActiveHistoryId(historyEntry.id);
@@ -673,6 +869,7 @@ export function StudentAiChatPanel({
     setStatus("idle");
     setActiveThinking(null);
     setLoading(false);
+    resetSmoothAnswer();
     setAssistantTurnFeedback({});
     setCopiedTurnKey(null);
     setActiveHistoryId(null);
@@ -686,6 +883,7 @@ export function StudentAiChatPanel({
     context.point_node_id,
     context.source_node_id,
     JSON.stringify(context.catalog_path || []),
+    resetSmoothAnswer,
   ]);
 
   useEffect(() => {
@@ -702,6 +900,7 @@ export function StudentAiChatPanel({
     nextContext: AssistantContext,
     historyId: string,
     createdAt?: string,
+    title?: string,
   ): StudentAiHistoryEntry => {
     const saved = upsertStudentAiHistory(
       buildStudentAiHistoryEntry({
@@ -710,6 +909,7 @@ export function StudentAiChatPanel({
         messages: nextMessages,
         source: historySourceForVariant(variant),
         createdAt,
+        title,
       }),
     );
     setActiveHistoryId(saved.id);
@@ -719,7 +919,7 @@ export function StudentAiChatPanel({
   };
 
   const handleResetContext = () => {
-    setActiveContext(defaultAssistantContext());
+    setActiveContext(resetContext || defaultAssistantContext());
     setMessages([]);
     setInput("");
     setComposerContextActive(false);
@@ -727,10 +927,12 @@ export function StudentAiChatPanel({
     setLoading(false);
     setStatus("idle");
     setActiveThinking(null);
+    resetSmoothAnswer();
     setAssistantTurnFeedback({});
     setCopiedTurnKey(null);
     setActiveHistoryId(null);
     setActiveHistoryCreatedAt(undefined);
+    clearActiveStudentAiHistoryId();
     onResetContext();
   };
 
@@ -739,12 +941,18 @@ export function StudentAiChatPanel({
     if (!question || loading) return;
     const requestContext = overrideContext || activeContext;
     const baseMessages = messages;
-    const userMessage: StudentAiChatMessage = { role: "user", content: question };
-    const assistantDraft: StudentAiChatMessage = { role: "assistant", content: "" };
+    const userMessage: StudentAiChatMessage = { id: createStudentAiMessageId("user"), role: "user", content: question };
+    const assistantDraft: StudentAiChatMessage = {
+      id: createStudentAiMessageId("assistant"),
+      role: "assistant",
+      content: "",
+      thinkingAnimationId: randomAtomThinkingAnimationId(),
+    };
     const nextMessages: StudentAiChatMessage[] = [...baseMessages, userMessage, assistantDraft];
     const historyId = activeHistoryId || createStudentAiHistoryId();
     const createdAt = activeHistoryCreatedAt;
     setActiveContext(requestContext);
+    resetSmoothAnswer();
     setMessages(nextMessages);
     setInput("");
     setComposerContextActive(false);
@@ -784,12 +992,7 @@ export function StudentAiChatPanel({
             answer += event.delta;
             setStatus("outputting");
             setActiveThinking(null);
-            setMessages((current) => {
-              const updated = [...current];
-              const last = updated[updated.length - 1];
-              if (last?.role === "assistant") updated[updated.length - 1] = { ...last, content: answer };
-              return updated;
-            });
+            appendSmoothAnswer(event.delta);
             return;
           }
           if (event.event === "replace" && typeof event.answer === "string") {
@@ -797,12 +1000,7 @@ export function StudentAiChatPanel({
             answer = event.answer;
             setStatus("outputting");
             setActiveThinking(null);
-            setMessages((current) => {
-              const updated = [...current];
-              const last = updated[updated.length - 1];
-              if (last?.role === "assistant") updated[updated.length - 1] = { ...last, content: answer };
-              return updated;
-            });
+            replaceSmoothAnswer(answer);
             return;
           }
           if (event.event === "error") {
@@ -815,12 +1013,15 @@ export function StudentAiChatPanel({
             if (finalMetadata && typeof finalMetadata.text === "string" && !answer.trim()) {
               answer = finalMetadata.text;
             }
+            answer = flushSmoothAnswer(answer);
             setStatus("ai");
             setActiveThinking(null);
             setMessages((current) => {
               const updated = [...current];
               const last = updated[updated.length - 1];
-              if (last?.role === "assistant") updated[updated.length - 1] = { ...last, content: answer || last.content, metadata: finalMetadata };
+              if (last?.role === "assistant") {
+                updated[updated.length - 1] = { ...last, content: answer || last.content, metadata: assistantMessageMetadata(finalMetadata) };
+              }
               return updated;
             });
             debugPhase = "stream-final-state";
@@ -829,12 +1030,18 @@ export function StudentAiChatPanel({
       );
       debugPhase = "stream-complete";
       if (!answer.trim()) answer = "Atom 暂时没有生成有效回答。";
-      const finalMessages: StudentAiChatMessage[] = [...baseMessages, userMessage, { role: "assistant", content: answer, metadata: finalMetadata }];
+      answer = flushSmoothAnswer(answer);
+      const finalMessages: StudentAiChatMessage[] = [
+        ...baseMessages,
+        userMessage,
+        { ...assistantDraft, content: answer, metadata: assistantMessageMetadata(finalMetadata) },
+      ];
       setMessages(finalMessages);
       setStatus("ai");
       setActiveThinking(null);
       debugPhase = "persist-final-history";
-      persistConversation(finalMessages, requestContext, historyId, createdAtForFinal);
+      const generatedHistoryTitle = baseMessages.length ? "" : sanitizeStudentAiHistoryTitle(finalMetadata?.conversation_title);
+      persistConversation(finalMessages, requestContext, historyId, createdAtForFinal, generatedHistoryTitle);
       debugPhase = "done";
     } catch (requestError) {
       const error = requestError instanceof Error ? requestError : undefined;
@@ -848,7 +1055,8 @@ export function StudentAiChatPanel({
         lastEvent: streamEventDebugSnapshot(lastStreamEvent),
       });
       const message = errorMessage(requestError);
-      const errorMessages: StudentAiChatMessage[] = [...baseMessages, userMessage, { role: "assistant", content: message, state: "error" }];
+      stopSmoothAnswer();
+      const errorMessages: StudentAiChatMessage[] = [...baseMessages, userMessage, { ...assistantDraft, content: message, state: "error" }];
       setStatus("error");
       setActiveThinking(null);
       setMessages(errorMessages);
@@ -888,7 +1096,7 @@ export function StudentAiChatPanel({
   };
 
   const handleComposerContextAction = () => {
-    if (isRootVariant) {
+    if (usesModernAtomSurface) {
       if (contextBindingLocked) {
         setComposerContextActive(true);
         composerTextareaRef.current?.focus();
@@ -908,7 +1116,7 @@ export function StudentAiChatPanel({
   };
 
   const handleComposerContextPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
-    if (!isRootVariant) return;
+    if (!usesModernAtomSurface) return;
     event.preventDefault();
     handleComposerContextAction();
   };
@@ -934,28 +1142,48 @@ export function StudentAiChatPanel({
     }, 1600);
   }, []);
 
+  const handleOpenRichContentArtifact = useCallback(
+    (historyId: string, messageId: string, artifact: AiRichContentArtifact) => {
+      saveActiveStudentAiHistoryId(historyId);
+      void navigate({
+        to: "/ai/artifact/$historyId/$messageId/$artifactId",
+        params: { historyId, messageId, artifactId: artifact.id },
+        search: { from: "ai" },
+      });
+    },
+    [navigate],
+  );
+
   return (
     <section
-      className={`ai-chat-panel ${variant}${rootLayoutClassName}`}
-      data-root-layout={isRootVariant ? rootLayoutState : undefined}
+      className={`ai-chat-panel ${variant}${modernSurfaceClassName}${rootLayoutClassName}`}
+      data-root-layout={usesModernAtomSurface ? rootLayoutState : undefined}
       data-root-state={rootLayoutState || undefined}
+      data-root-response-phase={rootResponsePhase}
       role="region"
       aria-label="Atom 学习助手对话"
     >
-      <header className={`ai-chat-head ${variant}`}>
+      {usesModernAtomSurface ? (
+        <div className="ai-root-glow-field" aria-hidden="true">
+          <i className="ai-root-glow-blob blob-gold" />
+          <i className="ai-root-glow-blob blob-green" />
+          <i className="ai-root-glow-blob blob-mint" />
+        </div>
+      ) : null}
+      <header className={`ai-chat-head ${surfaceVariant}`}>
         <div>
           <span>
             <Atom size={14} />
-            {isRootVariant ? "课程 Atom" : "当前上下文"}
+            {usesModernAtomSurface ? "课程 Atom" : "当前上下文"}
           </span>
-          <h2>{isRootVariant ? "Atom 学习助手" : activeContext.context_title}</h2>
+          <h2>{usesModernAtomSurface ? "Atom 学习助手" : activeContext.context_title}</h2>
           <small>
-            <b>{isRootVariant ? activeContext.context_title : contextMeta}</b>
-            {isRootVariant && contextMeta ? <span>{contextMeta}</span> : null}
+            <b>{usesModernAtomSurface ? activeContext.context_title : contextMeta}</b>
+            {usesModernAtomSurface && contextMeta ? <span>{contextMeta}</span> : null}
             <span>{assistantContextHint(activeContext)}</span>
           </small>
         </div>
-        {isRootVariant ? (
+        {usesModernAtomSurface ? (
           <div className="ai-root-actions" aria-label="Atom 对话操作">
             {onOpenHistory ? (
               <button type="button" className="ai-root-icon-action ai-history-action" onClick={onOpenHistory} aria-label="查看 Atom 历史记录">
@@ -980,7 +1208,7 @@ export function StudentAiChatPanel({
             <span>从一个实验开始吧！</span>
           </div>
         ) : null}
-        {!messages.length && !isRootVariant ? (
+        {!messages.length && !usesModernAtomSurface ? (
           <div className={`ai-chat-empty ${variant}`}>
             <Atom size={18} />
             <strong>围绕当前页面继续问</strong>
@@ -991,9 +1219,11 @@ export function StudentAiChatPanel({
           const isActiveAssistant = message.role === "assistant" && loading && index === messages.length - 1;
           const isLastError = message.role === "assistant" && (message.state === "error" || (status === "error" && index === messages.length - 1));
           const assistantState = isLastError ? "error" : isActiveAssistant ? "running" : "done";
-          const messageKey = `${message.role}-${index}`;
-          const isRootFlatAssistant = isRootVariant && message.role === "assistant" && assistantState === "done";
-          const isRootThinkingAssistant = isRootVariant && message.role === "assistant" && assistantState === "running";
+          const messageKey = message.id || `${message.role}-${index}`;
+          const artifactHistoryId = activeHistoryId || historyEntry?.id || null;
+          const artifactMessageId = message.id || (artifactHistoryId ? `${artifactHistoryId}-${message.role}-${index + 1}` : messageKey);
+          const isRootFlatAssistant = usesModernAtomSurface && message.role === "assistant" && assistantState === "done";
+          const isRootThinkingAssistant = usesModernAtomSurface && message.role === "assistant" && assistantState === "running";
           const activePhase = isActiveAssistant ? assistantVisibleThinkingPhase(activeThinking, status, Boolean(message.content.trim())) : null;
           return (
             <div className={`ai-message ${message.role} ${message.role === "assistant" ? assistantState : ""}`} key={messageKey}>
@@ -1012,7 +1242,7 @@ export function StudentAiChatPanel({
                     </div>
                   ) : null}
                   {isRootThinkingAssistant && activePhase ? (
-                    <AssistantThinkingLine phase={activePhase} />
+                    <AssistantThinkingLine animationId={message.thinkingAnimationId} phase={activePhase} />
                   ) : isActiveAssistant ? (
                     <div className="ai-stream-progress">
                       <span aria-hidden="true">
@@ -1023,7 +1253,23 @@ export function StudentAiChatPanel({
                       <strong>{assistantStreamPhaseLabel(status, Boolean(message.content.trim()))}</strong>
                     </div>
                   ) : null}
-                  {message.content.trim() ? <AiMarkdownBlock text={message.content} /> : isActiveAssistant && !isRootThinkingAssistant ? <AssistantSkeleton /> : null}
+                  {message.content.trim() ? (
+                    <AiMessageMarkdown
+                      text={message.content}
+                      streaming={isActiveAssistant}
+                      artifactContext={
+                        message.role === "assistant" && assistantState === "done" && artifactHistoryId && artifactMessageId
+                          ? {
+                              historyId: artifactHistoryId,
+                              messageId: artifactMessageId,
+                              onOpenArtifact: (artifact) => handleOpenRichContentArtifact(artifactHistoryId, artifactMessageId, artifact),
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : isActiveAssistant && !isRootThinkingAssistant ? (
+                    <AssistantSkeleton />
+                  ) : null}
                   {isRootFlatAssistant ? (
                     <AssistantTurnActions
                       turnKey={messageKey}
@@ -1047,39 +1293,17 @@ export function StudentAiChatPanel({
       </div>
 
       {quickPrompts.length ? (
-        <div className="ai-quick-prompts" aria-label="快捷问题">
+        <div className={`ai-quick-prompts${showBoundStarterPrompts ? " bound-starter" : ""}`} aria-label={showBoundStarterPrompts ? "实验提问建议" : "快捷问题"}>
           {quickPrompts.map((prompt) => (
-            <button type="button" key={prompt} disabled={loading} onClick={() => void submitQuestion(prompt)}>
-              {prompt}
+            <button type="button" key={`${prompt.label}-${prompt.question}`} disabled={loading} onClick={() => void submitQuestion(prompt.question)}>
+              {showBoundStarterPrompts ? <FlaskConical size={15} aria-hidden="true" /> : null}
+              {prompt.label}
             </button>
           ))}
         </div>
       ) : null}
 
-      {boundPointContext ? (
-        <section className={`ai-bound-context-card${contextBindingLocked ? " is-locked" : " is-editable"}`} aria-label="已绑定学习背景">
-          <div className="ai-bound-context-icon" aria-hidden="true">
-            <Atom size={17} />
-          </div>
-          <div className="ai-bound-context-copy">
-            <span>{contextBindingLocked ? "已绑定此点位" : "将围绕这个点位提问"}</span>
-            <strong>{boundPointContext.context_title}</strong>
-            {boundPointPath ? <small>{boundPointPath}</small> : null}
-          </div>
-          {canEditBoundPoint ? (
-            <div className="ai-bound-context-actions">
-              <button type="button" onClick={() => setContextPickerOpen(true)} aria-label="更换学习背景">
-                更换
-              </button>
-              <button type="button" onClick={handleRemovePointContext} aria-label="移除学习背景">
-                <X size={15} />
-              </button>
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      {isRootVariant ? (
+      {usesModernAtomSurface ? (
         <form
           ref={composerFormRef}
           className={`ai-chat-compose root ${rootComposerMode}${loading ? " is-loading" : ""}`}
@@ -1109,16 +1333,47 @@ export function StudentAiChatPanel({
             rows={1}
           />
           <div className="ai-chat-workbench" aria-label="Atom 输入工具">
-            <button
-              type="button"
-              className="ai-context-action"
-              onPointerDown={handleComposerContextPointerDown}
-              onClick={handleComposerContextAction}
-              aria-label={contextBindingLocked ? "已绑定学习背景，新建 Atom 对话后可更换" : "选择学习背景"}
-              aria-pressed={Boolean(boundPointContext || contextPickerOpen || composerContextActive)}
-            >
-              <Plus size={24} />
-            </button>
+            {boundPointContext ? (
+              <span className={`ai-context-chip has-bound-context${canEditBoundPoint ? " is-editable" : " is-locked"}`}>
+                <button
+                  type="button"
+                  className="ai-context-reselect-action"
+                  onPointerDown={handleComposerContextPointerDown}
+                  onClick={handleComposerContextAction}
+                  aria-label={contextBindingLocked ? "已绑定学习背景，新建 Atom 对话后可更换" : "重新选择实验点位"}
+                  aria-pressed={Boolean(boundPointContext || contextPickerOpen || composerContextActive)}
+                  title={boundPointContext.context_title}
+                  disabled={contextBindingLocked}
+                >
+                  <FlaskConical size={18} />
+                </button>
+                <span className="ai-context-bound-title" title={boundPointContext.context_title}>
+                  {boundPointContext.context_title}
+                </span>
+                {canEditBoundPoint ? (
+                  <button
+                    type="button"
+                    className="ai-context-clear-action"
+                    onClick={handleRemovePointContext}
+                    aria-label="取消点位绑定"
+                    title="取消点位绑定"
+                  >
+                    <X size={15} />
+                  </button>
+                ) : null}
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="ai-context-action"
+                onPointerDown={handleComposerContextPointerDown}
+                onClick={handleComposerContextAction}
+                aria-label={contextBindingLocked ? "已绑定学习背景，新建 Atom 对话后可更换" : "选择学习背景"}
+                aria-pressed={Boolean(contextPickerOpen || composerContextActive)}
+              >
+                <Plus size={24} />
+              </button>
+            )}
             <span className="ai-composer-context-status" role="status" aria-live="polite">
               {composerContextActive && contextBindingLocked
                 ? "已绑定此点位，新建对话后可更换"
@@ -1152,7 +1407,7 @@ export function StudentAiChatPanel({
           </button>
         </form>
       )}
-      {isRootVariant && contextPickerOpen ? (
+      {usesModernAtomSurface && contextPickerOpen ? (
         <AtomContextPickerSheet selectedContext={boundPointContext} onClose={() => setContextPickerOpen(false)} onSelect={handleSelectPointContext} />
       ) : null}
     </section>

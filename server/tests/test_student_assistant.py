@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from server.app.domains.assistant import student_assistant as student_assistant_module
 from server.app.domains.assistant.agent import classify_agent_request
-from server.app.domains.assistant.student_assistant import _agent_request_for_chat, _sanitize_followup_prompts
+from server.app.domains.assistant.student_assistant import _agent_request_for_chat, _sanitize_conversation_title, _sanitize_followup_prompts
 from server.app.schemas import AgentAskRequest, AgentChatMessage
 from server.app.student_assistant_schemas import StudentAssistantAskRequest
 from server.tests.route_helpers import assert_route
@@ -47,6 +47,58 @@ async def _collect_student_stream(payload: StudentAssistantAskRequest) -> list[d
     return [item async for item in student_assistant_module.stream_student_assistant_answer(user, payload)]
 
 
+def test_student_assistant_stream_attaches_generated_title_for_first_turn(monkeypatch) -> None:
+    payload = StudentAssistantAskRequest(
+        question="Why does the organic layer turn orange?",
+        context_type="learning_point",
+        context_title="Orange layer observation",
+        context_summary="Chlorine displaces bromide.",
+    )
+    settings = SimpleNamespace(agent_llm_provider="openai", agent_llm_api_key="test-key", agent_llm_model="test-model", agent_llm_base_url=None)
+
+    async def fake_stream(_request, settings=None):
+        yield {"event": "delta", "delta": "Bromide is oxidized."}
+        yield {"event": "final", "response": {"answer": "Bromide is oxidized.", "mode": "openai_chat_stream"}}
+
+    async def fake_metadata(metadata_payload, answer, metadata_settings):
+        assert metadata_payload.question == payload.question
+        assert metadata_payload.conversation_history == []
+        assert answer == "Bromide is oxidized."
+        assert metadata_settings is settings
+        return {"suggested_prompts": ["What color changes?", "Which ion reacts?"], "conversation_title": "CCl4 layer color"}
+
+    monkeypatch.setattr(student_assistant_module, "_ai_enabled", lambda: (True, True))
+    monkeypatch.setattr(student_assistant_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(student_assistant_module, "effective_ai_settings", lambda _settings: settings)
+    monkeypatch.setattr(student_assistant_module, "run_agent_stream", fake_stream)
+    monkeypatch.setattr(student_assistant_module, "_generate_followup_metadata", fake_metadata)
+
+    events = asyncio.run(_collect_student_stream(payload))
+
+    assert events[-1]["event"] == "final"
+    assert events[-1]["response"]["suggested_prompts"] == ["What color changes?", "Which ion reacts?"]
+    assert events[-1]["response"]["conversation_title"] == "CCl4 layer color"
+
+
+def test_student_assistant_metadata_payload_requests_title_only_for_first_turn() -> None:
+    first_turn = StudentAssistantAskRequest(
+        question="What causes the orange CCl4 layer?",
+        context_type="learning_point",
+        context_title="Orange layer observation",
+        context_summary="Chlorine displaces bromide.",
+    )
+    follow_up = StudentAssistantAskRequest(
+        question="Which ion is oxidized?",
+        context_type="learning_point",
+        context_title="Orange layer observation",
+        context_summary="Chlorine displaces bromide.",
+        conversation_history=[AgentChatMessage(role="user", content="What causes the orange CCl4 layer?")],
+    )
+
+    assert student_assistant_module._followup_generation_payload(first_turn, "answer")["request_conversation_title"] is True
+    assert student_assistant_module._followup_generation_payload(follow_up, "answer")["request_conversation_title"] is False
+
+
 def test_student_assistant_stream_attaches_suggested_prompts(monkeypatch) -> None:
     payload = StudentAssistantAskRequest(
         question="Why does the organic layer turn orange?",
@@ -73,11 +125,13 @@ def test_student_assistant_stream_attaches_suggested_prompts(monkeypatch) -> Non
     monkeypatch.setattr(student_assistant_module, "effective_ai_settings", lambda _settings: settings)
     monkeypatch.setattr(student_assistant_module, "run_agent_stream", fake_stream)
     monkeypatch.setattr(student_assistant_module, "_generate_followup_prompts", fake_suggestions)
+    monkeypatch.setattr(student_assistant_module, "_generate_followup_metadata", fake_suggestions)
 
     events = asyncio.run(_collect_student_stream(payload))
 
     assert events[-1]["event"] == "final"
     assert events[-1]["response"]["suggested_prompts"] == ["这个现象如何判断？", "相关反应式是什么？"]
+    assert "conversation_title" not in events[-1]["response"]
 
 
 def test_student_assistant_stream_keeps_final_when_suggestion_generation_fails(monkeypatch) -> None:
@@ -100,6 +154,7 @@ def test_student_assistant_stream_keeps_final_when_suggestion_generation_fails(m
     monkeypatch.setattr(student_assistant_module, "effective_ai_settings", lambda _settings: settings)
     monkeypatch.setattr(student_assistant_module, "run_agent_stream", fake_stream)
     monkeypatch.setattr(student_assistant_module, "_generate_followup_prompts", failing_suggestions)
+    monkeypatch.setattr(student_assistant_module, "_generate_followup_metadata", failing_suggestions)
 
     events = asyncio.run(_collect_student_stream(payload))
 
@@ -141,14 +196,24 @@ def test_student_assistant_followup_sanitizer_filters_guardrails_and_allows_part
     assert result == ["这个现象如何判断？", "Ellingham 图怎么判读？", "Frost 图怎么分析？", "相关反应式是什么？"]
 
 
+def test_student_assistant_title_sanitizer_keeps_formulas_and_rejects_wrappers() -> None:
+    assert _sanitize_conversation_title(" CCl4 layer color ") == "CCl4 layer color"
+    assert _sanitize_conversation_title("KI starch blue") == "KI starch blue"
+    assert _sanitize_conversation_title("```json\n{\"conversation_title\":\"CCl4\"}\n```") == ""
+    assert _sanitize_conversation_title("{\"conversation_title\":\"CCl4 color\"}") == ""
+    assert _sanitize_conversation_title("\u8bf7\u89e3\u91ca CCl4 color") == ""
+    assert _sanitize_conversation_title("RAG chunk color") == ""
+
+
 def test_student_assistant_followup_prompt_locks_student_question_voice() -> None:
     prompt = student_assistant_module._FOLLOWUP_SYSTEM_PROMPT
 
     assert "sent verbatim as the student's next message" in prompt
     assert "written in the student's voice" in prompt
-    assert "Ellingham图怎么判读？" in prompt
-    assert "想了解...？" in prompt
-    assert "需要解析...？" in prompt
+    assert "conversation_title" in prompt
+    assert "request_conversation_title is true" in prompt
+    assert "request_conversation_title is false" in prompt
+    assert "KI, Cl2, and CCl4" in prompt
 
 
 def test_posttest_review_context_allows_submitted_answer_explanation() -> None:

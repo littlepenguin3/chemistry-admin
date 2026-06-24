@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from server.app.student_video_save_schemas import StudentVideoPersonalState
 from server.app.student_learning_schemas import StudentLearningPageResponse
 
 
@@ -265,6 +266,7 @@ class StudentPointDetailResponse(BaseModel):
     videos: list[StudentPointVideo] = Field(default_factory=list)
     has_video: bool = False
     no_video_reason: str | None = None
+    personal_state: StudentVideoPersonalState = Field(default_factory=StudentVideoPersonalState)
     related_points: list[StudentRelatedPoint] = Field(default_factory=list)
     assessment_context: StudentPointAssessmentContext
 

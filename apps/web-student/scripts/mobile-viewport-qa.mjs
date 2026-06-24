@@ -33,6 +33,7 @@ const mockUser = {
   student_id: "20249999",
   class_id: "mobile-qa-class",
   class_name: "移动端测试班",
+  preview_mode: true,
 };
 
 const mockPretest = {
@@ -58,11 +59,36 @@ const mockRootAiHistoryEntry = {
     { role: "user", content: "Explain a halogen displacement experiment." },
     {
       role: "assistant",
-      content: Array.from(
-        { length: 80 },
-        (_, index) =>
-          `Restored answer paragraph ${index + 1}: chlorine can oxidize bromide ions, so the observed color change must be explained with evidence.`,
-      ).join("\n\n"),
+      content: [
+        "### 卤素置换复盘",
+        "",
+        "观察 CCl4 层颜色时，可以把证据拆成表格、方程和步骤图一起看。",
+        "",
+        "| 试剂/步骤 | 有机层现象 | 判断 | 化学式 | 备注 |",
+        "|---|---|---|---|---|",
+        "| Cl2 + KBr | 橙红色加深 | 生成 Br2 | $\\ce{Cl2 + 2Br- -> 2Cl- + Br2}$ | CCl4 层便于观察溴单质颜色 |",
+        "| Br2 + KI | 紫红色出现 | 生成 I2 | $\\ce{Br2 + 2I- -> 2Br- + I2}$ | 紫红色说明碘单质进入有机层 |",
+        "",
+        "- [x] 先记录水层和 CCl4 层颜色",
+        "- [ ] 再用氧化性顺序解释现象",
+        "",
+        "反应可以写成 $\\ce{Cl2 + 2Br- -> 2Cl- + Br2}$，也可以用电子守恒检查：",
+        "",
+        "$$\\ce{Cl2 + 2KBr -> 2KCl + Br2}$$",
+        "",
+        "```mermaid",
+        "flowchart TD",
+        "  A[加入氯水] --> B{有机层是否变橙红}",
+        "  B -->|是| C[说明生成溴单质]",
+        "  C --> D[比较 Cl2 与 Br2 的氧化性]",
+        "```",
+        "",
+        ...Array.from(
+          { length: 24 },
+          (_, index) =>
+            `Restored answer paragraph ${index + 1}: chlorine can oxidize bromide ions, so the observed color change must be explained with evidence.`,
+        ),
+      ].join("\n"),
       metadata: {
         source_count: 1,
         sources: [{ title: "safe source" }],
@@ -895,11 +921,21 @@ async function expectRootNav(page, root, label) {
 }
 
 async function ensureAuthenticatedShell(page) {
-  const skipBarrierButton = page.locator(".success-panel button").first();
-  if (await skipBarrierButton.isVisible().catch(() => false)) {
-    await skipBarrierButton.click({ force: true });
+  const authState = await waitForAny(page, [".student-app-shell", ".success-panel"], 15000);
+  if (authState === ".success-panel") {
+    await page.locator(".success-panel button").first().click({ force: true });
   }
-  await page.locator(".student-app-shell").first().waitFor({ state: "visible", timeout: 15000 });
+  try {
+    await page.locator(".student-app-shell").first().waitFor({ state: "visible", timeout: 15000 });
+  } catch (error) {
+    const showError = page.getByText("Show Error");
+    if (await showError.isVisible().catch(() => false)) {
+      await showError.click();
+      await page.waitForTimeout(100);
+    }
+    const bodyText = await page.locator("body").innerText().catch(() => "");
+    throw new Error("authenticated shell did not appear after " + authState + ": " + bodyText.slice(0, 500), { cause: error });
+  }
 }
 
 function jsonResponse(payload, status = 200) {
@@ -1043,7 +1079,7 @@ async function installMockApi(page) {
 }
 
 async function loginIfConfigured(page) {
-  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.goto(baseUrl + (aiRootOnly ? "/ai" : ""), { waitUntil: "networkidle" });
   await assertNoHorizontalOverflow(page, "login");
   await page.locator(".auth-panel").first().waitFor({ state: "visible", timeout: 10000 });
 
@@ -1051,15 +1087,12 @@ async function loginIfConfigured(page) {
     await page.locator(".auth-form input").nth(0).fill(mockUser.student_id);
     await page.locator(".auth-form input").nth(1).fill("MobileQa2026!");
     await page.locator(".auth-form button[type='submit']").click();
-    const loginResult = await waitForAny(page, [".learning-panel", ".success-panel", ".form-error"], 15000);
+    const loginResult = await waitForAny(page, [".student-app-shell", ".learning-panel", ".success-panel", ".form-error"], 15000);
     if (loginResult === ".form-error") {
       const errorText = await page.locator(".form-error").first().innerText();
       throw new Error(`Mock login failed: ${errorText}`);
     }
-    if (loginResult === ".success-panel") {
-      await page.locator(".success-panel button").first().click({ force: true });
-    }
-    await page.locator(".learning-panel").first().waitFor({ state: "visible", timeout: 15000 });
+    await ensureAuthenticatedShell(page);
     return true;
   }
 
@@ -1226,11 +1259,27 @@ async function assertRootAiFlatReply(page, label) {
   await page.evaluate((entry) => {
     window.localStorage.setItem("student-ai-chat-history:v1", JSON.stringify([entry]));
   }, mockRootAiHistoryEntry);
-  await page.locator('.ai-chat-panel.root .ai-new-chat-action').first().click();
+  await page.goto(baseUrl + '/ai', { waitUntil: 'networkidle' });
+  await ensureAuthenticatedShell(page);
+  await page.locator('.ai-chat-panel.root').first().waitFor({ state: 'visible', timeout: 10000 });
   await page.locator('.ai-chat-panel.root .ai-root-welcome').first().waitFor({ state: 'visible', timeout: 10000 });
   await page.locator('.ai-chat-panel.root .ai-history-action').first().click();
   await page.locator('.ai-history-main', { hasText: 'Restored Atom conversation' }).first().click();
   await page.locator('.ai-chat-panel.root .ai-message.assistant.done').first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForFunction(
+    () => {
+      const answer = document.querySelector('.ai-chat-panel.root .ai-message.assistant.done');
+      return (
+        answer &&
+        answer.querySelectorAll('table').length >= 1 &&
+        answer.querySelectorAll('input[type="checkbox"]').length >= 2 &&
+        answer.querySelectorAll('.katex').length >= 1 &&
+        answer.querySelectorAll('[data-streamdown="mermaid-block"]').length >= 1
+      );
+    },
+    null,
+    { timeout: 15000 },
+  );
   await page.locator('.ai-chat-panel.root .ai-chat-stream').first().evaluate((stream) => {
     stream.scrollTop = 0;
   });
@@ -1250,6 +1299,11 @@ async function assertRootAiFlatReply(page, label) {
       assistantTextLength: panel.querySelector('.ai-message.assistant.done')?.textContent?.length || 0,
       assistantHeight: panel.querySelector('.ai-message.assistant.done')?.getBoundingClientRect().height || 0,
       messageCount: panel.querySelectorAll('.ai-message').length,
+      tableCount: panel.querySelectorAll('.ai-message.assistant.done table').length,
+      taskCount: panel.querySelectorAll('.ai-message.assistant.done input[type="checkbox"]').length,
+      katexCount: panel.querySelectorAll('.ai-message.assistant.done .katex').length,
+      mermaidCount: panel.querySelectorAll('.ai-message.assistant.done [data-streamdown="mermaid-block"]').length,
+      streamingRendererCount: panel.querySelectorAll('.ai-message.assistant.done .ai-markdown-streaming').length,
     };
   });
   if (
@@ -1264,7 +1318,165 @@ async function assertRootAiFlatReply(page, label) {
   ) {
     throw new Error(label + ': root AI restored history state is missing ' + JSON.stringify(restoredState));
   }
+  if (
+    restoredState.tableCount < 1 ||
+    restoredState.taskCount < 2 ||
+    restoredState.katexCount < 1 ||
+    restoredState.mermaidCount < 1 ||
+    restoredState.streamingRendererCount !== 0
+  ) {
+    throw new Error(label + ': restored rich Markdown did not render through the static mobile path ' + JSON.stringify(restoredState));
+  }
   await assertNoHorizontalOverflow(page, label + ': restored root AI');
+
+  const restoredArtifactButtonState = await page.locator('.ai-chat-panel.root .ai-message.assistant.done').first().evaluate((answer) => ({
+    tableBlocks: answer.querySelectorAll('.ai-md-table-block').length,
+    mermaidBlocks: answer.querySelectorAll('.ai-md-mermaid-block').length,
+    artifactButtons: Array.from(answer.querySelectorAll('.ai-md-artifact-open')).map((button) => button.getAttribute('aria-label') || button.textContent || ''),
+    text: (answer.textContent || '').slice(0, 240),
+  }));
+  if (
+    restoredArtifactButtonState.tableBlocks < 1 ||
+    restoredArtifactButtonState.mermaidBlocks < 1 ||
+    !restoredArtifactButtonState.artifactButtons.some((labelText) => labelText.includes('表格')) ||
+    !restoredArtifactButtonState.artifactButtons.some((labelText) => labelText.includes('流程图'))
+  ) {
+    throw new Error(label + ': restored AI rich artifacts are missing detail affordances ' + JSON.stringify(restoredArtifactButtonState));
+  }
+
+  await page.locator('.ai-md-table-block .ai-md-artifact-open').first().click();
+  await page.locator('.ai-artifact-table-viewer').first().waitFor({ state: 'visible', timeout: 10000 });
+  const tableDetailState = await page.locator('.ai-artifact-table-viewer').first().evaluate((viewer) => {
+    const workspace = viewer.querySelector('.ai-artifact-canvas-workspace');
+    const toolbar = viewer.querySelector('.ai-artifact-canvas-toolbar');
+    const canvas = viewer.querySelector('.ai-artifact-table-canvas');
+    const table = viewer.querySelector('.ai-artifact-table');
+    const row = viewer.querySelector('.ai-artifact-table tbody tr[role="button"]');
+    const controls = viewer.querySelectorAll('.ai-artifact-table-controls button');
+    const bottomNav = document.querySelector('.student-bottom-nav');
+    const doc = document.documentElement;
+    const viewerStyle = window.getComputedStyle(viewer);
+    const canvasStyle = canvas ? window.getComputedStyle(canvas) : null;
+    const toolbarStyle = toolbar ? window.getComputedStyle(toolbar) : null;
+    return {
+      workspaceWidth: workspace?.getBoundingClientRect().width || 0,
+      workspaceHeight: workspace?.getBoundingClientRect().height || 0,
+      canvasWidth: canvas?.getBoundingClientRect().width || 0,
+      canvasHeight: canvas?.getBoundingClientRect().height || 0,
+      tableWidth: table?.getBoundingClientRect().width || 0,
+      rowCount: viewer.querySelectorAll('.ai-artifact-table tbody tr').length,
+      hasRowButton: Boolean(row),
+      controlCount: controls.length,
+      hasBottomNav: Boolean(bottomNav),
+      documentOverflow: doc.scrollWidth - doc.clientWidth,
+      scrollbarWidth: canvas ? window.getComputedStyle(canvas).overflow : '',
+      gridBackground: viewerStyle.backgroundImage,
+      toolbarPosition: toolbarStyle?.position || '',
+      canvasBorderTopWidth: canvasStyle?.borderTopWidth || '',
+      canvasBackgroundColor: canvasStyle?.backgroundColor || '',
+    };
+  });
+  if (
+    tableDetailState.workspaceWidth <= 0 ||
+    tableDetailState.workspaceHeight <= 0 ||
+    tableDetailState.canvasWidth <= 0 ||
+    tableDetailState.canvasHeight <= 0 ||
+    tableDetailState.tableWidth <= tableDetailState.canvasWidth ||
+    tableDetailState.rowCount < 2 ||
+    !tableDetailState.hasRowButton ||
+    tableDetailState.controlCount < 4 ||
+    tableDetailState.hasBottomNav ||
+    tableDetailState.documentOverflow > 1 ||
+    tableDetailState.gridBackground === 'none' ||
+    tableDetailState.toolbarPosition !== 'absolute' ||
+    tableDetailState.canvasBorderTopWidth !== '0px' ||
+    tableDetailState.canvasBackgroundColor !== 'rgba(0, 0, 0, 0)'
+  ) {
+    throw new Error(label + ': AI table detail viewer is not mobile ready ' + JSON.stringify(tableDetailState));
+  }
+  await page.locator('.ai-artifact-table-controls button[aria-label="放大表格"]').first().click();
+  await page.locator('.ai-artifact-table-controls button[aria-label="缩小表格"]').first().click();
+  await page.locator('.ai-artifact-table-controls button[aria-label="重置表格视图"]').first().click();
+  await page.locator('.ai-artifact-table tbody tr[role="button"]').first().click();
+  await page.locator('.ai-artifact-row-reader').first().waitFor({ state: 'visible', timeout: 10000 });
+  const rowReaderState = await page.locator('.ai-artifact-row-reader').first().evaluate((reader) => {
+    const rect = reader.getBoundingClientRect();
+    const doc = document.documentElement;
+    return {
+      fieldCount: reader.querySelectorAll('.ai-artifact-row-field').length,
+      text: reader.textContent || '',
+      right: rect.right,
+      viewportWidth: window.innerWidth,
+      documentOverflow: doc.scrollWidth - doc.clientWidth,
+    };
+  });
+  if (
+    rowReaderState.fieldCount < 4 ||
+    !rowReaderState.text.includes('CCl4') ||
+    rowReaderState.right > rowReaderState.viewportWidth + 1 ||
+    rowReaderState.documentOverflow > 1
+  ) {
+    throw new Error(label + ': AI table row reader is not mobile ready ' + JSON.stringify(rowReaderState));
+  }
+  await page.locator('.ai-artifact-row-reader button[aria-label="关闭行详情"]').first().click();
+  await page.waitForFunction(() => !document.querySelector('.ai-artifact-row-reader'), null, { timeout: 10000 });
+  await assertNoHorizontalOverflow(page, label + ': AI table detail');
+  await page.goBack({ waitUntil: 'networkidle' });
+
+  await page.locator('.ai-md-mermaid-block .ai-md-artifact-open').first().click();
+  await page.locator('.ai-artifact-mermaid-viewer').first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForFunction(() => document.querySelector('.ai-artifact-mermaid-svg svg') || document.querySelector('.ai-artifact-mermaid-fallback'), null, {
+    timeout: 10000,
+  });
+  const mermaidDetailState = await page.locator('.ai-artifact-mermaid-viewer').first().evaluate((viewer) => {
+    const workspace = viewer.querySelector('.ai-artifact-canvas-workspace');
+    const toolbar = viewer.querySelector('.ai-artifact-canvas-toolbar');
+    const pan = viewer.querySelector('.ai-artifact-mermaid-pan');
+    const svg = viewer.querySelector('.ai-artifact-mermaid-svg svg');
+    const controls = viewer.querySelectorAll('.ai-artifact-zoom-controls button');
+    const bottomNav = document.querySelector('.student-bottom-nav');
+    const doc = document.documentElement;
+    const viewerStyle = window.getComputedStyle(viewer);
+    const toolbarStyle = toolbar ? window.getComputedStyle(toolbar) : null;
+    const panStyle = pan ? window.getComputedStyle(pan) : null;
+    return {
+      workspaceWidth: workspace?.getBoundingClientRect().width || 0,
+      workspaceHeight: workspace?.getBoundingClientRect().height || 0,
+      panWidth: pan?.getBoundingClientRect().width || 0,
+      panHeight: pan?.getBoundingClientRect().height || 0,
+      svgWidth: svg?.getBoundingClientRect().width || 0,
+      svgHeight: svg?.getBoundingClientRect().height || 0,
+      controlCount: controls.length,
+      hasBottomNav: Boolean(bottomNav),
+      documentOverflow: doc.scrollWidth - doc.clientWidth,
+      gridBackground: viewerStyle.backgroundImage,
+      toolbarPosition: toolbarStyle?.position || '',
+      panBorderTopWidth: panStyle?.borderTopWidth || '',
+      panBackgroundColor: panStyle?.backgroundColor || '',
+    };
+  });
+  if (
+    mermaidDetailState.workspaceWidth <= 0 ||
+    mermaidDetailState.workspaceHeight <= 0 ||
+    mermaidDetailState.panWidth <= 0 ||
+    mermaidDetailState.panHeight <= 0 ||
+    mermaidDetailState.svgWidth <= 0 ||
+    mermaidDetailState.svgHeight <= 0 ||
+    mermaidDetailState.controlCount < 4 ||
+    mermaidDetailState.hasBottomNav ||
+    mermaidDetailState.documentOverflow > 1 ||
+    mermaidDetailState.gridBackground === 'none' ||
+    mermaidDetailState.toolbarPosition !== 'absolute' ||
+    mermaidDetailState.panBorderTopWidth !== '0px' ||
+    mermaidDetailState.panBackgroundColor !== 'rgba(0, 0, 0, 0)'
+  ) {
+    throw new Error(label + ': AI Mermaid canvas detail viewer is not mobile ready ' + JSON.stringify(mermaidDetailState));
+  }
+  await page.locator('.ai-artifact-zoom-controls button[aria-label="放大流程图"]').first().click();
+  await page.locator('.ai-artifact-zoom-controls button[aria-label="缩小流程图"]').first().click();
+  await page.locator('.ai-artifact-zoom-controls button[aria-label="重置流程图视图"]').first().click();
+  await assertNoHorizontalOverflow(page, label + ': AI Mermaid detail');
+  await page.goBack({ waitUntil: 'networkidle' });
 }
 
 async function assertAtomContextPicker(page, label) {
@@ -1390,7 +1602,7 @@ async function assertAtomContextPicker(page, label) {
   ) {
     throw new Error(label + ': picker search mode geometry failed ' + JSON.stringify(searchMetrics));
   }
-  await page.locator('.atom-context-picker-close').first().click();
+  await page.mouse.click(12, 12);
   await sheet.waitFor({ state: 'hidden', timeout: 10000 });
   try {
     await page.waitForFunction(() => {
@@ -1467,17 +1679,18 @@ async function checkAssessmentFlows(page, viewportName) {
 
 async function checkAuthenticatedFlows(page, viewportName) {
   await assertNoHorizontalOverflow(page, viewportName + ': initial route');
-  await page.locator('.student-app-shell').first().waitFor({ state: 'visible', timeout: 10000 });
+  await ensureAuthenticatedShell(page);
   const obsoleteFloatingCount = await page.locator('.ai-chat-toggle, .feedback-toggle, .ai-chat-fab, .feedback-fab').count();
   if (obsoleteFloatingCount > 0) {
     throw new Error(viewportName + ': obsolete floating AI/feedback entries are still rendered');
   }
 
-  const roots = ['home', 'learn', 'ai', 'assessment', 'profile'];
+  const expectedNavRoots = ['home', 'learn', 'ai', 'assessment', 'profile'];
+  const roots = aiRootOnly ? ['ai'] : expectedNavRoots;
   const navRoots = await page.locator('.student-bottom-nav button').evaluateAll((buttons) =>
     buttons.map((button) => button.getAttribute('data-root')),
   );
-  if (JSON.stringify(navRoots) !== JSON.stringify(roots)) {
+  if (JSON.stringify(navRoots) !== JSON.stringify(expectedNavRoots)) {
     throw new Error(viewportName + ': expected five root nav entries, got ' + JSON.stringify(navRoots));
   }
 

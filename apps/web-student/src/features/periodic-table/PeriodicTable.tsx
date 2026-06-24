@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type CSSProperties } from "react";
-import { Search } from "lucide-react";
+import { Crosshair } from "lucide-react";
 import { periodicElements } from "../../periodic";
 import type { AreaId } from "./periodicHelpers";
 import { areaInk, areaSwatches, periodicAreaByAreaId, periodicAreaIdForElement, periodicAreaOrder, periodicGridColumnForElement, periodicGridRowForPeriod, periodicLegendLabelByAreaId, periodicPeriodLabels } from "./periodicHelpers";
@@ -49,12 +49,12 @@ export function PeriodicTable({
           <p>元素周期表</p>
           <h3>选择元素分区</h3>
         </div>
-        <label className="periodic-search" aria-label="搜索元素">
-          <Search size={15} />
+        <label className="periodic-search" aria-label="定位元素">
+          <Crosshair size={15} />
           <input
             value={searchQuery}
-            aria-label="搜索元素"
-            placeholder="搜索元素"
+            aria-label="定位元素"
+            placeholder="定位元素"
             onCompositionStart={() => {
               isComposingRef.current = true;
             }}

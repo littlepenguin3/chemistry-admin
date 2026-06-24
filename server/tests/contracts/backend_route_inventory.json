@@ -484,6 +484,12 @@
     },
     {
       "method": "GET",
+      "path": "/api/admin/media/upload-policy",
+      "name": "admin_media_upload_policy",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
       "path": "/api/admin/platform-settings",
       "name": "admin_get_platform_settings",
       "owner": "admin-api"

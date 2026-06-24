@@ -36,7 +36,8 @@ Each first-level root route SHALL own the browsing, center, account, or entry wo
 
 #### Scenario: Student opens learning root
 - **WHEN** the student opens the `learn` root
-- **THEN** the page MUST provide the periodic-table learning entry and a separate smart recommendation card
+- **THEN** the page MUST provide a page-level learning search entry, the periodic-table learning entry, and a separate smart recommendation card
+- **AND** activating the page-level learning search entry MUST open the shared search/detail route with `from=learn` and without chapter-specific route context
 - **AND** the periodic-table entry MUST remain a selector for learning areas rather than an inline chapter list
 - **AND** it MUST NOT render a selected-area chapter list, specific chapter, catalog directory, or point detail as root content unless that target is explicitly opened as a non-tab detail route.
 

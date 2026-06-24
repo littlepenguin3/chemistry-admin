@@ -72,6 +72,7 @@ export const mediaFileStateLabels: Record<string, { label: string; color: string
   missing: { label: "文件缺失", color: "#b42318" },
   pending: { label: "文件待生成", color: "#356f9c" },
   untracked: { label: "未跟踪文件", color: "default" },
+  policy_rejected: { label: "超过大小限制", color: "#b42318" },
 };
 
 export const processingPhaseLabels: Record<string, string> = {
@@ -110,6 +111,14 @@ export function mediaFileStateTag(asset: MediaAsset) {
 export function processingPhaseText(asset?: MediaAsset | null): string {
   const phase = asset?.processing_phase || asset?.processing_job?.phase || asset?.upload_status || "";
   return processingPhaseLabels[phase] || phase || "-";
+}
+
+export function mediaErrorReasonText(reason?: string | null): string {
+  if (reason === "file_too_large") return "超过原始视频大小限制";
+  if (reason === "unsupported_file_extension") return "不支持的文件扩展名";
+  if (reason === "unsupported_mime_type") return "不支持的文件类型";
+  if (reason === "empty_file") return "文件为空";
+  return reason || "处理失败";
 }
 
 export function processingProgressValue(asset?: MediaAsset | null): number {

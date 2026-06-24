@@ -66,14 +66,21 @@
 .student-preview-frame-scale {
   position: relative;
   z-index: 1;
-  transform: scale(var(--student-preview-zoom));
-  transform-origin: top center;
+  zoom: var(--student-preview-zoom);
+}
+
+.student-preview-frame-rotate {
+  position: relative;
+  transform-origin: top left;
 }
 
 .student-preview-stage.landscape .student-preview-frame-scale {
-  transform: scale(var(--student-preview-zoom)) rotate(90deg) translateY(-100%);
-  transform-origin: top left;
   margin-left: min(42vw, 520px);
+}
+
+.student-preview-stage.landscape .student-preview-frame-rotate {
+  transform: rotate(90deg) translateY(-100%);
+  transform-origin: top left;
 }
 
 .device-preview-android-shell {

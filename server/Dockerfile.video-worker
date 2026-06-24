@@ -1,11 +1,13 @@
-FROM python:3.12-slim AS ffmpeg
+FROM python:3.12-slim@sha256:090ba77e2958f6af52a5341f788b50b032dd4ca28377d2893dcf1ecbdfdfe203 AS ffmpeg
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-ARG FFMPEG_URL=https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+ARG FFMPEG_URL=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-20-13-30/ffmpeg-N-125136-gb57ff00bcf-linux64-gpl.tar.xz
+ARG FFMPEG_SHA256=e73c0658d2b778e92d5367d3b47368c86f1589ae93764ea74cdca9e213fbba59
 
 RUN python - <<'PY'
+import hashlib
 import os
 import shutil
 import stat
@@ -15,7 +17,8 @@ import time
 import urllib.request
 from pathlib import Path
 
-url = os.environ.get("FFMPEG_URL") or "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
+url = os.environ.get("FFMPEG_URL") or "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-20-13-30/ffmpeg-N-125136-gb57ff00bcf-linux64-gpl.tar.xz"
+expected_sha256 = (os.environ.get("FFMPEG_SHA256") or "").removeprefix("sha256:").strip()
 archive = Path(tempfile.gettempdir()) / "ffmpeg.tar.xz"
 extract_dir = Path(tempfile.gettempdir()) / "ffmpeg"
 extract_dir.mkdir(parents=True, exist_ok=True)
@@ -36,6 +39,13 @@ for attempt in range(1, 6):
 if last_error is not None:
     raise last_error
 
+if expected_sha256:
+    actual_sha256 = hashlib.sha256(archive.read_bytes()).hexdigest()
+    if actual_sha256 != expected_sha256:
+        raise RuntimeError(
+            f"FFmpeg archive sha256 mismatch: expected {expected_sha256}, got {actual_sha256}"
+        )
+
 with tarfile.open(archive, "r:xz") as tar:
     tar.extractall(extract_dir, filter="data")
 
@@ -48,7 +58,7 @@ for binary in ("ffmpeg", "ffprobe"):
     target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 PY
 
-FROM python:3.12-slim AS worker-wheels
+FROM python:3.12-slim@sha256:090ba77e2958f6af52a5341f788b50b032dd4ca28377d2893dcf1ecbdfdfe203 AS worker-wheels
 
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
@@ -81,7 +91,7 @@ RUN pip wheel --no-cache-dir \
       --wheel-dir /wheels \
       -r requirements-worker.txt
 
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:090ba77e2958f6af52a5341f788b50b032dd4ca28377d2893dcf1ecbdfdfe203
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1

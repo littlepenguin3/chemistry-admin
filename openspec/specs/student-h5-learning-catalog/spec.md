@@ -195,6 +195,13 @@ The student H5 periodic-table entry SHALL distinguish area selection, separate r
 - **AND** area legend buttons and element cells MUST NOT render a default selected, muted, learnable, or focused visual state
 - **AND** tapping an area legend button or element cell MUST navigate to the corresponding area route.
 
+#### Scenario: Periodic table uses element location rather than catalog search
+- **WHEN** the learning root periodic-table entry renders its quick element input
+- **THEN** the input MUST be labeled and placeholdered as `定位元素` or an equivalent element-location action
+- **AND** it MUST use locator-style iconography rather than the primary search iconography used by catalog search
+- **AND** it MUST only locate element symbols, Chinese names, or aliases and hand off to the matching learning profile when one exists
+- **AND** it MUST NOT be presented as the global catalog, experiment, reagent, or point search entry.
+
 #### Scenario: Hydrogen is its own student learning area
 - **WHEN** the student uses the periodic-table entry
 - **THEN** the hydrogen cell MUST map to a dedicated `氢元素` learning area route
@@ -290,7 +297,9 @@ The student H5 learning root SHALL present the periodic table as the primary cha
 
 #### Scenario: Student opens learning root
 - **WHEN** a student opens the `学习` root
-- **THEN** the upper learning area MUST render a periodic-table selection card focused on area and element selection
+- **THEN** the upper learning area MUST render a page-level learning search entry and a periodic-table selection card focused on area and element selection
+- **AND** the page-level learning search entry MUST sit outside the periodic-table card and search catalog directories, experiment phenomena, reagents, and points across the learning catalog
+- **AND** activating the page-level learning search entry MUST open the unified search page with learning-root source context and without injecting a profile, chapter, or element context
 - **AND** the lower learning area MUST render a smart recommendation or continue-learning card when a recommended profile exists
 - **AND** the lower card MUST provide a clear action to enter the recommended chapter or area.
 - **AND** the periodic-table selector MUST NOT default to a selected area, selected element, or recommendation-derived focus state.

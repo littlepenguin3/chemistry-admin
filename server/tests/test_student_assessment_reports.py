@@ -27,6 +27,11 @@ REPORT_ID = "00000000-0000-0000-0000-000000000201"
 COMPLETED_AT = datetime(2026, 6, 25, 10, 0, tzinfo=timezone.utc)
 
 
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
+
 class _FakeResult:
     def __init__(self, *, first: dict[str, Any] | None = None, rows: list[dict[str, Any]] | None = None) -> None:
         self._first = first

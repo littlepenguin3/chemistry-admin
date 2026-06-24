@@ -158,26 +158,28 @@ export function StudentDevicePreviewPage() {
               </div>
             ) : null}
             <div className="student-preview-frame-scale">
-              <DeviceFrame preset={preset} hideHardwareButtons>
-                <div className="student-preview-screen-bridge">
-                <iframe
-                  key={iframeKey}
-                  ref={iframeRef}
-                  className="student-preview-iframe"
-                  title="学生端手机预览"
-                  src={iframeSrc}
-                  sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-downloads"
-                  referrerPolicy="no-referrer"
-                  onLoad={() => setIframeLoading(false)}
-                />
-                  <PreviewGestureSurface
-                    enabled={Boolean(iframeSrc && previewOrigin && !iframeLoading)}
-                    iframeRef={iframeRef}
-                    frameId={frameId}
-                    targetOrigin={previewOrigin}
-                  />
-                </div>
-              </DeviceFrame>
+              <div className="student-preview-frame-rotate">
+                <DeviceFrame preset={preset} hideHardwareButtons>
+                  <div className="student-preview-screen-bridge">
+                    <iframe
+                      key={iframeKey}
+                      ref={iframeRef}
+                      className="student-preview-iframe"
+                      title="学生端手机预览"
+                      src={iframeSrc}
+                      sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-downloads"
+                      referrerPolicy="no-referrer"
+                      onLoad={() => setIframeLoading(false)}
+                    />
+                    <PreviewGestureSurface
+                      enabled={Boolean(iframeSrc && previewOrigin && !iframeLoading)}
+                      iframeRef={iframeRef}
+                      frameId={frameId}
+                      targetOrigin={previewOrigin}
+                    />
+                  </div>
+                </DeviceFrame>
+              </div>
             </div>
           </>
         ) : (

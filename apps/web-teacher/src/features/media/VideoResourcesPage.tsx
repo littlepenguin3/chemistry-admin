@@ -40,7 +40,7 @@ import type Uppy from "@uppy/core";
 
 import type { ApiList } from "../../api/common";
 import type { MediaAsset, MediaDuplicatePrecheck } from "../../api/media";
-import { archiveMediaAsset, getMediaAssetArchivePlan } from "../../api/media";
+import { archiveMediaAsset, getMediaAssetArchivePlan, getMediaUploadPolicy } from "../../api/media";
 import { getAuthToken } from "../../api/auth";
 import { api, apiBase, patchJson, postJson } from "../../api/http";
 import { AuthenticatedImage } from "../../components/AuthenticatedImage";
@@ -58,6 +58,7 @@ import {
   formatResolution,
   hasPendingDuplicate,
   mediaFileStateTag,
+  mediaErrorReasonText,
   mediaStatusLabels,
   mediaStatusTag,
   pendingDuplicateCandidates,
@@ -96,6 +97,10 @@ export function VideoResourcesPage() {
   const assets = useQuery({
     queryKey: ["media-assets"],
     queryFn: () => api<ApiList<MediaAsset>>("/api/admin/media/assets?limit=200"),
+  });
+  const uploadPolicy = useQuery({
+    queryKey: ["media-upload-policy"],
+    queryFn: getMediaUploadPolicy,
   });
   const tusEndpoint = String(import.meta.env.VITE_TUS_ENDPOINT || "").trim().replace(/\/+$/, "");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -139,6 +144,13 @@ export function VideoResourcesPage() {
   );
   const savedBytes = Math.max(0, sourceBytes - renditionBytes);
   const savedPercent = sourceBytes > 0 && renditionBytes > 0 ? Math.round((savedBytes / sourceBytes) * 100) : 0;
+  const maxUploadBytes = Number(uploadPolicy.data?.max_media_upload_bytes || 0);
+  const uploadPolicyReady = maxUploadBytes > 0 && !uploadPolicy.isError;
+  const uploadPolicyText = uploadPolicy.isLoading ? "加载中" : uploadPolicyReady ? formatBytes(maxUploadBytes) : "-";
+  const uploadPolicyErrorText = uploadPolicy.isError ? "无法读取原始视频大小限制，请刷新页面或检查后台服务。" : "";
+  const allowedUploadExtensions = uploadPolicy.data?.allowed_extensions?.length ? uploadPolicy.data.allowed_extensions : [".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"];
+  const uploadAccept = `video/*,${allowedUploadExtensions.join(",")}`;
+  const uploadFormatsText = allowedUploadExtensions.map((extension) => extension.replace(/^\./, "")).join("、");
   const currentUploadItem = useMemo(
     () => uploadItems.find((item) => item.id === currentUploadId) || null,
     [currentUploadId, uploadItems],
@@ -290,10 +302,16 @@ export function VideoResourcesPage() {
       message.warning("队列正在上传，请先暂停或取消当前队列");
       return;
     }
+    if (!uploadPolicyReady) {
+      message.error(uploadPolicyErrorText || "正在读取原始视频大小限制，请稍后再选择文件");
+      return;
+    }
     hashRunRef.current += 1;
     disposeUploadClient();
     const videoFiles = files.filter((file) => file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|avi|mkv)$/i.test(file.name));
-    const nextItems = videoFiles.map((file) => makeUploadQueueItem(file, (file as File & { uid?: string }).uid));
+    const oversizedFiles = videoFiles.filter((file) => file.size > maxUploadBytes);
+    const acceptedFiles = videoFiles.filter((file) => file.size <= maxUploadBytes);
+    const nextItems = acceptedFiles.map((file) => makeUploadQueueItem(file, (file as File & { uid?: string }).uid));
     uploadItemsRef.current = nextItems;
     currentUploadIdRef.current = undefined;
     setUploadItems(nextItems);
@@ -303,10 +321,20 @@ export function VideoResourcesPage() {
       ...emptyUploadState,
       stage: nextItems.length ? "pending" : "idle",
       totalBytes: nextItems.reduce((sum, item) => sum + item.totalBytes, 0),
-      note: nextItems.length > 1 ? `已选择 ${nextItems.length} 个视频，将按顺序逐个上传。` : undefined,
+      note: oversizedFiles.length
+        ? `已跳过 ${oversizedFiles.length} 个超过 ${formatBytes(maxUploadBytes)} 的视频。`
+        : nextItems.length > 1
+          ? `已选择 ${nextItems.length} 个视频，将按顺序逐个上传。`
+          : undefined,
     });
     if (files.length && !videoFiles.length) {
       message.warning("请选择视频文件");
+    }
+    if (oversizedFiles.length === 1) {
+      const file = oversizedFiles[0];
+      message.error(`${file.name} 为 ${formatBytes(file.size)}，超过原始视频大小限制 ${formatBytes(maxUploadBytes)}，未加入上传队列。`);
+    } else if (oversizedFiles.length > 1) {
+      message.error(`${oversizedFiles.length} 个视频超过原始视频大小限制 ${formatBytes(maxUploadBytes)}，已跳过。`);
     }
   };
 
@@ -500,6 +528,10 @@ export function VideoResourcesPage() {
   };
 
   const startUpload = async () => {
+    if (!uploadPolicyReady) {
+      message.error(uploadPolicyErrorText || "正在读取原始视频大小限制，请稍后再开始上传");
+      return;
+    }
     if (!uploadItems.length) {
       message.warning("请先选择视频文件");
       return;
@@ -655,7 +687,7 @@ export function VideoResourcesPage() {
   };
 
   const uploadBusy = batchRunning || ["hashing", "uploading", "paused", "finalizing"].includes(uploadState.stage);
-  const canStartUpload = uploadItems.length > 0 && !batchRunning && uploadItems.some((item) => ["pending", "ready", "error"].includes(item.status)) && (uploadItems.length > 1 || Boolean(uploadItems[0].title.trim()));
+  const canStartUpload = uploadPolicyReady && uploadItems.length > 0 && !batchRunning && uploadItems.some((item) => ["pending", "ready", "error"].includes(item.status)) && (uploadItems.length > 1 || Boolean(uploadItems[0].title.trim()));
   const canPause = Boolean(tusEndpoint && uppyRef.current && uppyFileIdRef.current && ["uploading", "paused"].includes(uploadState.stage));
   const canCancel = batchRunning || ["uploading", "paused", "finalizing", "hashing"].includes(uploadState.stage);
   const uploadFinished = uploadState.stage === "complete";
@@ -696,17 +728,19 @@ export function VideoResourcesPage() {
   );
 
   const renderProcessingLine = (asset: MediaAsset) => {
+    if (asset.file_state === "policy_rejected" || asset.error_reason === "file_too_large") return <Text type="danger">{mediaErrorReasonText("file_too_large")}</Text>;
     if (asset.file_state === "missing") return <Text type="danger">本地媒体文件缺失</Text>;
     if (asset.file_state === "partial") return <Text type="warning">部分媒体文件缺失</Text>;
     if (asset.upload_status === "ready") return <Text type="secondary">{formatDurationSeconds(asset.duration_seconds)} · {formatResolution(asset)}</Text>;
-    if (asset.upload_status === "failed") return <Text type="danger">{asset.error_reason || asset.processing_job?.error_reason || "处理失败"}</Text>;
+    if (asset.upload_status === "failed") return <Text type="danger">{mediaErrorReasonText(asset.error_reason || asset.processing_job?.error_reason)}</Text>;
     return <Progress percent={processingProgressValue(asset)} size="small" status="active" format={() => processingPhaseText(asset)} />;
   };
 
   const renderPreviewButton = (asset: MediaAsset) => {
     const missingPrimaryFile = asset.primary_file_available === false;
+    const policyRejected = asset.file_state === "policy_rejected" || asset.error_reason === "file_too_large";
     return (
-      <Tooltip title={missingPrimaryFile ? "本地媒体文件缺失，无法预览" : ""}>
+      <Tooltip title={policyRejected ? "原始视频超过大小限制，未生成可预览文件" : missingPrimaryFile ? "本地媒体文件缺失，无法预览" : ""}>
         <Button size="small" icon={<EyeOutlined />} disabled={!isPreviewableVideo(asset)} onClick={() => setPreviewAsset(asset)}>预览</Button>
       </Tooltip>
     );
@@ -714,7 +748,7 @@ export function VideoResourcesPage() {
 
   const renderAssetActions = (asset: MediaAsset) => (
     <Space size={6}>
-      {asset.upload_status === "failed" ? (
+      {asset.upload_status === "failed" && asset.error_reason !== "file_too_large" ? (
         <Button size="small" icon={<ReloadOutlined />} loading={retryProcessing.isPending} onClick={() => retryProcessing.mutate(asset.id)}>重试</Button>
       ) : null}
       {renderPreviewButton(asset)}
@@ -816,8 +850,8 @@ export function VideoResourcesPage() {
         <Card><Statistic title="待确认重复" value={pendingDuplicateAssets.length} /></Card>
         <Card><Statistic title="处理失败" value={failedAssets.length} /></Card>
         <Card><Statistic title="原始空间" value={formatBytes(sourceBytes)} /></Card>
-        <Card><Statistic title="学生播放源空间" value={formatBytes(renditionBytes)} /></Card>
-        <Card><Statistic title="已节省空间" value={savedBytes ? formatBytes(savedBytes) : "-"} suffix={savedPercent ? " / " + savedPercent + "%" : undefined} /></Card>
+        <Card><Statistic title="学生播放源空间" value={formatBytes(renditionBytes)} suffix={savedPercent ? " / 节省" + savedPercent + "%" : undefined} /></Card>
+        <Card><Statistic title="原始视频大小限制" value={uploadPolicyText} /></Card>
       </div>
 
       <div className="video-drive-panel">
@@ -870,6 +904,8 @@ export function VideoResourcesPage() {
           {!uploadFinished ? (
             <>
               {!tusEndpoint ? <Alert type="warning" showIcon title="当前使用小文件回退上传" description="配置 VITE_TUS_ENDPOINT 后可启用断点续传。" /> : null}
+              {uploadPolicy.isLoading ? <Alert type="info" showIcon title="正在读取上传限制" description="上传策略加载完成后才能选择视频。" /> : null}
+              {uploadPolicy.isError ? <Alert type="error" showIcon title="无法读取上传限制" description={uploadPolicyErrorText} /> : null}
               <Input
                 placeholder={uploadItems.length > 1 ? "多个视频将默认使用各自文件名作为标题" : "视频标题"}
                 value={uploadItems.length > 1 ? "" : uploadTitle}
@@ -913,15 +949,15 @@ export function VideoResourcesPage() {
                   })}
                 </div>
                 <div className="video-upload-guide-notes">
-                  <span>同一浏览器重新选择同一文件，会尽量从已上传位置继续</span>
+                  <span>原始视频大小限制：{uploadPolicyText}</span>
                   <span>多个视频会按队列串行上传，完成后进入后台处理</span>
                 </div>
               </div>
               <Upload.Dragger
-                accept="video/*,.mp4,.mov,.m4v,.webm,.avi,.mkv"
+                accept={uploadAccept}
                 multiple
                 showUploadList={false}
-                disabled={batchRunning}
+                disabled={batchRunning || !uploadPolicyReady}
                 beforeUpload={(file, fileList) => {
                   const maybeFile = file as File & { uid?: string };
                   const lastFile = fileList[fileList.length - 1] as File & { uid?: string };
@@ -931,7 +967,7 @@ export function VideoResourcesPage() {
               >
                 <p className="ant-upload-drag-icon"><CloudUploadOutlined /></p>
                 <p className="ant-upload-text">拖拽一个或多个视频到这里，或点击选择文件</p>
-                <p className="ant-upload-hint">支持 mp4、mov、m4v、webm、avi、mkv；多个文件会串行上传，上传完成后自动进入后台处理。</p>
+                <p className="ant-upload-hint">支持 {uploadFormatsText}；超过 {uploadPolicyText} 会先拒绝，不会开始上传。</p>
               </Upload.Dragger>
             </>
           ) : (

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { Atom, Clock3, Trash2, X } from "lucide-react";
+import { Atom, Clock3, Trash2 } from "lucide-react";
 import { useStudentRuntime } from "../../app/shell/studentAppContext";
 import { defaultAssistantContext } from "../../features/assistant/assistantContext";
 import {
   clearStudentAiHistory,
+  clearActiveStudentAiHistoryId,
   deleteStudentAiHistory,
   listStudentAiHistory,
+  readActiveStudentAiHistoryId,
   readStudentAiHistory,
   type StudentAiHistoryEntry,
 } from "../../features/assistant/assistantHistoryStore";
@@ -50,9 +52,12 @@ function AiHistoryPanel({
             <p>近期对话</p>
             <h2>Atom 历史记录</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="关闭 Atom 历史记录">
-            <X size={18} />
-          </button>
+          <div className="ai-history-actions">
+            <button type="button" className="ai-history-clear-all" onClick={onClear} aria-label="清除全部 Atom 历史记录">
+              <span>清除全部</span>
+              <Trash2 size={17} />
+            </button>
+          </div>
         </header>
 
         {entries.length ? (
@@ -74,9 +79,6 @@ function AiHistoryPanel({
                 </article>
               ))}
             </div>
-            <button type="button" className="ai-history-clear" onClick={onClear}>
-              清空历史记录
-            </button>
           </>
         ) : (
           <div className="ai-history-empty">
@@ -95,7 +97,10 @@ export function AiRootPage() {
   const context = defaultAssistantContext();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyEntries, setHistoryEntries] = useState<StudentAiHistoryEntry[]>([]);
-  const [selectedHistory, setSelectedHistory] = useState<StudentAiHistoryEntry | null>(null);
+  const [selectedHistory, setSelectedHistory] = useState<StudentAiHistoryEntry | null>(() => {
+    const activeHistoryId = readActiveStudentAiHistoryId();
+    return activeHistoryId ? readStudentAiHistory(activeHistoryId) : null;
+  });
 
   const refreshHistory = useCallback(() => {
     setHistoryEntries(listStudentAiHistory());
@@ -117,7 +122,10 @@ export function AiRootPage() {
 
   const deleteHistory = (id: string) => {
     deleteStudentAiHistory(id);
-    if (selectedHistory?.id === id) setSelectedHistory(null);
+    if (selectedHistory?.id === id) {
+      setSelectedHistory(null);
+      clearActiveStudentAiHistoryId();
+    }
     refreshHistory();
   };
 
@@ -133,7 +141,10 @@ export function AiRootPage() {
         <>
           <StudentAiChatTab
             context={context}
-            onResetContext={() => setSelectedHistory(null)}
+            onResetContext={() => {
+              setSelectedHistory(null);
+              clearActiveStudentAiHistoryId();
+            }}
             variant="root"
             historyEntry={selectedHistory}
             onOpenHistory={openHistory}

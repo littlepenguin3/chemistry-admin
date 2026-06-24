@@ -70,4 +70,17 @@ describe("student device preview contracts", () => {
     expect(previewCssSource).not.toContain("transition:\n    opacity 80ms ease,\n    transform");
   });
 
+  it("keeps iframe preview zoom out of transform scaling", async () => {
+    // @ts-expect-error The frontend tsconfig intentionally omits Node types, but Vitest runs this contract in Node.
+    const { readFileSync } = await import("node:fs");
+    const cwd = (globalThis as unknown as { process: { cwd: () => string } }).process.cwd();
+    const previewCssSource = readFileSync(`${cwd}/src/features/student-preview/studentPreview.css`, "utf8");
+
+    expect(pageSource).toContain("student-preview-frame-rotate");
+    expect(previewCssSource).toContain("zoom: var(--student-preview-zoom);");
+    expect(previewCssSource).toContain(".student-preview-stage.landscape .student-preview-frame-rotate");
+    expect(previewCssSource).toContain("transform: rotate(90deg) translateY(-100%);");
+    expect(previewCssSource).not.toContain("scale(var(--student-preview-zoom))");
+  });
+
 });

@@ -17,7 +17,9 @@ from server.app.domains.catalog_tree.common import (
 from server.app.domains.catalog_tree.media_bindings import student_videos
 from server.app.domains.catalog_tree.related_links import related_links
 from server.app.domains.errors import DomainHTTPException as HTTPException, domain_status as status
+from server.app.domains.student_video_saves import personal_state_for_item
 from server.app.infrastructure.database import db_session
+from server.app.student_video_save_schemas import StudentVideoPersonalState
 
 
 STUDENT_VALIDATION = {"ok": True, "errors": [], "warnings": []}
@@ -78,7 +80,7 @@ def student_catalog_node(*, node_id: str) -> dict[str, Any]:
         return {"node": _student_card(node), "breadcrumbs": breadcrumbs(session, node_id), "children": _published_children(session, parent_id=node_id)}
 
 
-def student_point_detail(*, node_id: str) -> dict[str, Any]:
+def student_point_detail(*, node_id: str, user: Any | None = None) -> dict[str, Any]:
     with db_session() as session:
         node = get_node(session, node_id, include_archived=False)
         if node["status"] != "published" or not published_path_available(session, node_id):
@@ -91,6 +93,11 @@ def student_point_detail(*, node_id: str) -> dict[str, Any]:
         published_content = content if content and content.get("content_status") == "published" else None
         path = breadcrumbs(session, node["node_id"])
         videos = student_videos(session, node["node_id"])
+        personal_state = (
+            personal_state_for_item(session, user, placement_node_id=node["node_id"], media_id=str(videos[0]["media_id"]))
+            if user and videos
+            else StudentVideoPersonalState()
+        )
         related = related_links(session, node["node_id"], include_hidden=False, include_defaults=True)
         return {
             "node_id": node["node_id"],
@@ -111,6 +118,7 @@ def student_point_detail(*, node_id: str) -> dict[str, Any]:
             "videos": videos,
             "has_video": bool(videos),
             "no_video_reason": None if videos else "No published video is bound to this point yet.",
+            "personal_state": personal_state,
             "related_points": [
                 {
                     "node_id": link["target_node_id"],

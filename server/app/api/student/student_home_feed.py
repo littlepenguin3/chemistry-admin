@@ -16,7 +16,8 @@ StudentUser = Annotated[AuthUser, Depends(require_roles("student"))]
 @router.get("/home-video-feed", response_model=StudentHomeVideoFeedResponse)
 def student_home_video_feed_route(
     user: StudentUser,
+    topic: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=30)] = 12,
+    cursor: Annotated[str | None, Query()] = None,
 ) -> StudentHomeVideoFeedResponse:
-    return student_home_video_feed(user, limit=limit)
-
+    return student_home_video_feed(user, topic=topic, limit=limit, cursor=cursor)

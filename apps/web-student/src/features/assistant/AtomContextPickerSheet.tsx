@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Atom, ChevronLeft, ChevronRight, FolderOpen, LoaderCircle, Search, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Atom, ChevronRight, FolderOpen, LoaderCircle, Search, X } from "lucide-react";
 
 import type {
   StudentCatalogBreadcrumb,
@@ -22,7 +22,6 @@ import { formatChapterEntryTitle } from "../learning/learningFormat";
 import {
   assistantContextFromCatalogNode,
   assistantContextFromVideoLibraryResult,
-  assistantContextPathLabel,
   isBindableVideoLibraryResult,
   type AssistantContext,
 } from "./assistantContext";
@@ -35,13 +34,32 @@ function contextIdentity(context: AssistantContext | null | undefined): string {
   return [context.point_node_id, context.source_node_id, context.chapter_id, context.context_title].filter(Boolean).join("::");
 }
 
+function catalogNodeMatchesContext(node: StudentCatalogNodeCard, context: AssistantContext | null | undefined): boolean {
+  if (!context) return false;
+  const selectedIds = [context.point_node_id, context.source_node_id].filter((id): id is string => Boolean(id));
+  if (selectedIds.length) {
+    return [node.node_id, node.placement_node_id, node.canonical_point_id].some((id) => Boolean(id && selectedIds.includes(id)));
+  }
+  const nodeTitle = node.canonical_point_title || node.title;
+  return Boolean(nodeTitle && context.context_title && nodeTitle === context.context_title && (!context.chapter_id || node.chapter_id === context.chapter_id));
+}
+
 function profileTitle(profile: StudentLearningProfileSummary): string {
   return formatChapterEntryTitle(profile) || profile.title || profile.subtitle || profile.chapter_id;
 }
 
-function compactResultPath(item: StudentVideoLibraryResultItem): string {
+function compactResultPath(item: StudentVideoLibraryResultItem, profiles: StudentLearningProfileSummary[] = []): string {
+  const target = item.target;
   const path = item.target?.catalog_path?.map((part) => part.trim()).filter(Boolean) || [];
-  if (path.length) return path.join(" / ");
+  const profile = profiles.find((entry) => entry.profile_id === target?.profile_id || entry.chapter_id === target?.chapter_id);
+  const chapterTitle = profile ? profileTitle(profile) : target?.chapter_id || "";
+  const fullPath: string[] = [];
+  for (const part of [chapterTitle, ...path]) {
+    const text = part.trim();
+    if (!text || fullPath[fullPath.length - 1] === text) continue;
+    fullPath.push(text);
+  }
+  if (fullPath.length) return fullPath.join(" / ");
   return item.subtitle;
 }
 
@@ -63,6 +81,46 @@ function pointResultItems(response: StudentVideoLibrarySearchResponse | null): S
 
 function PickerState({ children }: { children: ReactNode }) {
   return <div className="atom-context-picker-state">{children}</div>;
+}
+
+function ScrollingLine({ text, className = "" }: { text: string; className?: string }) {
+  const frameRef = useRef<HTMLSpanElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useEffect(() => {
+    const measure = () => {
+      const frame = frameRef.current;
+      const textNode = textRef.current;
+      setOverflowing(Boolean(frame && textNode && textNode.scrollWidth > frame.clientWidth + 2));
+    };
+
+    measure();
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    if (frameRef.current) resizeObserver?.observe(frameRef.current);
+    if (textRef.current) resizeObserver?.observe(textRef.current);
+    window.addEventListener("resize", measure);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [text]);
+
+  return (
+    <span ref={frameRef} className={`atom-context-picker-marquee ${className}${overflowing ? " is-overflowing" : ""}`} title={text}>
+      <span className="atom-context-picker-marquee-track">
+        <span ref={textRef} className="atom-context-picker-marquee-text">
+          {text}
+        </span>
+        {overflowing ? (
+          <span className="atom-context-picker-marquee-text" aria-hidden="true">
+            {text}
+          </span>
+        ) : null}
+      </span>
+    </span>
+  );
 }
 
 export function AtomContextPickerSheet({
@@ -94,8 +152,12 @@ export function AtomContextPickerSheet({
   const [searchRequestVersion, setSearchRequestVersion] = useState(0);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const selectedProfileAutoFocusRef = useRef("");
+  const selectedDirectoryAutoFocusRef = useRef("");
 
   const trimmedQuery = query.trim();
+  const showSearchMode = Boolean(trimmedQuery);
   const selectedIdentity = contextIdentity(selectedContext);
   const activeRootTitle = activeProfile ? profileTitle(activeProfile) : chapterCatalog?.chapter_title || "";
   const activeBreadcrumbs = activeDirectoryId ? directoryDetail?.breadcrumbs || [] : [];
@@ -122,6 +184,8 @@ export function AtomContextPickerSheet({
 
   const clearShellPickerState = useCallback(() => {
     document.querySelector(".student-app-shell.context-picker-active")?.classList.remove("context-picker-active");
+    document.documentElement.classList.remove("atom-context-picker-active");
+    document.body.classList.remove("atom-context-picker-active");
   }, []);
 
   const closePicker = useCallback(() => {
@@ -129,6 +193,34 @@ export function AtomContextPickerSheet({
     clearShellPickerState();
     onClose();
   }, [blurPickerFocus, clearShellPickerState, onClose]);
+
+  const clearSearch = useCallback(() => {
+    setQuery("");
+    setDebouncedQuery("");
+    setSearchResponse(null);
+    setSearchError("");
+    setSearchLoading(false);
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  }, []);
+
+  const findSelectedParentDirectory = useCallback(
+    async (nodes: StudentCatalogNodeCard[], parentDirectoryId: string, visitedDirectoryIds: Set<string>): Promise<string | null> => {
+      if (nodes.some((node) => node.node_kind === "point" && catalogNodeMatchesContext(node, selectedContext))) {
+        return parentDirectoryId;
+      }
+
+      for (const node of nodes) {
+        if (node.node_kind !== "directory" || visitedDirectoryIds.has(node.node_id)) continue;
+        visitedDirectoryIds.add(node.node_id);
+        const detail = await getStudentCatalogNode(node.node_id);
+        const foundDirectoryId = await findSelectedParentDirectory(detail.children, node.node_id, visitedDirectoryIds);
+        if (foundDirectoryId !== null) return foundDirectoryId;
+      }
+
+      return null;
+    },
+    [selectedContext],
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(trimmedQuery), PICKER_SEARCH_DEBOUNCE_MS);
@@ -153,6 +245,18 @@ export function AtomContextPickerSheet({
       cancelled = true;
     };
   }, [learningRequestVersion]);
+
+  useEffect(() => {
+    if (!selectedContext || !selectedIdentity || selectedProfileAutoFocusRef.current === selectedIdentity || activeProfile || !orderedProfiles.length) {
+      return;
+    }
+    const selectedChapterId = selectedContext.chapter_id;
+    if (!selectedChapterId) return;
+    const matchingProfile = orderedProfiles.find((profile) => profile.chapter_id === selectedChapterId);
+    if (!matchingProfile) return;
+    selectedProfileAutoFocusRef.current = selectedIdentity;
+    setActiveProfile(matchingProfile);
+  }, [activeProfile, orderedProfiles, selectedContext, selectedIdentity]);
 
   useEffect(() => {
     if (!activeProfile) {
@@ -182,6 +286,36 @@ export function AtomContextPickerSheet({
       cancelled = true;
     };
   }, [activeProfile, chapterRequestVersion]);
+
+  useEffect(() => {
+    if (
+      !selectedContext ||
+      !selectedIdentity ||
+      selectedDirectoryAutoFocusRef.current === selectedIdentity ||
+      !activeProfile ||
+      !chapterCatalog ||
+      chapterLoading
+    ) {
+      return;
+    }
+    if (selectedContext.chapter_id && activeProfile.chapter_id !== selectedContext.chapter_id) return;
+
+    let cancelled = false;
+    const visitedDirectoryIds = new Set<string>();
+    findSelectedParentDirectory(chapterCatalog.nodes, "", visitedDirectoryIds)
+      .then((directoryId) => {
+        if (cancelled) return;
+        if (directoryId !== null) setActiveDirectoryId(directoryId);
+        selectedDirectoryAutoFocusRef.current = selectedIdentity;
+      })
+      .catch(() => {
+        if (!cancelled) selectedDirectoryAutoFocusRef.current = selectedIdentity;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProfile, chapterCatalog, chapterLoading, findSelectedParentDirectory, selectedContext, selectedIdentity]);
 
   useEffect(() => {
     if (!activeDirectoryId) {
@@ -232,6 +366,15 @@ export function AtomContextPickerSheet({
       cancelled = true;
     };
   }, [debouncedQuery, searchRequestVersion]);
+
+  useEffect(() => {
+    if (!selectedIdentity || catalogLoading || searchLoading) return;
+    const timer = window.setTimeout(() => {
+      const selectedRow = document.querySelector<HTMLElement>(".atom-context-picker-row.selected");
+      if (typeof selectedRow?.scrollIntoView === "function") selectedRow.scrollIntoView({ block: "center" });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeDirectoryId, activeNodes.length, catalogLoading, searchItems.length, searchLoading, selectedIdentity, showSearchMode]);
 
   const openDirectory = useCallback((node: StudentCatalogNodeCard) => {
     if (node.node_kind === "directory") setActiveDirectoryId(node.node_id);
@@ -286,7 +429,7 @@ export function AtomContextPickerSheet({
         );
       }
       return (
-        <div className="atom-context-picker-list" aria-label="学习目录根">
+        <div className="atom-context-picker-list kind-catalog" aria-label="学习目录根">
           {orderedProfiles.map((profile) => (
             <button
               type="button"
@@ -338,7 +481,7 @@ export function AtomContextPickerSheet({
     }
 
     return (
-      <div className="atom-context-picker-list" aria-label="目录点位">
+      <div className="atom-context-picker-list kind-catalog" aria-label="目录点位">
         {activeNodes.map((node) => {
           const pointContext = node.node_kind === "point" ? assistantContextFromCatalogNode(node, activeBreadcrumbs, activeRootTitle) : null;
           const selected = pointContext ? contextIdentity(pointContext) === selectedIdentity : false;
@@ -389,7 +532,7 @@ export function AtomContextPickerSheet({
       );
     }
     return (
-      <div className="atom-context-picker-list" aria-label="点位搜索结果">
+      <div className="atom-context-picker-list kind-search" aria-label="点位搜索结果">
         {searchItems.map((item) => {
           const context = assistantContextFromVideoLibraryResult(item);
           const selected = context ? contextIdentity(context) === selectedIdentity : false;
@@ -403,10 +546,9 @@ export function AtomContextPickerSheet({
               <span className="atom-context-picker-row-icon">
                 <Atom size={18} />
               </span>
-              <span className="atom-context-picker-row-copy">
-                <strong>{item.title}</strong>
-                <small>{compactResultPath(item)}</small>
-                {item.snippet ? <em>{item.snippet}</em> : null}
+              <span className="atom-context-picker-search-copy">
+                <ScrollingLine text={item.title} className="is-title" />
+                <ScrollingLine text={compactResultPath(item, orderedProfiles)} className="is-path" />
               </span>
               <ChevronRight size={17} />
             </button>
@@ -416,42 +558,90 @@ export function AtomContextPickerSheet({
     );
   };
 
-  const pathLabel = selectedContext ? assistantContextPathLabel(selectedContext) : "";
-  const showSearchMode = Boolean(trimmedQuery);
+  const catalogBreadcrumbItems = activeBreadcrumbs.map((item) => ({ nodeId: item.node_id, title: item.title }));
+  const catalogItemCount = activeProfile ? activeNodes.length : orderedProfiles.length;
+  const catalogItemUnit = activeProfile && activeNodes.some((node) => node.node_kind === "point") ? "项" : "目录";
+
+  const goCatalogHome = () => {
+    setActiveProfile(null);
+    setChapterCatalog(null);
+    setActiveDirectoryId("");
+    setDirectoryDetail(null);
+  };
+
+  const renderCatalogPath = () => {
+    if (showSearchMode) return null;
+    return (
+      <nav className="atom-context-picker-path" aria-label="目录路径">
+        <div className="atom-context-picker-path-row">
+          <div className="atom-context-picker-root-path">
+            <button
+              type="button"
+              className={`atom-context-picker-crumb${activeProfile ? "" : " is-active"}`}
+              aria-current={activeProfile ? undefined : "page"}
+              onClick={goCatalogHome}
+            >
+              全章节
+            </button>
+            {activeProfile ? (
+              <span className="atom-context-picker-crumb-separator" aria-hidden="true">
+                ›
+              </span>
+            ) : null}
+          </div>
+          <span className="atom-context-picker-count" aria-label={`当前共${catalogItemCount}${catalogItemUnit}`}>
+            共{catalogItemCount}{catalogItemUnit}
+          </span>
+        </div>
+        {activeProfile ? (
+          <div className="atom-context-picker-breadcrumbs">
+            <div className="atom-context-picker-path-track">
+              <button
+                type="button"
+                className={`atom-context-picker-crumb${catalogBreadcrumbItems.length ? "" : " is-active"}`}
+                aria-current={catalogBreadcrumbItems.length ? undefined : "page"}
+                onClick={() => setActiveDirectoryId("")}
+                title={activeRootTitle}
+              >
+                {activeRootTitle}
+              </button>
+              {catalogBreadcrumbItems.map((item, index) => {
+                const active = index === catalogBreadcrumbItems.length - 1;
+                return (
+                  <span className="atom-context-picker-crumb-piece" key={`${item.nodeId}-${index}`}>
+                    <span className="atom-context-picker-crumb-separator" aria-hidden="true">
+                      ›
+                    </span>
+                    <button
+                      type="button"
+                      className={`atom-context-picker-crumb${active ? " is-active" : ""}`}
+                      aria-current={active ? "page" : undefined}
+                      onClick={() => setActiveDirectoryId(item.nodeId)}
+                      title={item.title}
+                    >
+                      {item.title}
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </nav>
+    );
+  };
 
   return (
     <div className="atom-context-picker-layer" role="dialog" aria-modal="true" aria-label="选择学习背景">
       <button type="button" className="atom-context-picker-backdrop" onClick={closePicker} aria-label="关闭学习背景选择" />
       <section className="atom-context-picker-sheet">
-        <header className="atom-context-picker-head">
-          <button
-            type="button"
-            className="atom-context-picker-nav"
-            onClick={() => {
-              if (activeDirectoryId) {
-                const crumbs = directoryDetail?.breadcrumbs || [];
-                const parent = crumbs[crumbs.length - 2];
-                setActiveDirectoryId(parent?.node_id || "");
-                return;
-              }
-              if (activeProfile) {
-                setActiveProfile(null);
-                setChapterCatalog(null);
-              }
-            }}
-            disabled={!activeProfile || showSearchMode}
-            aria-label="返回上一级目录"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <div>
-            <p>{showSearchMode ? "搜索点位" : activeRootTitle || "目录选择"}</p>
-            <h2>选择学习背景</h2>
-            {pathLabel ? <small>当前：{selectedContext?.context_title} · {pathLabel}</small> : <small>一个对话只绑定一个点位</small>}
-          </div>
-          <button type="button" className="atom-context-picker-close" onClick={closePicker} aria-label="关闭学习背景选择">
-            <X size={18} />
-          </button>
+        <header className={`atom-context-picker-head${showSearchMode ? " is-search" : " is-catalog"}`}>
+          <p className="atom-context-picker-mode-label">{showSearchMode ? "直接搜索实验点位" : "从目录选择实验点位"}</p>
+          {showSearchMode ? (
+            null
+          ) : (
+            renderCatalogPath()
+          )}
         </header>
 
         <div className="atom-context-picker-body">{showSearchMode ? renderSearchMode() : renderCatalogMode()}</div>
@@ -459,12 +649,22 @@ export function AtomContextPickerSheet({
         <footer className="atom-context-picker-search">
           <Search size={18} aria-hidden="true" />
           <input
+            ref={searchInputRef}
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索点位、现象或试剂"
+            placeholder="直接搜索实验点位"
             aria-label="搜索可绑定点位"
           />
+          <button
+            type="button"
+            className="atom-context-picker-search-clear"
+            onClick={clearSearch}
+            aria-label="清空实验点位搜索"
+            hidden={!query}
+          >
+            <X size={18} />
+          </button>
         </footer>
       </section>
     </div>

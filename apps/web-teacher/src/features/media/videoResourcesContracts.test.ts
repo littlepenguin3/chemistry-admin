@@ -36,6 +36,32 @@ describe("video resource lifecycle contracts", () => {
     expect(videoResourcesSource).not.toContain("getMediaAssetArchivePlan(item.id");
   });
 
+  it("loads upload policy before accepting large local videos", () => {
+    expect(mediaApiSource).toContain("type MediaUploadPolicy");
+    expect(mediaApiSource).toContain("getMediaUploadPolicy");
+    expect(mediaApiSource).toContain('"/api/admin/media/upload-policy"');
+    expect(videoResourcesSource).toContain('queryKey: ["media-upload-policy"]');
+    expect(videoResourcesSource).toContain("file.size > maxUploadBytes");
+    expect(videoResourcesSource).toContain("file.size <= maxUploadBytes");
+    expect(videoResourcesSource).toContain("超过原始视频大小限制");
+    expect(videoResourcesSource).toContain("disabled={batchRunning || !uploadPolicyReady}");
+    expect(videoResourcesSource).toContain("const canStartUpload = uploadPolicyReady");
+  });
+
+  it("shows playback savings and original upload limit as separate metrics", () => {
+    expect(videoResourcesSource).toContain('title="学生播放源空间"');
+    expect(videoResourcesSource).toContain(" / 节省");
+    expect(videoResourcesSource).toContain('title="原始视频大小限制"');
+    expect(videoResourcesSource).not.toContain('title="已节省空间"');
+  });
+
+  it("keeps file too large failures out of missing-file retry handling", () => {
+    expect(mediaApiSource).toContain('"policy_rejected"');
+    expect(videoResourcesSource).toContain('asset.error_reason === "file_too_large"');
+    expect(videoResourcesSource).toContain('asset.upload_status === "failed" && asset.error_reason !== "file_too_large"');
+    expect(videoResourcesSource).toContain('mediaErrorReasonText("file_too_large")');
+  });
+
   it("requires archive impact confirmation copy before removing bound point videos", () => {
     expect(videoResourcesSource).toContain("modal.confirm");
     expect(videoResourcesSource).toContain("catalog_binding_count ? \"warning\" : \"info\"");

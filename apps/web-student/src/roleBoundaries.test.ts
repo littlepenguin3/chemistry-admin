@@ -5,6 +5,7 @@ import appSource from "./App.tsx?raw";
 import studentBottomNavSource from "./app/shell/StudentBottomNav.tsx?raw";
 import authUtilsSource from "./features/auth/authUtils.ts?raw";
 import assistantPanelSource from "./features/assistant/StudentAiChatPanel.tsx?raw";
+import atomContextPickerSheetSource from "./features/assistant/AtomContextPickerSheet.tsx?raw";
 import authenticatedAppLayoutSource from "./app/shell/AuthenticatedAppLayout.tsx?raw";
 import previewInputRuntimeSource from "./app/preview/input/PreviewInputRuntime.tsx?raw";
 import periodicTableSource from "./features/periodic-table/PeriodicTable.tsx?raw";
@@ -104,6 +105,15 @@ describe("student console role boundaries", () => {
     expect(appShellCssSource).not.toContain(".student-preview-touch-runtime");
   });
 
+  it("keeps preview-tapped clear controls click-activated", () => {
+    const searchClearIndex = atomContextPickerSheetSource.indexOf('className="atom-context-picker-search-clear"');
+    const contextClearIndex = assistantPanelSource.indexOf('className="ai-context-clear-action"');
+    expect(searchClearIndex).toBeGreaterThan(-1);
+    expect(contextClearIndex).toBeGreaterThan(-1);
+    expect(atomContextPickerSheetSource.slice(searchClearIndex, searchClearIndex + 260)).not.toContain("onPointerDown");
+    expect(assistantPanelSource.slice(contextClearIndex, contextClearIndex + 260)).not.toContain("onPointerDown");
+  });
+
   it("keeps the mobile bottom nav fully offscreen while compressed", async () => {
     // @ts-expect-error The frontend tsconfig intentionally omits Node types, but Vitest runs this contract in Node.
     const { readFileSync } = await import("node:fs");
@@ -130,9 +140,12 @@ describe("student console role boundaries", () => {
       appShellCssSource.match(/\.student-app-shell\.root-route\.root-home\.nav-compressed \.student-app-header\s*\{[^}]*\}/)?.[0] || "";
     const homeRouteContentBlock =
       appShellCssSource.match(/\.student-app-shell\.root-route\.root-home \.student-route-content\s*\{[^}]*\}/)?.[0] || "";
+    const rootHomeShellBlock = appShellCssSource.match(/\.student-app-shell\.root-route\.root-home\s*\{[^}]*\}/)?.[0] || "";
 
     expect(authenticatedAppLayoutSource).toContain('window.addEventListener("scroll", handleScroll, { passive: true });');
-    expect(authenticatedAppLayoutSource).toContain('navCompressed && isRootRoute ? "nav-compressed" : ""');
+    expect(authenticatedAppLayoutSource).toContain('effectiveNavCompressed ? "nav-compressed" : ""');
+    expect(authenticatedAppLayoutSource).toContain('homeChromeOverlayLock === "compressed"');
+    expect(authenticatedAppLayoutSource).toContain('homeChromeOverlayLock !== "expanded"');
     expect(authenticatedAppLayoutSource).not.toMatch(/addEventListener\("touchmove"|addEventListener\("wheel"/);
     expect(authenticatedAppLayoutSource).not.toContain("preventDefault");
     expect(authenticatedAppLayoutSource).not.toContain("window.scrollBy");
@@ -150,6 +163,10 @@ describe("student console role boundaries", () => {
     expect(homeHeaderBlock).toContain("transition: transform 150ms ease;");
     expect(homeCompressedBlock).toContain("transform: translate3d(0, -100%, 0);");
     expect(homeRouteContentBlock).toContain("padding: var(--home-app-header-height) 0 0;");
+    expect(homeRouteContentBlock).not.toMatch(/(?:^|\n)\s*(?:min-)?height\s*:/);
+    expect(homeRouteContentBlock).not.toContain("overflow:");
+    expect(rootHomeShellBlock).not.toMatch(/(?:^|\n)\s*(?:min-)?height\s*:/);
+    expect(rootHomeShellBlock).not.toContain("overflow:");
   });
 
   it("keeps the root Atom composer keyboard layout scoped to the visible viewport", async () => {
@@ -168,7 +185,10 @@ describe("student console role boundaries", () => {
     const chatMessageBodyBlock = assistantCssSource.match(/\.ai-empty-bubble,\s*\.ai-message\s*\{[^}]*\}/)?.[0] || "";
     const rootTextareaBlock = assistantCssSource.match(/\.ai-chat-panel\.root \.ai-chat-compose\.root textarea\s*\{[^}]*\}/)?.[0] || "";
     const markdownBodyBlock = assistantCssSource.match(/\.ai-markdown\s*\{[^}]*\}/)?.[0] || "";
-    const markdownLineBlock = assistantCssSource.match(/\.ai-markdown \.ai-md-paragraph,\s*\.ai-markdown \.ai-md-list-item\s*\{[^}]*\}/)?.[0] || "";
+    const markdownLineBlock =
+      assistantCssSource.match(
+        /\.ai-markdown \.ai-md-paragraph,\s*\.ai-markdown \.ai-md-list-item,\s*\.ai-markdown \[data-streamdown="list-item"\]\s*\{[^}]*\}/,
+      )?.[0] || "";
 
     expect(authenticatedAppLayoutSource).toContain("ROOT_AI_COMPOSER_SELECTOR");
     expect(authenticatedAppLayoutSource).toContain("window.visualViewport?.height");
@@ -177,8 +197,11 @@ describe("student console role boundaries", () => {
     expect(authenticatedAppLayoutSource).toContain("--student-keyboard-bottom-inset");
     expect(appShellCssSource).toContain(".student-app-shell.keyboard-active .student-bottom-nav");
     expect(appShellCssSource).toContain(".student-app-shell.context-picker-active .student-bottom-nav");
+    expect(appShellCssSource).toContain("html.atom-context-picker-active .student-bottom-nav");
+    expect(appShellCssSource).toContain("body.atom-context-picker-active .student-bottom-nav");
     expect(appShellCssSource).toContain(".student-app-shell.root-route.root-ai.keyboard-active");
     expect(assistantPanelSource).toContain("context-picker-active");
+    expect(assistantPanelSource).toContain("atom-context-picker-active");
     expect(appShellCssSource).toContain(".learning-shell:has(.student-app-shell.root-route.root-ai)");
     expect(appShellCssSource).toContain(".learning-shell:has(.student-app-shell.root-route.root-ai)::before");
     expect(appShellCssSource).toContain("overscroll-behavior: none;");
@@ -220,6 +243,7 @@ describe("student console role boundaries", () => {
     const cwd = (globalThis as unknown as { process: { cwd: () => string } }).process.cwd();
     const assistantCssSource = readFileSync(`${cwd}/src/styles/assistant.css`, "utf8");
     const rootPanelBlock = assistantCssSource.match(/\.ai-chat-panel\.root\s*\{[^}]*\}/)?.[0] || "";
+    const rootCanvasBlock = assistantCssSource.match(/\.ai-chat-panel\.root::before\s*\{[^}]*\}/)?.[0] || "";
     const emptyDraftPanelBlock =
       assistantCssSource.match(/\.ai-chat-panel\.root\.root-state-empty,\s*\.ai-chat-panel\.root\.root-state-draft\s*\{[^}]*\}/)?.[0] || "";
     const conversationPanelBlock = assistantCssSource.match(/\.ai-chat-panel\.root\.root-state-conversation\s*\{[^}]*\}/)?.[0] || "";
@@ -256,8 +280,10 @@ describe("student console role boundaries", () => {
     expect(assistantPanelSource).toContain("root-state-${rootLayoutState}");
     expect(assistantPanelSource).toContain("data-root-layout");
     expect(assistantPanelSource).toContain("data-root-state");
-    expect(rootPanelBlock).toContain("radial-gradient(circle at 16% 20%");
-    expect(rootPanelBlock).toContain("radial-gradient(circle at 78% 72%");
+    expect(rootPanelBlock).not.toContain("radial-gradient");
+    expect(rootCanvasBlock).toContain("radial-gradient(circle at 16% 20%");
+    expect(rootCanvasBlock).toContain("radial-gradient(circle at 78% 72%");
+    expect(rootCanvasBlock.match(/radial-gradient/g) ?? []).toHaveLength(2);
     expect(rootPanelBlock).not.toContain("grid-template-rows");
     expect(emptyDraftPanelBlock).toContain("grid-template-rows: var(--ai-root-header-overlay-height) minmax(0, 1fr) auto;");
     expect(conversationPanelBlock).toContain("grid-template-rows: minmax(0, 1fr) auto auto;");
@@ -272,7 +298,8 @@ describe("student console role boundaries", () => {
     expect(rootHeaderBlock).toContain("pointer-events: none;");
     expect(rootHeaderBlock).not.toContain("radial-gradient");
     expect(rootHeaderBlock).not.toMatch(/\bopacity\s*:/);
-    expect(rootTitleBlock).toContain("text-shadow: none;");
+    expect(rootTitleBlock).toContain("text-shadow:");
+    expect(rootTitleBlock).not.toMatch(/\bbackground\s*:/);
     expect(rootTitleBlock).not.toMatch(/\bfilter\s*:/);
     expect(rootVeilBlock).toContain("background: linear-gradient(");
     expect(rootVeilBlock).toContain("var(--ai-root-header-veil-low) 82%");
@@ -308,7 +335,11 @@ describe("student console role boundaries", () => {
     expect(assistantCssSource).not.toContain(".ai-chat-panel.root.has-messages .ai-quick-prompts");
     expect(assistantCssSource).not.toContain(".ai-chat-panel.root.has-messages .ai-chat-compose");
     expect(assistantCssSource).toMatch(/\.ai-chat-panel\.root \.ai-chat-stream\.root-empty\s*\{[^}]*align-content: center;/s);
-    expect(assistantCssSource.match(/radial-gradient/g) ?? []).toHaveLength(2);
+    expect(assistantCssSource).toContain(".ai-root-glow-field");
+    expect(assistantCssSource).toContain(".ai-root-glow-blob.blob-gold");
+    expect(assistantCssSource).toContain(".ai-root-glow-blob.blob-green");
+    expect(assistantCssSource).toContain(".ai-root-glow-blob.blob-mint");
+    expect(assistantCssSource).toContain("atom-root-glow-field-vanish");
   });
 
   it("keeps root flat assistant replies scoped, action-delimited, and source-safe", async () => {
@@ -329,6 +360,8 @@ describe("student console role boundaries", () => {
 
     expect(assistantPanelSource).toContain("AssistantTurnActions");
     expect(assistantPanelSource).toContain("AssistantThinkingLine");
+    expect(assistantPanelSource).toContain("AiMessageMarkdown");
+    expect(assistantPanelSource).toContain("useSmoothAssistantStream");
     expect(assistantPanelSource).toContain("AtomThinkingMark");
     expect(assistantPanelSource).toContain("usePrefersReducedMotion");
     expect(assistantPanelSource).toContain("lottie-react");
@@ -346,6 +379,8 @@ describe("student console role boundaries", () => {
     expect(assistantPanelSource).toContain('"正在组织回答"');
     expect(assistantPanelSource).toContain('"正在输出回答"');
     expect(assistantPanelSource).toContain("safeAssistantSourceCount");
+    expect(assistantPanelSource).toContain("saveActiveStudentAiHistoryId");
+    expect(assistantPanelSource).toContain('to: "/ai/artifact/$historyId/$messageId/$artifactId"');
     expect(assistantPanelSource).toContain("Mark Atom answer helpful");
     expect(assistantPanelSource).toContain("Mark Atom answer unhelpful");
     expect(assistantPanelSource).toContain("Copy Atom answer");
@@ -355,6 +390,8 @@ describe("student console role boundaries", () => {
     expect(assistantPanelSource).not.toContain("guardrail_decisions");
     expect(assistantPanelSource).not.toContain("reasoning_text");
     expect(assistantPanelSource).not.toContain("provider exploded");
+    expect(assistantPanelSource).toContain("conversation_history: conversationHistory(baseMessages)");
+    expect(assistantPanelSource).toContain("messages.slice(-10).map(({ role, content }) => ({ role, content }))");
     expect(rootDoneBlock).toContain("max-width: none;");
     expect(rootDoneBlock).toContain("border: 0;");
     expect(rootDoneBlock).toContain("border-radius: 0;");
@@ -388,6 +425,31 @@ describe("student console role boundaries", () => {
     expect(assistantCssSource).toContain("@keyframes ai-thinking-text-in");
     expect(assistantCssSource).toContain("@keyframes ai-thinking-text-out");
     expect(assistantCssSource).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(assistantCssSource).toContain('[data-streamdown="mermaid-block"]');
+    expect(assistantCssSource).toContain(".ai-md-table-wrap");
+    expect(assistantCssSource).toContain(".ai-md-artifact-open");
+    expect(assistantCssSource).toContain(".ai-artifact-canvas-page");
+    expect(assistantCssSource).toContain(".ai-artifact-canvas-toolbar");
+    expect(assistantCssSource).toContain(".ai-artifact-canvas-workspace");
+    expect(assistantCssSource).toContain(".ai-artifact-table-scroll");
+    expect(assistantCssSource).toContain(".ai-artifact-mermaid-pan");
+    expect(assistantCssSource).toContain(".ai-artifact-table-canvas");
+    expect(assistantCssSource).toContain(".ai-artifact-table-canvas::after");
+    expect(assistantCssSource).toContain(".ai-artifact-table-pan");
+    expect(assistantCssSource).toContain(".ai-artifact-row-reader");
+    expect(assistantCssSource).toMatch(/\.ai-artifact-page\s*\{[^}]*overflow:\s*hidden;/s);
+    expect(assistantCssSource).toMatch(/\.ai-artifact-page > \.pagebar\s*\{[^}]*background:\s*transparent;/s);
+    expect(assistantCssSource).toMatch(/\.ai-artifact-page > \.pagebar\s*\{[^}]*backdrop-filter:\s*none;/s);
+    expect(assistantCssSource).toMatch(/\.ai-artifact-viewer\.ai-artifact-canvas-page\s*\{[^}]*background-image:/s);
+    expect(assistantCssSource).toMatch(/\.ai-artifact-canvas-page::before\s*\{[^}]*display:\s*none;/s);
+    expect(assistantCssSource).toMatch(/\.ai-artifact-canvas-toolbar\s*\{[^}]*position:\s*absolute;/s);
+    expect(assistantCssSource).toMatch(/\.ai-artifact-table-canvas,\s*\.ai-artifact-mermaid-pan\s*\{[^}]*border:\s*0;/s);
+    expect(assistantCssSource).toMatch(/\.ai-artifact-table-canvas,\s*\.ai-artifact-mermaid-pan\s*\{[^}]*background:\s*transparent;/s);
+    expect(assistantCssSource).toMatch(/\.ai-artifact-table-canvas::before,\s*\.ai-artifact-table-canvas::after\s*\{[^}]*display:\s*none;/s);
+    expect(assistantCssSource).toMatch(/\.ai-artifact-table-scroll\s*\{[^}]*overflow:\s*auto;/s);
+    expect(assistantCssSource).toMatch(/\.ai-artifact-table-scroll\s*\{[^}]*scrollbar-width:\s*none;/s);
+    expect(assistantCssSource).toContain(".ai-artifact-table-scroll::-webkit-scrollbar");
+    expect(assistantCssSource).toContain(".ai-markdown-streaming");
     expect(assistantCssSource).toContain(".ai-chat-panel.root .ai-thinking-atom-mark");
     expect(assistantCssSource).toContain(".ai-chat-panel.root .ai-thinking-text.outgoing");
   });
@@ -445,31 +507,89 @@ describe("student console role boundaries", () => {
     expect(appShellCssSource).toContain(".student-bottom-nav button:focus-visible");
   });
 
-  it("keeps the home video action row compact, icon-led, and search-free", async () => {
+  it("keeps home video cards browse-only and moves tools out of the root feed", async () => {
     // @ts-expect-error The frontend tsconfig intentionally omits Node types, but Vitest runs this contract in Node.
     const { readFileSync } = await import("node:fs");
     const cwd = (globalThis as unknown as { process: { cwd: () => string } }).process.cwd();
     const appShellCssSource = readFileSync(`${cwd}/src/styles/app-shell.css`, "utf8");
-    const actionRowBlock = appShellCssSource.match(/\.home-video-actions\s*\{[^}]*\}/)?.[0] || "";
-    const iconGroupBlock = appShellCssSource.match(/\.home-video-icon-actions\s*\{[^}]*\}/)?.[0] || "";
-    const atomActionBlock = appShellCssSource.match(/\.home-video-icon-action\.atom\s*\{[^}]*\}/)?.[0] || "";
+    const experimentsCssSource = readFileSync(`${cwd}/src/styles/experiments.css`, "utf8");
+    const homeVideoBodyBlock = appShellCssSource.match(/\.home-video-body\s*\{[^}]*\}/)?.[0] || "";
+    const homeVideoTextButtonBlock = appShellCssSource.match(/\.home-video-text-button\s*\{[^}]*\}/)?.[0] || "";
+    const homeVideoMetadataBlock = appShellCssSource.match(/\.home-video-metadata\s*\{[^}]*white-space: nowrap;[^}]*\}/)?.[0] || "";
+    const homeVideoOverflowTriggerBlock = appShellCssSource.match(/\.home-video-overflow-trigger\s*\{[^}]*width: 40px;[^}]*\}/)?.[0] || "";
+    const homeVideoMediaBlock = appShellCssSource.match(/\.home-video-media\s*\{[^}]*\}/)?.[0] || "";
+    const homeVideoInactiveProgressBlock = appShellCssSource.match(/\.home-video-inactive-progress\s*\{[^}]*\}/)?.[0] || "";
+    const homeVideoOverlayRouteContentBlock = appShellCssSource.match(/\.student-route-content:has\(\.home-video-overflow-backdrop\)\s*\{[^}]*\}/)?.[0] || "";
+    const homeChromeOverlayHeaderBlock =
+      appShellCssSource.match(/\.student-app-shell\.root-route\.root-home\.home-chrome-overlay-expanded \.student-app-header\s*\{[^}]*\}/)?.[0] || "";
+    const homeChromeOverlayBackdropBlock =
+      appShellCssSource.match(/\.student-app-shell\.root-route\.root-home\.home-chrome-overlay-expanded \.home-video-overflow-backdrop\s*\{[^}]*\}/)?.[0] || "";
+    const pointLearningOverlayRouteContentBlock = appShellCssSource.match(/\.student-route-content:has\(\.point-learning-more-backdrop\)\s*\{[^}]*\}/)?.[0] || "";
+    const pointLearningMainRowBlock = experimentsCssSource.match(/\.point-learning-main-row\s*\{[^}]*\}/)?.[0] || "";
+    const pointLearningUtilityRowBlock = experimentsCssSource.match(/\.point-learning-utility-row\s*\{[^}]*\}/)?.[0] || "";
+    const pointLearningMoreBackdropBlock = experimentsCssSource.match(/\.point-learning-more-backdrop\s*\{[^}]*\}/)?.[0] || "";
+    const pointLearningMoreSheetBlock = experimentsCssSource.match(/\.point-learning-more-sheet\s*\{[^}]*\}/)?.[0] || "";
+    const catalogPointDetailSource = routeAndFeatureSources["./features/catalog/CatalogPointDetailPanel.tsx"] || "";
 
-    expect(homeRootPageSource).toContain("home-video-open-action");
-    expect(homeRootPageSource).toContain("home-video-icon-actions");
-    expect(homeRootPageSource).toContain("问问Atom：");
-    expect(homeRootPageSource).toContain("<ThumbsUp");
-    expect(homeRootPageSource).toContain("<Bookmark");
-    expect(homeRootPageSource).toContain("<Share2");
-    expect(homeRootPageSource).toContain("<MoreHorizontal");
+    expect(homeRootPageSource).not.toContain("home-video-open-action");
+    expect(homeRootPageSource).not.toContain("home-video-icon-actions");
+    expect(homeRootPageSource).not.toContain("问问Atom：");
+    expect(homeRootPageSource).not.toContain("<Atom");
+    expect(homeRootPageSource).not.toContain("<ThumbsUp");
+    expect(homeRootPageSource).not.toContain("<Bookmark");
+    expect(homeRootPageSource).not.toContain("<ClipboardList");
+    expect(homeRootPageSource).not.toContain("<MoreHorizontal");
+    expect(homeRootPageSource).not.toContain("<VolumeX");
+    expect(homeRootPageSource).not.toContain("<Volume2");
+    expect(homeRootPageSource).toContain("<MoreVertical");
+    expect(homeRootPageSource).toContain("home-video-overflow-trigger");
+    expect(homeRootPageSource).toContain("home-video-overflow-sheet");
+    expect(homeRootPageSource).toContain("home-video-inactive-progress");
+    expect(homeRootPageSource).not.toContain("home-video-mute-toggle");
+    expect(homeRootPageSource).not.toContain("home-video-preview-state");
+    expect(homeRootPageSource).not.toContain("home-video-duration");
+    expect(homeRootPageSource).not.toContain("滑到此处自动预览");
+    expect(homeRootPageSource).not.toContain("静音预览");
+    expect(homeRootPageSource).not.toContain("home-video-badges");
+    expect(homeRootPageSource).not.toContain("home-video-avatar");
+    expect(homeRootPageSource).not.toContain("home-video-channel");
     expect(homeRootPageSource).not.toContain("搜索相关");
     expect(homeRootPageSource).not.toContain("onSearch");
-    expect(actionRowBlock).toContain("display: flex;");
-    expect(actionRowBlock).toContain("justify-content: space-between;");
-    expect(actionRowBlock).not.toContain("grid-template-columns");
-    expect(iconGroupBlock).toContain("justify-content: flex-end;");
-    expect(iconGroupBlock).toContain("min-width: 0;");
-    expect(atomActionBlock).toContain("color: var(--green);");
-    expect(atomActionBlock).toContain("background: rgba(0, 88, 38, 0.11);");
+    expect(appShellCssSource).not.toContain(".home-video-actions");
+    expect(appShellCssSource).not.toContain(".home-video-icon-action");
+    expect(appShellCssSource).not.toContain(".home-video-badges");
+    expect(appShellCssSource).not.toContain(".home-video-preview-state");
+    expect(appShellCssSource).not.toContain(".home-video-duration");
+    expect(appShellCssSource).not.toContain(".home-video-mute-toggle");
+    expect(homeVideoMediaBlock).toContain("--student-video-progress-track:");
+    expect(homeVideoMediaBlock).toContain("--student-video-progress-loaded:");
+    expect(homeVideoMediaBlock).toContain("--student-video-progress-played: linear-gradient");
+    expect(homeVideoInactiveProgressBlock).toContain("height: 2px;");
+    expect(homeVideoInactiveProgressBlock).toContain("background: var(--student-video-progress-track);");
+    expect(homeVideoBodyBlock).toContain("grid-template-columns: minmax(0, 1fr) 40px;");
+    expect(homeVideoTextButtonBlock).toContain("cursor: pointer;");
+    expect(homeVideoTextButtonBlock).toContain("text-align: left;");
+    expect(homeVideoMetadataBlock).toContain("white-space: nowrap;");
+    expect(homeVideoMetadataBlock).toContain("text-overflow: ellipsis;");
+    expect(homeVideoMetadataBlock).not.toContain("background:");
+    expect(homeVideoMetadataBlock).not.toContain("border-radius:");
+    expect(homeVideoOverflowTriggerBlock).toContain("width: 40px;");
+    expect(homeVideoOverflowTriggerBlock).toContain("min-height: 40px;");
+    expect(homeVideoOverlayRouteContentBlock).toContain("z-index: calc(var(--mobile-z-floating) + 16);");
+    expect(authenticatedAppLayoutSource).toContain('"home-chrome-overlay-expanded"');
+    expect(homeChromeOverlayHeaderBlock).toContain("z-index: calc(var(--mobile-z-floating) + 18);");
+    expect(homeChromeOverlayBackdropBlock).toContain("top: var(--home-app-header-height);");
+    expect(pointLearningOverlayRouteContentBlock).toContain("z-index: calc(var(--mobile-z-floating) + 16);");
+    expect(experimentsCssSource).not.toContain(".point-title-actions");
+    expect(experimentsCssSource).not.toContain(".point-title-action-row");
+    expect(experimentsCssSource).not.toContain(".point-learning-more-panel");
+    expect(pointLearningMainRowBlock).toContain("grid-template-columns: minmax(0, 1.14fr) minmax(0, 1fr);");
+    expect(pointLearningUtilityRowBlock).toContain("grid-template-columns: repeat(4, minmax(0, 1fr));");
+    expect(pointLearningMoreBackdropBlock).toContain("position: fixed;");
+    expect(pointLearningMoreSheetBlock).toContain("border-radius: 16px 16px 0 0;");
+    expect(catalogPointDetailSource).toContain("PointLearningMoreSheet");
+    expect(catalogPointDetailSource).toContain("稍后学习");
+    expect(catalogPointDetailSource).toContain("反馈问题");
   });
 
   it("locks the student periodic learning taxonomy without the removed combined area", () => {
@@ -518,7 +638,12 @@ describe("student console role boundaries", () => {
     // @ts-expect-error The frontend tsconfig intentionally omits Node types, but Vitest runs this contract in Node.
     const { readFileSync } = await import("node:fs");
     const cwd = (globalThis as unknown as { process: { cwd: () => string } }).process.cwd();
+    const appShellCssSource = readFileSync(`${cwd}/src/styles/app-shell.css`, "utf8");
     const experimentsCssSource = readFileSync(`${cwd}/src/styles/experiments.css`, "utf8");
+    const learningShellPointBlock = appShellCssSource.match(/\.learning-shell:has\(\.catalog-point-detail\)\s*\{[^}]*\}/)?.[0] || "";
+    const detailShellPointBlock = appShellCssSource.match(/\.student-app-shell\.detail-route:has\(\.catalog-point-detail\)\s*\{[^}]*\}/)?.[0] || "";
+    const pointRouteContentBlock =
+      experimentsCssSource.match(/\.student-app-shell\.detail-route \.student-route-content:has\(> \.catalog-point-detail\)\s*\{[^}]*\}/)?.[0] || "";
     const pointDetailBlock = experimentsCssSource.match(/\.catalog-point-detail\s*\{[^}]*\}/)?.[0] || "";
     const playerBlock = experimentsCssSource.match(/\.point-art-player\s*\{[^}]*\}/)?.[0] || "";
     const defaultChromeHideBlock =
@@ -547,6 +672,7 @@ describe("student console role boundaries", () => {
     const equationNoteBlock = experimentsCssSource.match(/\.point-equation-note\s*\{[^}]*\}/)?.[0] || "";
     const safetyCopyBlock = experimentsCssSource.match(/\.safety-section > p\s*\{[^}]*\}/)?.[0] || "";
     const actionAreaBlock = experimentsCssSource.match(/\.point-detail-actions\s*\{[^}]*\}/)?.[0] || "";
+    const relatedPointSectionBlock = experimentsCssSource.match(/\.related-point-section\s*\{[^}]*\}/)?.[0] || "";
 
     expect(pointVideoPlayerSource).toContain("point-player-back-icon");
     expect(pointVideoPlayerSource).toContain("BackArrowIcon");
@@ -567,14 +693,24 @@ describe("student console role boundaries", () => {
     expect(pointVideoPlayerSource).not.toContain("import { ArrowLeft");
     expect(pointVideoPlayerSource).not.toContain('const backIconSvg =\\n  \'<svg');
     expect(pointVideoPlayerSource).not.toContain("point-player-back-glyph");
+    expect(learningShellPointBlock).toContain("background: #fffdf6;");
+    expect(detailShellPointBlock).toContain("padding-bottom: 0;");
+    expect(detailShellPointBlock).toContain("background: #fffdf6;");
+    expect(pointRouteContentBlock).toContain("background: #fffdf6;");
     expect(pointDetailBlock).toContain("padding-top: min(62.5vw, 280px);");
+    expect(pointDetailBlock).toContain("padding-bottom: 0;");
+    expect(pointDetailBlock).toContain("overscroll-behavior-y: contain;");
     expect(playerBlock).toContain("position: fixed;");
     expect(playerBlock).toContain("top: 0;");
     expect(playerBlock).toContain("left: 50%;");
     expect(playerBlock).toContain("width: min(100vw, var(--mobile-content-max));");
     expect(playerBlock).toContain("aspect-ratio: 16 / 10;");
     expect(playerBlock).toContain("transform: translateX(-50%);");
-    expect(playerBlock).toContain("--point-player-active-progress: linear-gradient");
+    expect(playerBlock).toContain("--student-video-progress-played: linear-gradient");
+    expect(playerBlock).toContain("--point-player-active-progress: var(--student-video-progress-played);");
+    expect(playerBlock).toContain("--point-player-inactive-played: var(--student-video-progress-played);");
+    expect(playerBlock).toContain("--point-player-active-loaded: var(--student-video-progress-loaded);");
+    expect(playerBlock).toContain("--point-player-inactive-loaded: var(--student-video-progress-loaded);");
     expect(defaultChromeHideBlock).toContain("display: none !important;");
     expect(defaultChromeHideBlock).toContain("pointer-events: none !important;");
     expect(defaultChromeHideBlock).toContain(".point-art-player .art-lock");
@@ -618,6 +754,7 @@ describe("student console role boundaries", () => {
     expect(equationNoteBlock).not.toContain("font-family: ui-monospace");
     expect(safetyCopyBlock).toContain("border-left: 3px solid");
     expect(actionAreaBlock).toContain("padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));");
+    expect(relatedPointSectionBlock).toContain("padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));");
   });
 
   it("keeps secondary-page back arrows shared, flatter, and left-aligned", async () => {

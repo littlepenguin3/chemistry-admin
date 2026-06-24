@@ -53,6 +53,7 @@ ADMIN_ROUTE_CONTRACTS = [
     ("GET", "/api/admin/review/items/{item_id}"),
     ("POST", "/api/admin/review/items/{item_id}/actions"),
     ("GET", "/api/admin/media/assets"),
+    ("GET", "/api/admin/media/upload-policy"),
     ("POST", "/api/admin/media/assets/precheck"),
     ("GET", "/api/admin/media/assets/processing"),
     ("POST", "/api/admin/media/assets/complete-upload"),

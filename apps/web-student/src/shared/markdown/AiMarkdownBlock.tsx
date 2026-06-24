@@ -1,22 +1,16 @@
-import { Suspense, lazy } from "react";
+import { AiStaticMarkdown } from "../../components/AiMarkdown";
+import type { AiRichContentOpenContext } from "./aiRichContentArtifacts";
 
-const LazyAiMarkdown = lazy(async () => {
-  const module = await import("../../components/AiMarkdown");
-  return { default: module.AiMarkdown };
-});
-
-export function AiMarkdownBlock({ text, className = "" }: { text: string | null | undefined; className?: string }) {
+export function AiMarkdownBlock({
+  text,
+  className = "",
+  artifactContext,
+}: {
+  text: string | null | undefined;
+  className?: string;
+  artifactContext?: AiRichContentOpenContext;
+}) {
   const value = String(text || "");
   if (!value.trim()) return null;
-  return (
-    <Suspense
-      fallback={
-        <div className={["ai-markdown", className].filter(Boolean).join(" ")}>
-          <p className="ai-md-paragraph">{value}</p>
-        </div>
-      }
-    >
-      <LazyAiMarkdown text={value} className={className} />
-    </Suspense>
-  );
+  return <AiStaticMarkdown text={value} className={className} artifactContext={artifactContext} />;
 }

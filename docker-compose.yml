@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg16@sha256:00ba258a66dac104fd5171074a0084462a64a1369d8513f3d0a634e2f24d15bc
     environment:
       POSTGRES_DB: chemistry_exam
       POSTGRES_USER: chemistry
@@ -38,6 +38,7 @@ services:
       retries: 20
 
   backend:
+    image: chemistry-admin-backend:4e6da1db8525
     build:
       context: .
       dockerfile: server/Dockerfile
@@ -85,6 +86,7 @@ services:
       retries: 12
 
   web-student:
+    image: chemistry-admin-web-student:598142c947d7
     build:
       context: .
       dockerfile: server/Dockerfile.frontend
@@ -105,6 +107,7 @@ services:
       retries: 12
 
   web-teacher:
+    image: chemistry-admin-web-teacher:d33c08da4d29
     build:
       context: .
       dockerfile: server/Dockerfile.frontend
@@ -125,6 +128,7 @@ services:
       retries: 12
 
   web-admin:
+    image: chemistry-admin-web-admin:234baa67124f
     build:
       context: .
       dockerfile: server/Dockerfile.frontend
@@ -147,6 +151,7 @@ services:
   bge-rag:
     profiles:
       - rag
+    image: chemistry-admin-bge-rag:8a8c8613ef43
     build:
       context: .
       dockerfile: server/Dockerfile.bge-rag
@@ -170,7 +175,7 @@ services:
       retries: 20
 
   tusd:
-    image: tusproject/tusd:v2
+    image: tusproject/tusd:v2@sha256:9c61565fccd2689b052aa78e52d9558f309e98f6320960746f225d2fd73a35e3
     command:
       - "-host=0.0.0.0"
       - "-port=1080"
@@ -183,6 +188,7 @@ services:
       - ./data/media:/app/data/media
 
   video-worker:
+    image: chemistry-admin-video-worker:6d48e88ec044
     build:
       context: .
       dockerfile: server/Dockerfile.video-worker

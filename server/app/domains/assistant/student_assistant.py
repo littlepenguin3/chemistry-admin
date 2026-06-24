@@ -64,6 +64,8 @@ def _effective_settings_ready() -> bool:
 _FOLLOWUP_MIN_VISIBLE_CHARS = 8
 _FOLLOWUP_MAX_VISIBLE_CHARS = 24
 _FOLLOWUP_MAX_COUNT = 5
+_TITLE_MIN_VISIBLE_CHARS = 4
+_TITLE_MAX_VISIBLE_CHARS = 18
 _MODEL_SUCCESS_MODES = {
     "openai_chat",
     "openai_chat_stream",
@@ -150,6 +152,47 @@ _ASSISTANT_OFFER_PROMPT_PATTERNS = tuple(
         r"^(?:我来|让我|可以继续|可以再)",
     )
 )
+_TITLE_REJECT_TERMS = (
+    "markdown",
+    "json",
+    "atom",
+    "assistant",
+    "prompt",
+    "conversation",
+    "history",
+    "admin",
+    "teacher",
+    *_DIAGNOSTIC_PROMPT_TERMS,
+    *_UNSAFE_PROMPT_TERMS,
+    *_ASSESSMENT_ANSWER_PROMPT_TERMS,
+    *_OFF_SCOPE_PROMPT_TERMS,
+    "\u6211\u6b63\u5728\u5b66\u4e60",
+    "\u8bf7\u89e3\u91ca",
+    "\u8bf7\u7528",
+    "\u73b0\u4ee3",
+    "\u56de\u7b54",
+    "\u8fd9\u4e2a\u5185\u5bb9\u4e3b\u8981",
+    "\u9009\u62e9\u5b9e\u9a8c",
+    "\u9009\u62e9\u70b9\u4f4d",
+    "\u5b66\u751f\u7aef",
+    "\u6559\u5e08",
+    "\u540e\u53f0",
+)
+
+_FOLLOWUP_SYSTEM_PROMPT = (
+    "You generate final UI metadata for Atom, a student inorganic chemistry learning assistant. "
+    "Return JSON only: {\"suggested_prompts\":[...],\"conversation_title\":\"...\"}. "
+    "suggested_prompts must be 3 to 5 concise Chinese questions written in the student's voice; "
+    "each prompt must be 8 to 24 visible characters and can be sent verbatim as the student's next message. "
+    "If request_conversation_title is true, also return one concise Chinese learning-topic title, 4 to 18 visible characters. "
+    "If request_conversation_title is false, omit conversation_title or set it to null. "
+    "Preserve meaningful chemistry formulas such as KI, Cl2, and CCl4. "
+    "Use direct askable prompt wording. "
+    "Do not write Atom's offer/choice wording. "
+    "Base all metadata only on the current student context, latest question, completed answer, and recent history. "
+    "Do not include markdown, numbering, explanations, diagnostics, RAG/chunk/internal terms, unsafe private experiment operations, "
+    "direct live-assessment answers, teacher/admin terms, or off-course topics."
+)
 
 
 def _followup_model_ready(settings: Any) -> bool:
@@ -173,6 +216,10 @@ def _conversation_history_for_followups(payload: StudentAssistantAskRequest) -> 
     return history
 
 
+def _should_request_conversation_title(payload: StudentAssistantAskRequest) -> bool:
+    return not payload.conversation_history
+
+
 def _followup_generation_payload(payload: StudentAssistantAskRequest, answer: str) -> dict[str, Any]:
     return {
         "context_type": payload.context_type,
@@ -188,6 +235,7 @@ def _followup_generation_payload(payload: StudentAssistantAskRequest, answer: st
         "latest_student_question": payload.question,
         "completed_answer": answer[:2200],
         "recent_conversation_history": _conversation_history_for_followups(payload),
+        "request_conversation_title": _should_request_conversation_title(payload),
     }
 
 
@@ -199,13 +247,24 @@ def _json_payload_from_model_text(text: str) -> Any:
     try:
         return json.loads(content)
     except json.JSONDecodeError:
-        match = re.search(r"\[[\s\S]*\]", content)
-        if not match:
-            return []
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError:
-            return []
+        for pattern in (r"\{[\s\S]*\}", r"\[[\s\S]*\]"):
+            match = re.search(pattern, content)
+            if not match:
+                continue
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                continue
+        return []
+
+
+def _parse_followup_metadata_payload(value: Any) -> dict[str, Any]:
+    payload = _json_payload_from_model_text(value) if isinstance(value, str) else value
+    if isinstance(payload, dict):
+        return payload
+    if isinstance(payload, list):
+        return {"suggested_prompts": payload}
+    return {}
 
 
 def _parse_suggested_prompt_payload(value: Any) -> list[Any]:
@@ -274,6 +333,56 @@ def _sanitize_followup_prompts(value: Any) -> list[str]:
     return suggestions
 
 
+def _title_has_rejected_term(text: str) -> bool:
+    normalized = re.sub(r"\s+", " ", text).casefold()
+    compact = re.sub(r"\s+", "", text).casefold()
+    for term in _TITLE_REJECT_TERMS:
+        term_text = str(term).casefold()
+        if term_text and (term_text in normalized or term_text in compact):
+            return True
+    return False
+
+
+def _sanitize_conversation_title(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    raw = value.strip()
+    if not raw or "\n" in raw or "\r" in raw:
+        return ""
+    if raw.startswith("```") or re.search(r"[{}\[\]<>`#*|]", raw):
+        return ""
+    text_value = re.sub(r"\s+", " ", raw).strip()
+    text_value = re.sub(r"^(?:[-*]|\d+[.)])\s*", "", text_value).strip()
+    text_value = text_value.strip(" \"'`_*#-:：,，.。;；!?！？()（）[]【】{}<>《》")
+    if not text_value:
+        return ""
+    visible_length = _visible_char_count(text_value)
+    if visible_length < _TITLE_MIN_VISIBLE_CHARS or visible_length > _TITLE_MAX_VISIBLE_CHARS:
+        return ""
+    if _title_has_rejected_term(text_value):
+        return ""
+    if _prompt_uses_assistant_offer_voice(text_value):
+        return ""
+    return text_value
+
+
+def _sanitize_followup_metadata(value: Any, *, include_title: bool) -> dict[str, Any]:
+    payload = _parse_followup_metadata_payload(value)
+    metadata: dict[str, Any] = {
+        "suggested_prompts": _sanitize_followup_prompts(payload),
+    }
+    if include_title:
+        title = _sanitize_conversation_title(
+            payload.get("conversation_title")
+            or payload.get("title")
+            or payload.get("chat_title")
+            or payload.get("history_title")
+        )
+        if title:
+            metadata["conversation_title"] = title
+    return metadata
+
+
 def _should_generate_followups(response: dict[str, Any], answer: str) -> bool:
     if not answer.strip():
         return False
@@ -285,16 +394,17 @@ def _should_generate_followups(response: dict[str, Any], answer: str) -> bool:
     return mode in _MODEL_SUCCESS_MODES or mode.startswith("openai")
 
 
-async def _generate_followup_prompts(
+async def _generate_followup_metadata(
     payload: StudentAssistantAskRequest,
     answer: str,
     settings: Any,
-) -> list[str]:
+) -> dict[str, Any]:
     if not _followup_model_ready(settings):
-        return []
+        return {"suggested_prompts": []}
 
     from openai import OpenAI
 
+    include_title = _should_request_conversation_title(payload)
     client = OpenAI(
         api_key=settings.agent_llm_api_key or os.getenv("OPENAI_API_KEY"),
         base_url=settings.agent_llm_base_url or None,
@@ -303,7 +413,7 @@ async def _generate_followup_prompts(
     response = client.chat.completions.create(
         model=settings.agent_llm_model,
         temperature=0.35,
-        max_tokens=220,
+        max_tokens=320,
         messages=[
             {
                 "role": "system",
@@ -316,7 +426,16 @@ async def _generate_followup_prompts(
         ],
     )
     content = response.choices[0].message.content if response.choices else ""
-    return _sanitize_followup_prompts(content or "")
+    return _sanitize_followup_metadata(content or "", include_title=include_title)
+
+
+async def _generate_followup_prompts(
+    payload: StudentAssistantAskRequest,
+    answer: str,
+    settings: Any,
+) -> list[str]:
+    metadata = await _generate_followup_metadata(payload, answer, settings)
+    return _sanitize_followup_prompts(metadata)
 
 
 def _answer_from_final_response(response: dict[str, Any]) -> str:
@@ -333,13 +452,17 @@ async def _student_final_response_with_followups(
 ) -> dict[str, Any]:
     next_response = dict(response)
     answer = _answer_from_final_response(next_response)
-    suggestions: list[str] = []
+    metadata: dict[str, Any] = {"suggested_prompts": []}
     if _should_generate_followups(next_response, answer):
         try:
-            suggestions = await _generate_followup_prompts(payload, answer, settings)
+            raw_metadata = await _generate_followup_metadata(payload, answer, settings)
+            metadata = raw_metadata if isinstance(raw_metadata, dict) else {"suggested_prompts": raw_metadata}
         except Exception:
-            suggestions = []
-    next_response["suggested_prompts"] = suggestions
+            metadata = {"suggested_prompts": []}
+    next_response["suggested_prompts"] = _sanitize_followup_prompts(metadata)
+    title = _sanitize_conversation_title(metadata.get("conversation_title")) if _should_request_conversation_title(payload) else ""
+    if title:
+        next_response["conversation_title"] = title
     return next_response
 
 

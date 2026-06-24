@@ -42,4 +42,4 @@ def student_point_detail_route(
     node_id: Annotated[str, Path(min_length=1)],
     user: StudentUser,
 ) -> StudentPointDetailResponse:
-    return StudentPointDetailResponse(**student_point_detail(node_id=node_id))
+    return StudentPointDetailResponse(**student_point_detail(node_id=node_id, user=user))

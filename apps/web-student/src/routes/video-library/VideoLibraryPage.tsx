@@ -43,6 +43,7 @@ type SearchScope = "video" | "learning";
 type CatalogSearchRecord = {
   node: StudentCatalogNodeCard;
   breadcrumbs: StudentCatalogBreadcrumb[];
+  chapterTitle?: string;
 };
 
 function compactSearch(search: Record<string, string | null | undefined>): Record<string, string> {
@@ -105,7 +106,7 @@ function catalogRecordPath(record: CatalogSearchRecord): string {
 }
 
 function catalogRecordParentLabel(record: CatalogSearchRecord, rootLabel: string): string {
-  return record.breadcrumbs[record.breadcrumbs.length - 1]?.title || rootLabel;
+  return record.breadcrumbs[record.breadcrumbs.length - 1]?.title || record.chapterTitle || rootLabel;
 }
 
 function catalogNodeMeta(node: StudentCatalogNodeCard): string {
@@ -123,7 +124,7 @@ async function buildCatalogSearchIndex(chapterId: string): Promise<{
   records: CatalogSearchRecord[];
 }> {
   const chapter = await getStudentChapterCatalog(chapterId);
-  const records: CatalogSearchRecord[] = chapter.nodes.map((node) => ({ node, breadcrumbs: [] }));
+  const records: CatalogSearchRecord[] = chapter.nodes.map((node) => ({ node, breadcrumbs: [], chapterTitle: chapter.chapter_title }));
   const visited = new Set<string>();
 
   async function visit(nodes: StudentCatalogNodeCard[]) {
@@ -131,7 +132,7 @@ async function buildCatalogSearchIndex(chapterId: string): Promise<{
       if (node.node_kind !== "directory" || visited.has(node.node_id)) continue;
       visited.add(node.node_id);
       const detail = await getStudentCatalogNode(node.node_id);
-      const childRecords = detail.children.map((child) => ({ node: child, breadcrumbs: detail.breadcrumbs }));
+      const childRecords = detail.children.map((child) => ({ node: child, breadcrumbs: detail.breadcrumbs, chapterTitle: chapter.chapter_title }));
       records.push(...childRecords);
       await visit(detail.children);
     }
@@ -139,6 +140,17 @@ async function buildCatalogSearchIndex(chapterId: string): Promise<{
 
   await visit(chapter.nodes);
   return { chapter, records };
+}
+
+async function buildCatalogSearchIndexes(chapterIds: string[]): Promise<{
+  chapterTitle: string;
+  records: CatalogSearchRecord[];
+}> {
+  const indexes = await Promise.all(chapterIds.map((chapterId) => buildCatalogSearchIndex(chapterId)));
+  return {
+    chapterTitle: indexes.length === 1 ? indexes[0]?.chapter.chapter_title || "" : "全部章节",
+    records: indexes.flatMap((item) => item.records),
+  };
 }
 
 function isVideoResult(item: StudentVideoLibraryResultItem): boolean {
@@ -306,14 +318,21 @@ export function VideoLibraryPage({ scope = "video" }: { scope?: SearchScope }) {
   const [error, setError] = useState("");
   const hasQuery = query.trim().length > 0;
   const learningProfiles = learningPage?.profiles || [];
-  const activeChapterId = search.chapterId || learningPage?.active_profile?.chapter_id || "";
-  const learningRootLabel = learningPage?.active_profile ? formatChapterEntryTitle(learningPage.active_profile) : chapterTitle;
+  const hasScopedLearningContext = Boolean(search.profileId || search.chapterId || search.sourceNodeId || search.catalogPath || search.elementSymbol);
+  const activeChapterId = search.chapterId || (hasScopedLearningContext ? learningPage?.active_profile?.chapter_id || "" : "");
+  const catalogChapterIds = isLearningScope
+    ? activeChapterId
+      ? [activeChapterId]
+      : Array.from(new Set(learningProfiles.map((profile) => profile.chapter_id).filter(Boolean)))
+    : [];
+  const catalogChapterIdsKey = catalogChapterIds.join("|");
+  const learningRootLabel = hasScopedLearningContext && learningPage?.active_profile ? formatChapterEntryTitle(learningPage.active_profile) : chapterTitle || "全部章节";
 
   const routeSearchForQuery = (nextQuery: string) =>
     compactSearch({
       from: search.from || defaultSource,
       profileId: isLearningScope ? search.profileId || "" : "",
-      chapterId: isLearningScope ? search.chapterId || activeChapterId || "" : "",
+      chapterId: isLearningScope ? search.chapterId || (hasScopedLearningContext ? activeChapterId : "") || "" : "",
       sourceNodeId: isLearningScope ? search.sourceNodeId || "" : "",
       catalogPath: isLearningScope ? search.catalogPath || "" : "",
       elementSymbol: isLearningScope ? search.elementSymbol || "" : "",
@@ -383,7 +402,8 @@ export function VideoLibraryPage({ scope = "video" }: { scope?: SearchScope }) {
   }, [isLearningScope, search.profileId]);
 
   useEffect(() => {
-    if (!isLearningScope || !activeChapterId) {
+    const chapterIds = catalogChapterIdsKey ? catalogChapterIdsKey.split("|").filter(Boolean) : [];
+    if (!isLearningScope || !chapterIds.length) {
       setCatalogRecords([]);
       setChapterTitle("");
       setCatalogError("");
@@ -393,10 +413,10 @@ export function VideoLibraryPage({ scope = "video" }: { scope?: SearchScope }) {
     let cancelled = false;
     setCatalogLoading(true);
     setCatalogError("");
-    buildCatalogSearchIndex(activeChapterId)
-      .then(({ chapter, records }) => {
+    buildCatalogSearchIndexes(chapterIds)
+      .then(({ chapterTitle: nextChapterTitle, records }) => {
         if (cancelled) return;
-        setChapterTitle(chapter.chapter_title);
+        setChapterTitle(nextChapterTitle);
         setCatalogRecords(records);
       })
       .catch((requestError) => {
@@ -408,7 +428,7 @@ export function VideoLibraryPage({ scope = "video" }: { scope?: SearchScope }) {
     return () => {
       cancelled = true;
     };
-  }, [activeChapterId, isLearningScope]);
+  }, [catalogChapterIdsKey, isLearningScope]);
 
   const searchItems = useMemo(() => payload?.groups.flatMap((group) => group.items) || [], [payload]);
   const videoResultItems = useMemo(() => {

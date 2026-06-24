@@ -35,7 +35,7 @@ export type MediaAsset = {
   association_count?: number;
   legacy_association_count?: number;
   catalog_binding_count?: number;
-  file_state?: "available" | "partial" | "missing" | "pending" | "untracked" | string;
+  file_state?: "available" | "partial" | "missing" | "pending" | "untracked" | "policy_rejected" | string;
   primary_file_available?: boolean;
   existing_file_count?: number;
   missing_file_count?: number;
@@ -94,6 +94,12 @@ export type MediaDuplicatePrecheck = {
   asset?: MediaAsset | null;
 };
 
+export type MediaUploadPolicy = {
+  max_media_upload_mb: number;
+  max_media_upload_bytes: number;
+  allowed_extensions?: string[];
+};
+
 export type MediaArchiveCatalogBinding = {
   binding_id: string;
   placement_node_id?: string | null;
@@ -141,6 +147,10 @@ export type MediaAssetArchiveResult = {
 
 export function listMediaAssets(limit = 200): Promise<ApiList<MediaAsset>> {
   return api<ApiList<MediaAsset>>(`/api/admin/media/assets?limit=${limit}`);
+}
+
+export function getMediaUploadPolicy(): Promise<MediaUploadPolicy> {
+  return api<MediaUploadPolicy>("/api/admin/media/upload-policy");
 }
 
 export function getMediaAssetThumbnailUrl(assetId: string): string {

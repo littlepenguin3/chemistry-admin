@@ -8,6 +8,7 @@ import {
   applyPreviewDragScrollWithLock,
   applyPreviewScroll,
   applyPreviewWheelScroll,
+  clearPreviewTextSelection,
   dispatchPreviewPointerEvent,
   findScrollablePreviewTarget,
   PreviewInputRuntime,
@@ -129,9 +130,18 @@ function dispatchPreviewMessage(message: PreviewInputMessage, origin = window.lo
   window.dispatchEvent(new MessageEvent("message", { origin, data: message }));
 }
 
+function selectElementText(element: Node) {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
 describe("student preview input runtime helpers", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
+    window.getSelection()?.removeAllRanges();
     sessionStorage.clear();
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -141,6 +151,7 @@ describe("student preview input runtime helpers", () => {
 
   afterEach(() => {
     cleanup();
+    window.getSelection()?.removeAllRanges();
     vi.useRealTimers();
   });
 
@@ -176,6 +187,17 @@ describe("student preview input runtime helpers", () => {
 
     expect(sessionStorage.getItem("chem_student_preview_frame_id")).toBe("frame-1");
     expect(sessionStorage.getItem("chem_student_preview_teacher_origin")).toBe("http://127.0.0.1:5174");
+  });
+
+  it("clears browser text selection only when explicitly requested by preview runtime", () => {
+    const label = document.createElement("p");
+    label.textContent = "selected student preview text";
+    document.body.appendChild(label);
+    selectElementText(label);
+
+    expect(window.getSelection()?.rangeCount).toBe(1);
+    clearPreviewTextSelection();
+    expect(window.getSelection()?.rangeCount).toBe(0);
   });
 
   it("activates real actionable elements through click without leaving desktop focus", () => {
@@ -490,6 +512,60 @@ describe("student preview input runtime helpers", () => {
     dispatchPreviewMessage(previewMessage("touchEnd", { point: { x: 10, y: 10 }, timestamp: 1020, startedAt: 1000, primaryButton: false }));
 
     expect(clickHandler).not.toHaveBeenCalled();
+  });
+
+  it("leaves ordinary student text selection alone when preview messages are posted", () => {
+    const label = document.createElement("p");
+    label.textContent = "ordinary student selection";
+    document.body.appendChild(label);
+
+    renderPreviewRuntime(false);
+    selectElementText(label);
+    dispatchPreviewMessage(previewMessage("touchStart", { point: { x: 10, y: 10 }, timestamp: 1000, startedAt: 1000 }));
+
+    expect(window.getSelection()?.toString()).toBe("ordinary student selection");
+  });
+
+  it("clears stale browser text selection after verified teacher preview gestures", () => {
+    const label = document.createElement("p");
+    label.textContent = "stale iframe selection";
+    document.body.appendChild(label);
+
+    renderPreviewRuntime();
+    selectElementText(label);
+    dispatchPreviewMessage(previewMessage("touchStart", { point: { x: 10, y: 10 }, timestamp: 1000, startedAt: 1000 }));
+
+    expect(window.getSelection()?.rangeCount).toBe(0);
+  });
+
+  it("keeps stale text selection when preview input comes from an unexpected origin", () => {
+    const label = document.createElement("p");
+    label.textContent = "unexpected origin selection";
+    document.body.appendChild(label);
+
+    renderPreviewRuntime();
+    selectElementText(label);
+    dispatchPreviewMessage(
+      previewMessage("touchStart", { point: { x: 10, y: 10 }, timestamp: 1000, startedAt: 1000 }),
+      "http://evil.example",
+    );
+
+    expect(window.getSelection()?.toString()).toBe("unexpected origin selection");
+  });
+
+  it("suppresses text selection only while teacher preview runtime is mounted", () => {
+    document.documentElement.style.setProperty("user-select", "text");
+    document.body.style.setProperty("user-select", "text");
+
+    const view = renderPreviewRuntime();
+
+    expect(document.documentElement.style.getPropertyValue("user-select")).toBe("none");
+    expect(document.body.style.getPropertyValue("user-select")).toBe("none");
+
+    view.unmount();
+
+    expect(document.documentElement.style.getPropertyValue("user-select")).toBe("text");
+    expect(document.body.style.getPropertyValue("user-select")).toBe("text");
   });
 
   it("rejects messages from unexpected origins without canceling the active sequence", () => {

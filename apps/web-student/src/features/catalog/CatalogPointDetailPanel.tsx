@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Atom, Bookmark, ClipboardList, Eye, FlaskConical, LoaderCircle, MoreHorizontal, PlayCircle, ShieldAlert } from "lucide-react";
+import { Atom, Bookmark, ClipboardList, Clock3, Eye, Flag, FlaskConical, LoaderCircle, MoreHorizontal, PlayCircle, Share2, ShieldAlert, ThumbsUp } from "lucide-react";
 
 import { buildReactionEquationRows } from "../../../../shared/reactionEquations";
-import type { StudentPointDetailResponse } from "../../api";
-import { errorMessage, getStudentCatalogPointDetail, studentMediaUrl } from "../../api";
+import type { StudentPointDetailResponse, StudentPointVideo, StudentVideoSaveRequest, StudentVideoSaveResponse } from "../../api";
+import { errorMessage, getStudentCatalogPointDetail, removeStudentVideoSave, saveStudentVideo, studentMediaUrl } from "../../api";
 import type { StudentRouteSearch } from "../../app/router/routeTypes";
 import { ChemEquation } from "../../components/ChemEquation";
 import { MobileEmptyState } from "../../mobile/primitives";
@@ -24,6 +24,7 @@ export function CatalogPointDetailPanel({
   assistantEnabled,
   onOpenAssistant,
   onOpenRelatedPoint,
+  onOpenFeedback,
   previewMode = false,
   loadPointDetail = getStudentCatalogPointDetail,
   resolveMediaUrl = studentMediaUrl,
@@ -37,6 +38,7 @@ export function CatalogPointDetailPanel({
   assistantEnabled: boolean;
   onOpenAssistant: (context: AssistantContext) => void;
   onOpenRelatedPoint: (nodeId: string, pointTitle: string) => void;
+  onOpenFeedback?: (detail: StudentPointDetailResponse) => void;
   previewMode?: boolean;
   loadPointDetail?: (nodeId: string) => Promise<StudentPointDetailResponse>;
   resolveMediaUrl?: (path: string) => string;
@@ -44,18 +46,28 @@ export function CatalogPointDetailPanel({
   const [detail, setDetail] = useState<StudentPointDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [watchLater, setWatchLater] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [actionStatus, setActionStatus] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError("");
+    setLiked(false);
     setSaved(false);
+    setWatchLater(false);
     setMoreOpen(false);
+    setActionStatus("");
     loadPointDetail(nodeId)
       .then((payload) => {
-        if (!cancelled) setDetail(payload);
+        if (!cancelled) {
+          setDetail(payload);
+          setSaved(Boolean(payload.personal_state.favorite));
+          setWatchLater(Boolean(payload.personal_state.watch_later));
+        }
       })
       .catch((requestError) => {
         if (!cancelled) setError(errorMessage(requestError));
@@ -102,6 +114,96 @@ export function CatalogPointDetailPanel({
     };
   }, [detail, principleText]);
 
+  const sharePoint = useCallback(() => {
+    if (!detail) return;
+    const shareText = compactText([pathText, principleText || detail.phenomenon_explanation || detail.summary]);
+    if (typeof navigator.share === "function") {
+      void navigator
+        .share({
+          title: detail.title,
+          text: shareText || detail.title,
+          url: window.location.href,
+        })
+        .then(() => setActionStatus("已打开系统分享"))
+        .catch(() => undefined);
+      return;
+    }
+    setActionStatus("当前环境暂不支持系统分享");
+  }, [detail, pathText, principleText]);
+
+  const applySaveResponse = useCallback((response: StudentVideoSaveResponse) => {
+    setSaved(response.personal_state.favorite);
+    setWatchLater(response.personal_state.watch_later);
+    setDetail((current) =>
+      current
+        ? {
+            ...current,
+            personal_state: response.personal_state,
+          }
+        : current,
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [moreOpen]);
+
+  const buildSavePayload = useCallback((targetDetail: StudentPointDetailResponse, targetVideo: StudentPointVideo, source: string): StudentVideoSaveRequest => {
+    return {
+      placement_node_id: targetDetail.placement_node_id || targetDetail.node_id,
+      canonical_point_id: targetDetail.canonical_point_id,
+      media_id: targetVideo.media_id,
+      source,
+    };
+  }, []);
+
+  const toggleFavorite = useCallback(() => {
+    if (!detail || !video) {
+      setActionStatus("当前实验还没有可收藏的视频");
+      return;
+    }
+    const active = saved;
+    const request = active
+      ? removeStudentVideoSave("favorite", buildSavePayload(detail, video, "point_detail"))
+      : saveStudentVideo("favorite", buildSavePayload(detail, video, "point_detail"));
+    void request
+      .then((response) => {
+        applySaveResponse(response);
+        setActionStatus(active ? `已取消收藏：${detail.title}` : `已收藏：${detail.title}`);
+      })
+      .catch((requestError) => setActionStatus(errorMessage(requestError)));
+  }, [applySaveResponse, buildSavePayload, detail, saved, video]);
+
+  const markWatchLater = useCallback(() => {
+    if (!detail || !video) {
+      setMoreOpen(false);
+      setActionStatus("当前实验还没有可稍后学习的视频");
+      return;
+    }
+    setMoreOpen(false);
+    const active = watchLater;
+    const request = active
+      ? removeStudentVideoSave("watch_later", buildSavePayload(detail, video, "point_detail"))
+      : saveStudentVideo("watch_later", buildSavePayload(detail, video, "point_detail"));
+    void request
+      .then((response) => {
+        applySaveResponse(response);
+        setActionStatus(active ? `已移出稍后学习：${detail.title}` : `已记录稍后学习：${detail.title}`);
+      })
+      .catch((requestError) => setActionStatus(errorMessage(requestError)));
+  }, [applySaveResponse, buildSavePayload, detail, video, watchLater]);
+
+  const openFeedback = useCallback(() => {
+    if (!detail) return;
+    setMoreOpen(false);
+    onOpenFeedback?.(detail);
+  }, [detail, onOpenFeedback]);
+
   return (
     <section className="learning-panel catalog-point-detail" aria-label="点位视频详情">
       {loading ? <LearningState icon={<LoaderCircle className="spin" size={23} />} text="正在加载点位详情" /> : null}
@@ -120,43 +222,75 @@ export function CatalogPointDetailPanel({
             <h2>{detail.title}</h2>
           </section>
 
+          <LearningContentSection title="现象解释" body={detail.phenomenon_explanation || ""} icon={<Eye size={18} />} className="phenomenon-section" />
+          <PrincipleContentSection detail={detail} body={principleText || ""} />
+          <LearningContentSection title="安全提示" body={detail.safety_note || ""} icon={<ShieldAlert size={18} />} className="safety-section" />
+
           {!previewMode ? (
-            <section className="point-title-actions" aria-label="点位操作">
-              <div className="point-title-action-row">
+            <section className="point-learning-actions" aria-label="学习操作">
+              <div className="point-learning-main-row">
                 <button
                   type="button"
-                  className="point-title-action primary"
+                  className="point-learning-main-action primary"
+                  disabled={finishing}
+                  onClick={() => onFinishLearning(detail)}
+                >
+                  <ClipboardList size={20} />
+                  <span>{finishing ? "生成中" : "学完测一测"}</span>
+                </button>
+                <button
+                  type="button"
+                  className="point-learning-main-action"
                   disabled={!assistantEnabled || !assistantContext}
                   onClick={() => assistantContext && onOpenAssistant(assistantContext)}
                 >
-                  <Atom size={19} />
+                  <Atom size={20} />
                   <span>问问Atom</span>
                 </button>
-                <button type="button" className="point-title-action" disabled={finishing} onClick={() => onFinishLearning(detail)}>
-                  <ClipboardList size={19} />
-                  <span>{finishing ? "生成中" : "测一测"}</span>
+              </div>
+              <div className="point-learning-utility-row" aria-label="次要操作">
+                <button
+                  type="button"
+                  className={liked ? "point-learning-utility-action active" : "point-learning-utility-action"}
+                  aria-label={liked ? "取消点赞" : "点赞"}
+                  aria-pressed={liked}
+                  onClick={() => setLiked((value) => !value)}
+                >
+                  <ThumbsUp size={18} />
+                  <span>{liked ? "已赞" : "点赞"}</span>
                 </button>
-                <button type="button" className={saved ? "point-title-action active" : "point-title-action"} onClick={() => setSaved((value) => !value)}>
-                  <Bookmark size={19} />
+                <button
+                  type="button"
+                  className={saved ? "point-learning-utility-action active" : "point-learning-utility-action"}
+                  aria-label={saved ? "取消收藏" : "收藏"}
+                  aria-pressed={saved}
+                  onClick={toggleFavorite}
+                >
+                  <Bookmark size={18} />
                   <span>{saved ? "已收藏" : "收藏"}</span>
                 </button>
-                <button type="button" className={moreOpen ? "point-title-action active" : "point-title-action"} onClick={() => setMoreOpen((value) => !value)}>
-                  <MoreHorizontal size={20} />
+                <button type="button" className="point-learning-utility-action" aria-label="分享" onClick={sharePoint}>
+                  <Share2 size={18} />
+                  <span>分享</span>
+                </button>
+                <button
+                  type="button"
+                  className={moreOpen ? "point-learning-utility-action active" : "point-learning-utility-action"}
+                  aria-haspopup="dialog"
+                  aria-expanded={moreOpen}
+                  onClick={() => setMoreOpen((value) => !value)}
+                >
+                  <MoreHorizontal size={19} />
                   <span>更多</span>
                 </button>
               </div>
               {finishError ? <div className="form-error">{finishError}</div> : null}
+              {actionStatus ? <div className="point-learning-action-hint">{actionStatus}</div> : null}
               {moreOpen ? (
-                <div className="point-title-more-panel">
-                  <span>反馈问题、分享给同学等低频操作后续放在这里。</span>
-                </div>
+                <PointLearningMoreSheet title={detail.title} watchLater={watchLater} onClose={() => setMoreOpen(false)} onWatchLater={markWatchLater} onFeedback={openFeedback} />
               ) : null}
             </section>
           ) : null}
-
-          <LearningContentSection title="现象解释" body={detail.phenomenon_explanation || ""} icon={<Eye size={18} />} className="phenomenon-section" />
-          <PrincipleContentSection detail={detail} body={principleText || ""} />
-          <LearningContentSection title="安全提示" body={detail.safety_note || ""} icon={<ShieldAlert size={18} />} className="safety-section" />
 
           <section className="detail-section related-point-section">
             <h3>相关实验链接</h3>
@@ -169,7 +303,7 @@ export function CatalogPointDetailPanel({
                     </span>
                     <span className="related-point-copy">
                       <span>{item.title}</span>
-                      <small>{item.relation_type || "相关实验"}</small>
+                      <small>{relatedPointRelationLabel(item.relation_type)}</small>
                     </span>
                   </button>
                 ))}
@@ -182,6 +316,63 @@ export function CatalogPointDetailPanel({
         </>
       ) : null}
     </section>
+  );
+}
+
+function relatedPointRelationLabel(relationType?: string | null) {
+  switch (relationType) {
+    case "default":
+    case "default_override":
+    case "generated_default":
+      return "推荐实验";
+    case "manual":
+    default:
+      return "相关实验";
+  }
+}
+
+function PointLearningMoreSheet({
+  title,
+  watchLater,
+  onClose,
+  onWatchLater,
+  onFeedback,
+}: {
+  title: string;
+  watchLater: boolean;
+  onClose: () => void;
+  onWatchLater: () => void;
+  onFeedback: () => void;
+}) {
+  return (
+    <div
+      className="point-learning-more-backdrop"
+      role="presentation"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section className="point-learning-more-sheet" role="dialog" aria-modal="true" aria-label={`更多学习操作：${title}`}>
+        <div className="point-learning-more-head">
+          <p>更多</p>
+          <h3>{title}</h3>
+        </div>
+        <button type="button" onClick={onWatchLater}>
+          <Clock3 size={22} />
+          <span>
+            <b>{watchLater ? "移出稍后学习" : "稍后学习"}</b>
+            <small>{watchLater ? "不再放在首页稍后学习标签里" : "先把这个实验留到稍后再看"}</small>
+          </span>
+        </button>
+        <button type="button" onClick={onFeedback}>
+          <Flag size={22} />
+          <span>
+            <b>反馈问题</b>
+            <small>记录这个视频卡片的问题</small>
+          </span>
+        </button>
+      </section>
+    </div>
   );
 }
 

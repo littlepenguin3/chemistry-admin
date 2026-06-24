@@ -40,6 +40,7 @@ from server.app.api.student.student_assessment_reports import router as student_
 from server.app.api.student.student_custom_assessment import router as student_custom_assessment_router
 from server.app.api.student.student_learning import router as student_learning_router
 from server.app.api.student.student_home_feed import router as student_home_feed_router
+from server.app.api.student.student_video_saves import router as student_video_saves_router
 from server.app.api.student.student_posttest import router as student_posttest_router
 from server.app.api.student.student_pretest import router as student_pretest_router
 from server.app.api.student.student_platform import router as student_platform_router
@@ -108,6 +109,7 @@ app.include_router(student_posttest_router)
 app.include_router(student_pretest_router)
 app.include_router(student_platform_router)
 app.include_router(student_smart_assessment_router)
+app.include_router(student_video_saves_router)
 app.include_router(student_video_library_router)
 
 

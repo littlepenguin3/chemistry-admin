@@ -269,6 +269,7 @@ export type StudentPointDetailResponse = {
   videos: StudentPointVideo[];
   has_video: boolean;
   no_video_reason?: string | null;
+  personal_state: StudentVideoPersonalState;
   related_points: StudentRelatedPoint[];
   assessment_context: {
     point_node_id: string;
@@ -392,6 +393,30 @@ export type StudentVideoLibrarySearchResponse = {
 
 export type StudentHomeVideoFeedStatus = "ok" | "empty";
 export type StudentHomeVideoFeedReason = "catalog" | "recommended" | "recent" | "weakness";
+export type StudentHomeVideoTopic =
+  | "discover"
+  | "watch_later"
+  | "all"
+  | "color_change"
+  | "precipitation"
+  | "gas_generation"
+  | "layer_extraction"
+  | "fading_bleaching"
+  | "flame_light"
+  | "temperature_change"
+  | "heating"
+  | "test_paper"
+  | "indicator"
+  | "crystallization"
+  | "favorites";
+export type StudentHomeVideoRepeatMode = "cycled" | "none";
+
+export type StudentVideoPersonalState = {
+  watch_later: boolean;
+  watch_later_saved_at?: string | null;
+  favorite: boolean;
+  favorite_saved_at?: string | null;
+};
 
 export type StudentHomeVideoMedia = {
   media_id: string;
@@ -404,6 +429,7 @@ export type StudentHomeVideoMedia = {
 
 export type StudentHomeVideoFeedItem = {
   id: string;
+  instance_id: string;
   node_id: string;
   placement_node_id: string;
   canonical_point_id: string;
@@ -415,13 +441,38 @@ export type StudentHomeVideoFeedItem = {
   badges: string[];
   video: StudentHomeVideoMedia;
   target: StudentVideoLibraryRouteTarget;
+  personal_state: StudentVideoPersonalState;
   reason: StudentHomeVideoFeedReason;
 };
 
 export type StudentHomeVideoFeedResponse = {
   status: StudentHomeVideoFeedStatus;
   message: string;
+  topic: StudentHomeVideoTopic | string;
+  next_cursor?: string | null;
+  has_more: boolean;
+  batch_size: number;
+  pool_size: number;
+  repeat_mode: StudentHomeVideoRepeatMode;
   items: StudentHomeVideoFeedItem[];
+};
+
+export type StudentVideoSaveType = "watch_later" | "favorite";
+
+export type StudentVideoSaveRequest = {
+  placement_node_id: string;
+  media_id: string;
+  canonical_point_id?: string | null;
+  source?: string;
+};
+
+export type StudentVideoSaveResponse = {
+  save_type: StudentVideoSaveType;
+  placement_node_id: string;
+  canonical_point_id: string;
+  media_id: string;
+  active: boolean;
+  personal_state: StudentVideoPersonalState;
 };
 
 export type PosttestExperimentSummary = {
@@ -675,6 +726,7 @@ export type AgentChatMessage = {
 
 export type StudentAssistantFinalMetadata = {
   source_count?: number;
+  conversation_title?: string;
   suggested_prompts?: string[];
   sources?: Array<{
     title?: string | null;
@@ -1040,9 +1092,32 @@ export function getStudentLearningHome(): Promise<StudentLearningHomeResponse> {
   return api<StudentLearningHomeResponse>("/api/student/learning-home");
 }
 
-export function getStudentHomeVideoFeed(limit = 12): Promise<StudentHomeVideoFeedResponse> {
-  const params = new URLSearchParams({ limit: String(limit) });
+export function getStudentHomeVideoFeed(options: number | { limit?: number; topic?: string; cursor?: string | null } = 12): Promise<StudentHomeVideoFeedResponse> {
+  const payload = typeof options === "number" ? { limit: options } : options;
+  const params = new URLSearchParams({ limit: String(payload.limit ?? 12) });
+  if (payload.topic) params.set("topic", payload.topic);
+  if (payload.cursor) params.set("cursor", payload.cursor);
   return api<StudentHomeVideoFeedResponse>(`/api/student/home-video-feed?${params.toString()}`);
+}
+
+export function saveStudentVideo(saveType: StudentVideoSaveType, payload: StudentVideoSaveRequest): Promise<StudentVideoSaveResponse> {
+  return api<StudentVideoSaveResponse>(`/api/student/video-saves/${encodeURIComponent(saveType)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function removeStudentVideoSave(saveType: StudentVideoSaveType, payload: StudentVideoSaveRequest): Promise<StudentVideoSaveResponse> {
+  return api<StudentVideoSaveResponse>(`/api/student/video-saves/${encodeURIComponent(saveType)}`, {
+    method: "DELETE",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getStudentFavoriteVideoFeed(limit = 12, cursor?: string | null): Promise<StudentHomeVideoFeedResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  return api<StudentHomeVideoFeedResponse>(`/api/student/video-saves/favorite/feed?${params.toString()}`);
 }
 
 export function getStudentLearningPage(profileId?: string | null): Promise<StudentLearningPageResponse> {
