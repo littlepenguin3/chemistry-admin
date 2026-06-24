@@ -1209,16 +1209,38 @@ async function assertRootAiFlatReply(page, label) {
   }
   await assertNoHorizontalOverflow(page, label + ': restored root AI');
 
+  const restoredArtifactButtonState = await page.locator('.ai-chat-panel.root .ai-message.assistant.done').first().evaluate((answer) => ({
+    tableBlocks: answer.querySelectorAll('.ai-md-table-block').length,
+    mermaidBlocks: answer.querySelectorAll('.ai-md-mermaid-block').length,
+    artifactButtons: Array.from(answer.querySelectorAll('.ai-md-artifact-open')).map((button) => button.getAttribute('aria-label') || button.textContent || ''),
+    text: (answer.textContent || '').slice(0, 240),
+  }));
+  if (
+    restoredArtifactButtonState.tableBlocks < 1 ||
+    restoredArtifactButtonState.mermaidBlocks < 1 ||
+    !restoredArtifactButtonState.artifactButtons.some((labelText) => labelText.includes('表格')) ||
+    !restoredArtifactButtonState.artifactButtons.some((labelText) => labelText.includes('流程图'))
+  ) {
+    throw new Error(label + ': restored AI rich artifacts are missing detail affordances ' + JSON.stringify(restoredArtifactButtonState));
+  }
+
   await page.locator('.ai-md-table-block .ai-md-artifact-open').first().click();
   await page.locator('.ai-artifact-table-viewer').first().waitFor({ state: 'visible', timeout: 10000 });
   const tableDetailState = await page.locator('.ai-artifact-table-viewer').first().evaluate((viewer) => {
+    const workspace = viewer.querySelector('.ai-artifact-canvas-workspace');
+    const toolbar = viewer.querySelector('.ai-artifact-canvas-toolbar');
     const canvas = viewer.querySelector('.ai-artifact-table-canvas');
     const table = viewer.querySelector('.ai-artifact-table');
     const row = viewer.querySelector('.ai-artifact-table tbody tr[role="button"]');
     const controls = viewer.querySelectorAll('.ai-artifact-table-controls button');
     const bottomNav = document.querySelector('.student-bottom-nav');
     const doc = document.documentElement;
+    const viewerStyle = window.getComputedStyle(viewer);
+    const canvasStyle = canvas ? window.getComputedStyle(canvas) : null;
+    const toolbarStyle = toolbar ? window.getComputedStyle(toolbar) : null;
     return {
+      workspaceWidth: workspace?.getBoundingClientRect().width || 0,
+      workspaceHeight: workspace?.getBoundingClientRect().height || 0,
       canvasWidth: canvas?.getBoundingClientRect().width || 0,
       canvasHeight: canvas?.getBoundingClientRect().height || 0,
       tableWidth: table?.getBoundingClientRect().width || 0,
@@ -1228,9 +1250,15 @@ async function assertRootAiFlatReply(page, label) {
       hasBottomNav: Boolean(bottomNav),
       documentOverflow: doc.scrollWidth - doc.clientWidth,
       scrollbarWidth: canvas ? window.getComputedStyle(canvas).overflow : '',
+      gridBackground: viewerStyle.backgroundImage,
+      toolbarPosition: toolbarStyle?.position || '',
+      canvasBorderTopWidth: canvasStyle?.borderTopWidth || '',
+      canvasBackgroundColor: canvasStyle?.backgroundColor || '',
     };
   });
   if (
+    tableDetailState.workspaceWidth <= 0 ||
+    tableDetailState.workspaceHeight <= 0 ||
     tableDetailState.canvasWidth <= 0 ||
     tableDetailState.canvasHeight <= 0 ||
     tableDetailState.tableWidth <= tableDetailState.canvasWidth ||
@@ -1238,7 +1266,11 @@ async function assertRootAiFlatReply(page, label) {
     !tableDetailState.hasRowButton ||
     tableDetailState.controlCount < 4 ||
     tableDetailState.hasBottomNav ||
-    tableDetailState.documentOverflow > 1
+    tableDetailState.documentOverflow > 1 ||
+    tableDetailState.gridBackground === 'none' ||
+    tableDetailState.toolbarPosition !== 'absolute' ||
+    tableDetailState.canvasBorderTopWidth !== '0px' ||
+    tableDetailState.canvasBackgroundColor !== 'rgba(0, 0, 0, 0)'
   ) {
     throw new Error(label + ': AI table detail viewer is not mobile ready ' + JSON.stringify(tableDetailState));
   }
@@ -1269,6 +1301,61 @@ async function assertRootAiFlatReply(page, label) {
   await page.locator('.ai-artifact-row-reader button[aria-label="关闭行详情"]').first().click();
   await page.waitForFunction(() => !document.querySelector('.ai-artifact-row-reader'), null, { timeout: 10000 });
   await assertNoHorizontalOverflow(page, label + ': AI table detail');
+  await page.goBack({ waitUntil: 'networkidle' });
+
+  await page.locator('.ai-md-mermaid-block .ai-md-artifact-open').first().click();
+  await page.locator('.ai-artifact-mermaid-viewer').first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForFunction(() => document.querySelector('.ai-artifact-mermaid-svg svg') || document.querySelector('.ai-artifact-mermaid-fallback'), null, {
+    timeout: 10000,
+  });
+  const mermaidDetailState = await page.locator('.ai-artifact-mermaid-viewer').first().evaluate((viewer) => {
+    const workspace = viewer.querySelector('.ai-artifact-canvas-workspace');
+    const toolbar = viewer.querySelector('.ai-artifact-canvas-toolbar');
+    const pan = viewer.querySelector('.ai-artifact-mermaid-pan');
+    const svg = viewer.querySelector('.ai-artifact-mermaid-svg svg');
+    const controls = viewer.querySelectorAll('.ai-artifact-zoom-controls button');
+    const bottomNav = document.querySelector('.student-bottom-nav');
+    const doc = document.documentElement;
+    const viewerStyle = window.getComputedStyle(viewer);
+    const toolbarStyle = toolbar ? window.getComputedStyle(toolbar) : null;
+    const panStyle = pan ? window.getComputedStyle(pan) : null;
+    return {
+      workspaceWidth: workspace?.getBoundingClientRect().width || 0,
+      workspaceHeight: workspace?.getBoundingClientRect().height || 0,
+      panWidth: pan?.getBoundingClientRect().width || 0,
+      panHeight: pan?.getBoundingClientRect().height || 0,
+      svgWidth: svg?.getBoundingClientRect().width || 0,
+      svgHeight: svg?.getBoundingClientRect().height || 0,
+      controlCount: controls.length,
+      hasBottomNav: Boolean(bottomNav),
+      documentOverflow: doc.scrollWidth - doc.clientWidth,
+      gridBackground: viewerStyle.backgroundImage,
+      toolbarPosition: toolbarStyle?.position || '',
+      panBorderTopWidth: panStyle?.borderTopWidth || '',
+      panBackgroundColor: panStyle?.backgroundColor || '',
+    };
+  });
+  if (
+    mermaidDetailState.workspaceWidth <= 0 ||
+    mermaidDetailState.workspaceHeight <= 0 ||
+    mermaidDetailState.panWidth <= 0 ||
+    mermaidDetailState.panHeight <= 0 ||
+    mermaidDetailState.svgWidth <= 0 ||
+    mermaidDetailState.svgHeight <= 0 ||
+    mermaidDetailState.controlCount < 4 ||
+    mermaidDetailState.hasBottomNav ||
+    mermaidDetailState.documentOverflow > 1 ||
+    mermaidDetailState.gridBackground === 'none' ||
+    mermaidDetailState.toolbarPosition !== 'absolute' ||
+    mermaidDetailState.panBorderTopWidth !== '0px' ||
+    mermaidDetailState.panBackgroundColor !== 'rgba(0, 0, 0, 0)'
+  ) {
+    throw new Error(label + ': AI Mermaid canvas detail viewer is not mobile ready ' + JSON.stringify(mermaidDetailState));
+  }
+  await page.locator('.ai-artifact-zoom-controls button[aria-label="放大流程图"]').first().click();
+  await page.locator('.ai-artifact-zoom-controls button[aria-label="缩小流程图"]').first().click();
+  await page.locator('.ai-artifact-zoom-controls button[aria-label="重置流程图视图"]').first().click();
+  await assertNoHorizontalOverflow(page, label + ': AI Mermaid detail');
   await page.goBack({ waitUntil: 'networkidle' });
 }
 

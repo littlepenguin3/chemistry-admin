@@ -65,7 +65,7 @@ export function AiChatPage() {
   };
 
   return (
-    <DetailPageFrame title="Atom 对话" source={search.from || "ai"}>
+    <DetailPageFrame title="Atom 对话" source={search.from || "ai"} className="ai-chat-detail-frame">
       {canUseAssistant ? (
         <>
           <StudentAiChatTab

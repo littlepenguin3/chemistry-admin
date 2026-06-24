@@ -2453,6 +2453,9 @@ describe("student app route stack", () => {
     expectBottomNavHidden();
     expect(screen.getAllByText("表格详情").length).toBeGreaterThan(0);
     expect(screen.getByText("KBr + 氯水")).toBeInTheDocument();
+    expect(document.querySelector(".ai-artifact-canvas-page")).not.toBeNull();
+    expect(document.querySelector(".ai-artifact-canvas-toolbar")).not.toBeNull();
+    expect(document.querySelector(".ai-artifact-canvas-workspace")).not.toBeNull();
     expect(document.querySelector(".ai-artifact-table-canvas")).not.toBeNull();
     expect(document.querySelector(".ai-artifact-table-pan")).not.toBeNull();
     expect(document.querySelector(".ai-artifact-table-context")).not.toBeNull();
@@ -2474,6 +2477,10 @@ describe("student app route stack", () => {
     await waitFor(() => expect(window.location.pathname).toMatch(/^\/ai\/artifact\//));
     expectBottomNavHidden();
     expect(screen.getAllByText("流程图详情").length).toBeGreaterThan(0);
+    expect(document.querySelector(".ai-artifact-canvas-page")).not.toBeNull();
+    expect(document.querySelector(".ai-artifact-canvas-toolbar")).not.toBeNull();
+    expect(document.querySelector(".ai-artifact-canvas-workspace")).not.toBeNull();
+    await waitFor(() => expect(document.querySelector(".ai-artifact-mermaid-pan, .ai-artifact-mermaid-fallback")).not.toBeNull());
     expect(screen.getByRole("button", { name: "放大流程图" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "缩小流程图" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "适合屏幕" }).length).toBeGreaterThan(0);

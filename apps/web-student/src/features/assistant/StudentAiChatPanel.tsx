@@ -1220,6 +1220,8 @@ export function StudentAiChatPanel({
           const isLastError = message.role === "assistant" && (message.state === "error" || (status === "error" && index === messages.length - 1));
           const assistantState = isLastError ? "error" : isActiveAssistant ? "running" : "done";
           const messageKey = message.id || `${message.role}-${index}`;
+          const artifactHistoryId = activeHistoryId || historyEntry?.id || null;
+          const artifactMessageId = message.id || (artifactHistoryId ? `${artifactHistoryId}-${message.role}-${index + 1}` : messageKey);
           const isRootFlatAssistant = usesModernAtomSurface && message.role === "assistant" && assistantState === "done";
           const isRootThinkingAssistant = usesModernAtomSurface && message.role === "assistant" && assistantState === "running";
           const activePhase = isActiveAssistant ? assistantVisibleThinkingPhase(activeThinking, status, Boolean(message.content.trim())) : null;
@@ -1256,11 +1258,11 @@ export function StudentAiChatPanel({
                       text={message.content}
                       streaming={isActiveAssistant}
                       artifactContext={
-                        message.role === "assistant" && assistantState === "done" && activeHistoryId && message.id
+                        message.role === "assistant" && assistantState === "done" && artifactHistoryId && artifactMessageId
                           ? {
-                              historyId: activeHistoryId,
-                              messageId: message.id,
-                              onOpenArtifact: (artifact) => handleOpenRichContentArtifact(activeHistoryId, message.id || messageKey, artifact),
+                              historyId: artifactHistoryId,
+                              messageId: artifactMessageId,
+                              onOpenArtifact: (artifact) => handleOpenRichContentArtifact(artifactHistoryId, artifactMessageId, artifact),
                             }
                           : undefined
                       }

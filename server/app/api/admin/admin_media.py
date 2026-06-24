@@ -11,12 +11,14 @@ from server.app.auth import AuthUser, get_user_from_access_token, is_teacher_con
 from server.app.infrastructure.settings import get_settings
 from server.app.infrastructure.database import db_session
 from server.app.domains.media.assets import (
+    MediaUploadPolicyError,
     complete_resumable_upload,
     create_media_asset,
     decide_duplicate_candidate,
     list_media_assets,
     precheck_exact_duplicate,
 )
+from server.app.domains.media.files import media_upload_policy
 from server.app.domains.media.lifecycle import archive_media_asset, media_asset_archive_plan
 from server.app.domains.media.bindings import (
     create_media_binding,
@@ -61,6 +63,16 @@ class MediaDuplicateDecisionRequest(BaseModel):
 
 class MediaAssetArchiveRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
+
+
+class MediaUploadPolicyResponse(BaseModel):
+    max_media_upload_mb: int
+    max_media_upload_bytes: int
+    allowed_extensions: list[str]
+
+
+def _media_upload_policy_error(exc: MediaUploadPolicyError) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=exc.detail())
 
 
 def _media_asset_file_response(asset_id: str) -> FileResponse:
@@ -119,6 +131,13 @@ async def admin_list_media_assets(
     )
 
 
+@router.get("/media/upload-policy", response_model=MediaUploadPolicyResponse)
+async def admin_media_upload_policy(
+    user: AuthUser = Depends(require_teacher_console_user),
+) -> dict[str, Any]:
+    return media_upload_policy()
+
+
 @router.post("/media/assets/precheck")
 async def admin_precheck_media_asset(
     payload: MediaDuplicatePrecheckRequest,
@@ -154,6 +173,8 @@ async def admin_complete_resumable_media_upload(
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except MediaUploadPolicyError as exc:
+        raise _media_upload_policy_error(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -277,13 +298,16 @@ async def admin_upload_media_asset(
     user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     content = await file.read()
-    return create_media_asset(
-        title=title,
-        filename=file.filename or "upload.mp4",
-        content=content,
-        content_type=file.content_type,
-        uploaded_by=user.id,
-    )
+    try:
+        return create_media_asset(
+            title=title,
+            filename=file.filename or "upload.mp4",
+            content=content,
+            content_type=file.content_type,
+            uploaded_by=user.id,
+        )
+    except MediaUploadPolicyError as exc:
+        raise _media_upload_policy_error(exc) from exc
 
 
 @router.post("/media/assets/{asset_id}/replace")
@@ -294,14 +318,17 @@ async def admin_replace_media_asset(
     user: AuthUser = Depends(require_teacher_console_user),
 ) -> dict[str, Any]:
     content = await file.read()
-    return create_media_asset(
-        title=title,
-        filename=file.filename or "upload.mp4",
-        content=content,
-        content_type=file.content_type,
-        uploaded_by=user.id,
-        replace_asset_id=asset_id,
-    )
+    try:
+        return create_media_asset(
+            title=title,
+            filename=file.filename or "upload.mp4",
+            content=content,
+            content_type=file.content_type,
+            uploaded_by=user.id,
+            replace_asset_id=asset_id,
+        )
+    except MediaUploadPolicyError as exc:
+        raise _media_upload_policy_error(exc) from exc
 
 
 @router.post("/media/bindings")

@@ -39,6 +39,16 @@ def validate_media_file(filename: str, content: bytes, content_type: str | None 
     return MediaValidation(True, guessed_type or "application/octet-stream", len(content))
 
 
+def media_upload_policy() -> dict[str, Any]:
+    settings = get_settings()
+    max_media_upload_mb = int(settings.max_media_upload_mb)
+    return {
+        "max_media_upload_mb": max_media_upload_mb,
+        "max_media_upload_bytes": max_media_upload_mb * 1024 * 1024,
+        "allowed_extensions": sorted(ALLOWED_MEDIA_SUFFIXES),
+    }
+
+
 def checksum_sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 

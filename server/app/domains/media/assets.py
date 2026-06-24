@@ -11,6 +11,7 @@ from sqlalchemy import text
 from server.app.domains.media.files import (
     checksum_sha256_file,
     json_param,
+    media_upload_policy,
     resolve_media_relative,
     safe_media_path,
     source_media_path,
@@ -23,6 +24,27 @@ from server.app.infrastructure.settings import get_settings
 
 def asset_id() -> str:
     return str(uuid.uuid4())
+
+
+class MediaUploadPolicyError(ValueError):
+    def __init__(self, *, filename: str, file_size_bytes: int, reason: str = "file_too_large") -> None:
+        policy = media_upload_policy()
+        self.reason = reason
+        self.filename = filename
+        self.file_size_bytes = file_size_bytes
+        self.max_media_upload_mb = int(policy["max_media_upload_mb"])
+        self.max_media_upload_bytes = int(policy["max_media_upload_bytes"])
+        super().__init__(reason)
+
+    def detail(self) -> dict[str, Any]:
+        return {
+            "reason": self.reason,
+            "message": f"原始视频超过大小限制，当前限制 {self.max_media_upload_mb} MB。",
+            "filename": self.filename,
+            "file_size_bytes": self.file_size_bytes,
+            "max_media_upload_mb": self.max_media_upload_mb,
+            "max_media_upload_bytes": self.max_media_upload_bytes,
+        }
 
 
 def row_dict(row: Any) -> dict[str, Any]:
@@ -96,6 +118,8 @@ def media_asset_file_summary(asset: dict[str, Any]) -> dict[str, Any]:
         file_state = "partial"
     if asset.get("upload_status") in {"pending", "processing"} and existing_count == 0:
         file_state = "pending"
+    if asset.get("error_reason") == "file_too_large":
+        file_state = "policy_rejected"
     return {
         "file_state": file_state,
         "primary_file_available": primary_file_available,
@@ -215,15 +239,7 @@ def create_media_asset_record_from_file(
         )
     max_bytes = get_settings().max_media_upload_mb * 1024 * 1024
     if file_size > max_bytes:
-        return insert_failed_asset(
-            title=title,
-            filename=filename,
-            relative_path=f"failed/{secrets.token_hex(16)}{Path(filename).suffix.lower()}",
-            mime_type=validation.mime_type,
-            file_size_bytes=file_size,
-            error_reason="file_too_large",
-            uploaded_by=uploaded_by,
-        )
+        raise MediaUploadPolicyError(filename=filename, file_size_bytes=file_size)
     if file_size <= 0:
         return insert_failed_asset(
             title=title,
@@ -317,6 +333,8 @@ def create_media_asset(
     replace_asset_id: str | None = None,
 ) -> dict[str, Any]:
     validation = validate_media_file(filename, content, content_type)
+    if validation.error == "file_too_large":
+        raise MediaUploadPolicyError(filename=filename, file_size_bytes=validation.file_size_bytes)
     if not validation.ok:
         return insert_failed_asset(
             title=title,
@@ -356,6 +374,15 @@ def complete_resumable_upload(
     upload_path = resolve_media_relative((Path(settings.tus_upload_dir) / upload_id).as_posix())
     if not upload_path.exists():
         raise FileNotFoundError("Uploaded file not found")
+    max_bytes = settings.max_media_upload_mb * 1024 * 1024
+    upload_size = upload_path.stat().st_size
+    if upload_size > max_bytes:
+        for path in (upload_path, Path(str(upload_path) + ".info")):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise MediaUploadPolicyError(filename=filename, file_size_bytes=upload_size)
     if checksum_sha256_value:
         actual = checksum_sha256_file(upload_path)
         if actual.lower() != checksum_sha256_value.lower():

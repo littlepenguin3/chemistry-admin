@@ -12,6 +12,73 @@
   --assistant-panel-height: calc(100dvh - 118px - env(safe-area-inset-bottom, 0px));
 }
 
+.student-app-shell.detail-route:has(.ai-chat-detail-frame) {
+  height: 100dvh;
+  min-height: 100dvh;
+  padding-bottom: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.student-app-shell.detail-route:has(.ai-chat-detail-frame) .student-route-content {
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.ai-chat-detail-frame {
+  position: relative;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.ai-chat-detail-frame > .pagebar {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  left: 12px;
+  z-index: calc(var(--mobile-z-floating) + 4);
+  display: block;
+  min-height: var(--mobile-touch-md);
+  pointer-events: none;
+}
+
+.ai-chat-detail-frame > .pagebar h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ai-chat-detail-frame > .pagebar .icon-action {
+  transform: none;
+  pointer-events: auto;
+}
+
+.ai-chat-detail-frame > .assistant-tab-panel.detail {
+  --assistant-panel-height: 100%;
+
+  z-index: auto;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding-bottom: 0;
+}
+
 .assistant-tab-panel.root {
   width: 100%;
   max-width: none;
@@ -2207,13 +2274,13 @@
   z-index: 20;
   min-height: calc(58px + env(safe-area-inset-top, 0px));
   padding: calc(6px + env(safe-area-inset-top, 0px)) 16px 8px;
-  background: linear-gradient(180deg, rgba(255, 253, 246, 0.9) 0%, rgba(255, 253, 246, 0.58) 58%, rgba(255, 253, 246, 0) 100%);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .ai-artifact-page > .pagebar .icon-action {
-  background: rgba(255, 253, 246, 0.26);
+  background: transparent;
 }
 
 .ai-artifact-page > .pagebar h2 {
@@ -2236,12 +2303,7 @@
 }
 
 .ai-artifact-canvas-page::before {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 9;
-  height: calc(136px + env(safe-area-inset-top, 0px));
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 253, 246, 0.72), rgba(255, 253, 246, 0));
+  display: none;
   content: "";
 }
 
