@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
@@ -15,11 +15,9 @@ import {
   Popconfirm,
   Select,
   Space,
-  Spin,
   Statistic,
   Table,
   Tag,
-  Tooltip,
   Tree,
   Typography,
 } from "antd";
@@ -36,12 +34,13 @@ import {
 } from "@ant-design/icons";
 
 import type { ApiList } from "../../api/common";
-import { api, postJson, postJsonStream } from "../../api/http";
+import { api, patchJson, postJson, postJsonStream } from "../../api/http";
 import type {
   CatalogQuestionBankNode,
   CatalogQuestionBankResponse,
   Question,
   QuestionDraft,
+  SourceRef,
   QuestionWorkbenchCandidate,
   QuestionWorkbenchSession,
 } from "../../api/questionBank";
@@ -49,6 +48,7 @@ import { listCatalogQuestionBank, refreshCatalogQuestionBankEvidence } from "../
 import type { LearningAssistantRuntime } from "../../api/learningAssistant";
 import { PageTitle } from "../../components/PageTitle";
 import { QueryState } from "../../components/QueryState";
+import { AssistantMarkdownContent } from "../../lib/assistant-markdown";
 import { errorMessage } from "../../lib/errors";
 import { formatChapterTitle } from "../../lib/resourceUtils";
 import {
@@ -78,12 +78,62 @@ type TreeNodeWithTitle = DataNode & {
   children?: TreeNodeWithTitle[];
 };
 
+type ReviewItem =
+  | { kind: "candidate"; key: string; candidate: QuestionWorkbenchCandidate; draft?: QuestionDraft | null }
+  | { kind: "draft"; key: string; draft: QuestionDraft };
+
+type DraftEditorState = {
+  draftId: string;
+  questionType: Question["question_type"];
+  stem: string;
+  optionsText: string;
+  answerText: string;
+  explanation: string;
+  payload: Partial<Question> & Record<string, unknown>;
+};
+
 function nodePath(node?: CatalogQuestionBankNode | null) {
   return (node?.breadcrumb_titles || []).join(" / ");
 }
 
 function cleanText(value?: string | null) {
   return String(value || "").trim();
+}
+
+function cleanSourceText(value: unknown) {
+  return String(value || "").trim();
+}
+
+function sourcePageLabel(source?: Record<string, unknown> | null) {
+  if (!source) return "-";
+  const start = cleanSourceText(source.page_start);
+  const end = cleanSourceText(source.page_end);
+  const page = cleanSourceText(source.page_number);
+  if (start && end && start !== end) return `第 ${start}-${end} 页`;
+  if (start || end) return `第 ${start || end} 页`;
+  return page ? `第 ${page} 页` : "-";
+}
+
+function sourceSectionPathLabel(source?: Record<string, unknown> | null) {
+  const path = source?.section_path;
+  if (Array.isArray(path) && path.length) return path.map(String).filter(Boolean).join(" / ");
+  return cleanSourceText(source?.section_title) || "-";
+}
+
+function sourceScoreLabel(value: unknown) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return "-";
+  return numberValue.toFixed(4);
+}
+
+function sourceEvidenceText(source?: Record<string, unknown> | null) {
+  return cleanSourceText(source?.text) || cleanSourceText(source?.text_preview);
+}
+
+function sourceEvidenceMarkdown(source?: Record<string, unknown> | null) {
+  return sourceEvidenceText(source)
+    .replace(/^(#{1,6}\s+.*?)(\s+)(?=（\d+）|\(\d+\)|①|②|③|④|⑤|⑥)/u, "$1\n\n")
+    .replace(/\s+(?=（\d+）|\(\d+\)|①|②|③|④|⑤|⑥)/g, "\n\n");
 }
 
 function principleText(node?: CatalogQuestionBankNode | null) {
@@ -184,6 +234,80 @@ function draftParams(selectedPoint?: CatalogQuestionBankNode | null) {
   return params;
 }
 
+function draftPayload(draft: QuestionDraft) {
+  return draft.payload || {};
+}
+
+function draftQuestionType(draft: QuestionDraft) {
+  return String(draftPayload(draft).question_type || "");
+}
+
+function draftStem(draft: QuestionDraft) {
+  return String(draftPayload(draft).stem || "");
+}
+
+function draftValidationErrors(draft: QuestionDraft) {
+  return draft.validation_errors || [];
+}
+
+function normalizeQuestionType(value: unknown): Question["question_type"] {
+  if (value === "single_choice" || value === "true_false" || value === "fill_blank") return value;
+  return "single_choice";
+}
+
+function optionsToText(options: unknown) {
+  if (!Array.isArray(options)) return "";
+  return options
+    .map((option, index) => {
+      const fallbackLabel = String.fromCharCode(65 + index);
+      if (typeof option === "string") return `${fallbackLabel}. ${option}`;
+      const item = option as Record<string, unknown>;
+      return `${cleanText(String(item.label || fallbackLabel))}. ${cleanText(String(item.text || ""))}`.trim();
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function textToOptions(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      const match = line.match(/^([A-Za-z])[\s.、)、:：-]+(.+)$/);
+      if (match) return { label: match[1].toUpperCase(), text: match[2].trim() };
+      return { label: String.fromCharCode(65 + index), text: line };
+    });
+}
+
+function answerToEditableText(questionType: Question["question_type"], answer: unknown) {
+  const answerValue = answer as Record<string, unknown>;
+  if (questionType === "fill_blank") {
+    const accepted = Array.isArray(answerValue?.accepted_answers) ? answerValue.accepted_answers : [];
+    return accepted.length ? accepted.map(String).join("；") : cleanText(String(answer || ""));
+  }
+  const value = answerValue && typeof answerValue === "object" && "value" in answerValue ? answerValue.value : answer;
+  if (questionType === "true_false") {
+    if (value === true) return "正确";
+    if (value === false) return "错误";
+  }
+  return cleanText(String(value ?? ""));
+}
+
+function editableAnswerToPayload(questionType: Question["question_type"], value: string) {
+  const text = value.trim();
+  if (questionType === "fill_blank") {
+    return {
+      accepted_answers: text
+        .split(/[;；,\n，]/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+      match: "normalized_exact",
+    };
+  }
+  return { value: text };
+}
+
 export function QuestionBanksPage() {
   const { message, modal } = AntApp.useApp();
   const queryClient = useQueryClient();
@@ -194,7 +318,6 @@ export function QuestionBanksPage() {
   const [search, setSearch] = useState("");
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [aiWorkbenchOpen, setAiWorkbenchOpen] = useState(false);
   const [aiWorkbenchSessionId, setAiWorkbenchSessionId] = useState<string>();
   const [workbenchPrompt, setWorkbenchPrompt] = useState("");
   const [workbenchQuestionTypes, setWorkbenchQuestionTypes] = useState<Question["question_type"][]>([
@@ -205,6 +328,9 @@ export function QuestionBanksPage() {
   const [workbenchCount, setWorkbenchCount] = useState(3);
   const [workbenchStreaming, setWorkbenchStreaming] = useState(false);
   const [workbenchStreamStatus, setWorkbenchStreamStatus] = useState("");
+  const [selectedEvidenceSource, setSelectedEvidenceSource] = useState<SourceRef | null>(null);
+  const [draftEditor, setDraftEditor] = useState<DraftEditorState | null>(null);
+  const autoEvidencePointRef = useRef<string | undefined>(undefined);
 
   const catalog = useQuery<CatalogQuestionBankResponse>({
     queryKey: ["question-bank-catalog", chapterId],
@@ -223,6 +349,20 @@ export function QuestionBanksPage() {
     () => nodes.find((node) => node.node_id === selectedNodeId && node.node_kind === "point") || null,
     [nodes, selectedNodeId],
   );
+
+  useEffect(() => {
+    setAiWorkbenchSessionId(undefined);
+    setSelectedEvidenceSource(null);
+    setWorkbenchStreamStatus("");
+    setWorkbenchStreaming(false);
+    setWorkbenchQuestionTypes(["single_choice", "true_false", "fill_blank"]);
+    setWorkbenchCount(3);
+    setWorkbenchPrompt(
+      selectedPoint
+        ? `请围绕「${selectedPoint.title}」生成一组可机判的实验题，覆盖实验原理、现象解释和安全提示。`
+        : "",
+    );
+  }, [selectedPoint?.node_id]);
   const selectedChapter = catalog.data?.chapters.find((chapter) => chapter.chapter_id === chapterId);
   const treeData = useMemo(() => buildQuestionBankTree(nodes), [nodes]);
   const expandedRootKeys = useMemo(
@@ -253,7 +393,7 @@ export function QuestionBanksPage() {
   const aiWorkbench = useQuery({
     queryKey: ["question-ai-workbench", aiWorkbenchSessionId],
     queryFn: () => api<QuestionWorkbenchSession>(`/api/admin/question-banks/workbench-sessions/${aiWorkbenchSessionId}`),
-    enabled: Boolean(aiWorkbenchOpen && aiWorkbenchSessionId),
+    enabled: Boolean(aiWorkbenchSessionId),
   });
 
   const workbenchContext = aiWorkbench.data?.context_snapshot || {};
@@ -270,6 +410,14 @@ export function QuestionBanksPage() {
     selectedPoint && ["succeeded", "partial", "fresh", "available"].includes(selectedPoint.evidence_status || ""),
   );
   const evidenceBlockedText = selectedPoint ? `${nodeEvidenceLabel(selectedPoint)}，请先刷新教材证据。` : "请先选择一个点位";
+  const canGenerateWithAI = Boolean(
+    selectedPoint &&
+      questionWorkbenchGate.healthy &&
+      selectedEvidenceReady &&
+      workbenchPrompt.trim() &&
+      workbenchQuestionTypes.length &&
+      !workbenchStreaming,
+  );
 
   const refreshQuestionBank = () => {
     void queryClient.invalidateQueries({ queryKey: ["question-bank-catalog"] });
@@ -308,16 +456,15 @@ export function QuestionBanksPage() {
     }) => postJson<QuestionWorkbenchSession>("/api/admin/question-banks/workbench-sessions", payload),
     onSuccess: (result) => {
       setAiWorkbenchSessionId(result.id);
-      setAiWorkbenchOpen(true);
       void queryClient.invalidateQueries({ queryKey: ["question-ai-workbench", result.id] });
     },
-    onError: (error) => message.error(`AI 工作台打开失败：${errorMessage(error)}`),
+    onError: (error) => message.error(`AI 出题准备失败：${errorMessage(error)}`),
   });
 
   const publishCandidate = useMutation({
     mutationFn: (candidateId: string) => postJson<Question>(`/api/admin/question-banks/workbench-candidates/${candidateId}/publish`, {}),
     onSuccess: () => {
-      message.success("候选题已发布");
+      message.success("待审题目已发布");
       void queryClient.invalidateQueries({ queryKey: ["question-ai-workbench", aiWorkbenchSessionId] });
       refreshQuestionBank();
     },
@@ -327,7 +474,7 @@ export function QuestionBanksPage() {
   const rejectCandidate = useMutation({
     mutationFn: (candidateId: string) => postJson<QuestionWorkbenchCandidate>(`/api/admin/question-banks/workbench-candidates/${candidateId}/reject`, {}),
     onSuccess: () => {
-      message.success("候选题已拒绝");
+      message.success("待审题目已拒绝");
       void queryClient.invalidateQueries({ queryKey: ["question-ai-workbench", aiWorkbenchSessionId] });
       refreshQuestionBank();
     },
@@ -337,19 +484,33 @@ export function QuestionBanksPage() {
   const publishDraft = useMutation({
     mutationFn: (draftId: string) => postJson<Question>(`/api/admin/question-banks/drafts/${draftId}/publish`, {}),
     onSuccess: () => {
-      message.success("草稿已发布");
+      message.success("待审题目已发布");
       refreshQuestionBank();
     },
-    onError: (error) => message.error(`草稿发布失败：${errorMessage(error)}`),
+    onError: (error) => message.error(`待审题目发布失败：${errorMessage(error)}`),
   });
 
   const rejectDraft = useMutation({
     mutationFn: (draftId: string) => postJson<QuestionDraft>(`/api/admin/question-banks/drafts/${draftId}/reject`, {}),
     onSuccess: () => {
-      message.success("草稿已拒绝");
+      message.success("待审题目已拒绝");
       refreshQuestionBank();
     },
-    onError: (error) => message.error(`草稿拒绝失败：${errorMessage(error)}`),
+    onError: (error) => message.error(`待审题目拒绝失败：${errorMessage(error)}`),
+  });
+
+  const updateDraft = useMutation({
+    mutationFn: ({ draftId, payload }: { draftId: string; payload: Partial<Question> & Record<string, unknown> }) =>
+      patchJson<QuestionDraft>(`/api/admin/question-banks/drafts/${draftId}`, { payload, status: "draft" }),
+    onSuccess: () => {
+      message.success("待审题目已保存");
+      setDraftEditor(null);
+      if (aiWorkbenchSessionId) {
+        void queryClient.invalidateQueries({ queryKey: ["question-ai-workbench", aiWorkbenchSessionId] });
+      }
+      refreshQuestionBank();
+    },
+    onError: (error) => message.error(`保存失败：${errorMessage(error)}`),
   });
 
   const openQuestionDetail = (question: Question) => {
@@ -357,43 +518,103 @@ export function QuestionBanksPage() {
     setDetailOpen(true);
   };
 
-  const openAddSuggestion = () => {
+  const openDraftEditor = (item: ReviewItem) => {
+    const draftId = item.kind === "candidate" ? item.candidate.draft_id : item.draft.id;
+    if (!draftId) {
+      message.warning("这条待审题目缺少草稿记录，暂时不能手动编辑");
+      return;
+    }
+    const payload = item.kind === "candidate" && item.draft ? draftPayload(item.draft) : item.kind === "candidate" ? candidatePayload(item.candidate) : draftPayload(item.draft);
+    const questionType = normalizeQuestionType(payload.question_type);
+    setDraftEditor({
+      draftId,
+      questionType,
+      stem: cleanText(String(payload.stem || "")),
+      optionsText: optionsToText(payload.options),
+      answerText: answerToEditableText(questionType, payload.answer),
+      explanation: cleanText(String(payload.explanation || "")),
+      payload,
+    });
+  };
+
+  const saveDraftEditor = () => {
+    if (!draftEditor) return;
+    const payload = {
+      ...draftEditor.payload,
+      question_type: draftEditor.questionType,
+      stem: draftEditor.stem.trim(),
+      options: draftEditor.questionType === "single_choice" ? textToOptions(draftEditor.optionsText) : [],
+      answer: editableAnswerToPayload(draftEditor.questionType, draftEditor.answerText),
+      explanation: draftEditor.explanation.trim(),
+      status: "draft",
+    };
+    updateDraft.mutate({ draftId: draftEditor.draftId, payload });
+  };
+
+  const createWorkbenchSession = async () => {
     if (!selectedPoint) {
       message.warning("请先选择一个点位");
-      return;
+      return undefined;
     }
     if (!questionWorkbenchGate.healthy) {
       message.warning(questionWorkbenchGate.message);
-      return;
+      return undefined;
     }
     if (!selectedEvidenceReady) {
       message.warning(evidenceBlockedText);
-      return;
+      return undefined;
     }
-    setWorkbenchPrompt(`请围绕「${selectedPoint.title}」生成一组可机判的实验题，覆盖实验原理、现象解释和安全提示。`);
-    setWorkbenchQuestionTypes(["single_choice", "true_false", "fill_blank"]);
-    setWorkbenchCount(3);
-    startWorkbench.mutate({
+    const result = await startWorkbench.mutateAsync({
       mode: "create",
       experiment_id: selectedPoint.experiment_id,
       point_node_id: selectedPoint.node_id,
       point_node_ids: [selectedPoint.node_id],
       point_key: selectedPoint.node_id,
     });
+    return result.id;
   };
 
+  const prepareWorkbenchSession = () => {
+    void createWorkbenchSession();
+  };
+
+  useEffect(() => {
+    if (!selectedPoint || aiWorkbenchSessionId || !questionWorkbenchGate.healthy || !selectedEvidenceReady || startWorkbench.isPending) {
+      return;
+    }
+    if (autoEvidencePointRef.current === selectedPoint.node_id) return;
+    autoEvidencePointRef.current = selectedPoint.node_id;
+    void createWorkbenchSession();
+  }, [
+    aiWorkbenchSessionId,
+    questionWorkbenchGate.healthy,
+    selectedEvidenceReady,
+    selectedPoint?.node_id,
+    startWorkbench.isPending,
+  ]);
+
   const sendWorkbenchMessage = async () => {
-    if (!aiWorkbenchSessionId || !workbenchPrompt.trim() || workbenchStreaming) return;
+    if (!workbenchPrompt.trim() || workbenchStreaming) return;
     if (!questionWorkbenchGate.healthy) {
       message.warning(questionWorkbenchGate.message);
+      return;
+    }
+    if (!workbenchQuestionTypes.length) {
+      message.warning("请至少选择一种题型");
+      return;
+    }
+    if (!selectedEvidenceReady) {
+      message.warning(evidenceBlockedText);
       return;
     }
     const prompt = workbenchPrompt.trim();
     setWorkbenchStreaming(true);
     setWorkbenchStreamStatus("已发送提示，正在准备教材证据");
     try {
+      const sessionId = aiWorkbenchSessionId || (await createWorkbenchSession());
+      if (!sessionId) return;
       await postJsonStream<{ message?: string; session?: QuestionWorkbenchSession }>(
-        `/api/admin/question-banks/workbench-sessions/${aiWorkbenchSessionId}/messages/stream`,
+        `/api/admin/question-banks/workbench-sessions/${sessionId}/messages/stream`,
         {
           prompt,
           question_types: workbenchQuestionTypes,
@@ -402,13 +623,13 @@ export function QuestionBanksPage() {
         },
         ({ event, data }) => {
           if (event === "status") {
-            setWorkbenchStreamStatus(String(data.message || "AI 正在生成候选题"));
+            setWorkbenchStreamStatus(String(data.message || "AI 正在生成待审题目"));
           }
           if (event === "final" && data.session) {
-            queryClient.setQueryData(["question-ai-workbench", aiWorkbenchSessionId], data.session);
-            message.success("AI 候选题已更新");
+            queryClient.setQueryData(["question-ai-workbench", sessionId], data.session);
+            message.success("AI 待审题目已更新");
             setWorkbenchPrompt("");
-            void queryClient.invalidateQueries({ queryKey: ["question-ai-workbench", aiWorkbenchSessionId] });
+            void queryClient.invalidateQueries({ queryKey: ["question-ai-workbench", sessionId] });
             refreshQuestionBank();
           }
           if (event === "error") {
@@ -452,6 +673,30 @@ export function QuestionBanksPage() {
   const selectedCounts = selectedPoint?.counts;
   const visibleQuestions = questions.data?.items || [];
   const visibleDrafts = drafts.data?.items || [];
+  const reviewItems = useMemo<ReviewItem[]>(() => {
+    const draftsById = new Map(visibleDrafts.map((draft) => [draft.id, draft]));
+    const pendingCandidates = workbenchCandidates.filter(
+      (candidate) =>
+        candidate.status === "draft" &&
+        (!candidate.draft_id || draftsById.get(candidate.draft_id)?.status === "draft" || candidate.draft_status === "draft"),
+    );
+    const candidateDraftIds = new Set(pendingCandidates.map((candidate) => candidate.draft_id).filter(Boolean));
+    return [
+      ...pendingCandidates.map((candidate) => ({
+        kind: "candidate" as const,
+        key: `candidate-${candidate.id}`,
+        candidate,
+        draft: candidate.draft_id ? draftsById.get(candidate.draft_id) || null : null,
+      })),
+      ...visibleDrafts
+        .filter((draft) => draft.status === "draft" && !candidateDraftIds.has(draft.id))
+        .map((draft) => ({
+          kind: "draft" as const,
+          key: `draft-${draft.id}`,
+          draft,
+        })),
+    ];
+  }, [visibleDrafts, workbenchCandidates]);
 
   return (
     <Space orientation="vertical" size={18} className="full question-bank-catalog-page">
@@ -471,7 +716,7 @@ export function QuestionBanksPage() {
           <Statistic title="已发布" value={totals?.published_count || 0} suffix="题" prefix={<CheckCircleOutlined />} />
         </Card>
         <Card>
-          <Statistic title="草稿候选" value={totals?.draft_candidate_count || 0} suffix="题" prefix={<FileTextOutlined />} />
+          <Statistic title="待审题目" value={totals?.draft_candidate_count || 0} suffix="题" prefix={<FileTextOutlined />} />
         </Card>
         <Card>
           <Statistic title="待覆盖" value={Math.max(0, (totals?.point_count || 0) - (totals?.published_count || 0))} suffix="点" />
@@ -553,7 +798,7 @@ export function QuestionBanksPage() {
                     </Tag>
                     <Tag color={nodeEvidenceTone(selectedPoint)}>{nodeEvidenceLabel(selectedPoint)}</Tag>
                     <Tag>{statusCountLine(selectedPoint)}</Tag>
-                    <Tag>草稿 {selectedCounts?.draft_candidate_count || 0}</Tag>
+                    <Tag>待审 {selectedCounts?.draft_candidate_count || 0}</Tag>
                   </Space>
                 </div>
                 <Space wrap>
@@ -565,25 +810,6 @@ export function QuestionBanksPage() {
                   >
                     刷新当前点位证据
                   </Button>
-                  <Tooltip
-                    title={
-                      !questionWorkbenchGate.healthy
-                        ? questionWorkbenchGate.message
-                        : selectedEvidenceReady
-                          ? "基于该点位三段式内容和已绑定教材证据生成候选题"
-                          : evidenceBlockedText
-                    }
-                  >
-                    <Button
-                      type="primary"
-                      icon={<MessageOutlined />}
-                      onClick={openAddSuggestion}
-                      loading={startWorkbench.isPending}
-                      disabled={!questionWorkbenchGate.healthy || !selectedEvidenceReady}
-                    >
-                      AI 出题
-                    </Button>
-                  </Tooltip>
                 </Space>
               </Flex>
             ) : (
@@ -614,22 +840,312 @@ export function QuestionBanksPage() {
                 </div>
               </div>
 
-              <Card className="question-point-content-card" title="点位内容">
-                <div className="question-point-content-grid">
-                  <section>
-                    <Text strong>实验原理</Text>
-                    <Text className="block-text">{principleText(selectedPoint) || "暂无实验原理"}</Text>
-                  </section>
-                  <section>
-                    <Text strong>现象解释</Text>
-                    <Text className="block-text">{cleanText(selectedPoint.phenomenon_explanation) || "暂无现象解释"}</Text>
-                  </section>
-                  <section>
-                    <Text strong>安全提示</Text>
-                    <Text className="block-text">{cleanText(selectedPoint.safety_note) || "暂无安全提示"}</Text>
-                  </section>
-                </div>
-              </Card>
+              <div className="question-authoring-shell">
+                <Card
+                  className="question-authoring-card question-authoring-evidence-card"
+                  title="出题依据"
+                  extra={<Tag color={selectedEvidenceReady ? "green" : "orange"}>{nodeEvidenceLabel(selectedPoint)}</Tag>}
+                >
+                  <Space orientation="vertical" size={14} className="full">
+                    <div className={`question-workbench-status question-workbench-status-${workbenchStatusTone}`}>
+                      <div className="question-workbench-status-main">
+                        <span className="question-workbench-status-icon">
+                          {workbenchStatusTone === "ready" ? <CheckCircleOutlined /> : workbenchStatusTone === "checking" ? <ReloadOutlined /> : <CloseCircleOutlined />}
+                        </span>
+                        <div className="question-workbench-status-copy">
+                          <Text strong>{workbenchRagGate?.healthy === false ? "证据未生成" : "教材证据详情"}</Text>
+                          <Text type="secondary">
+                            {aiWorkbenchSessionId
+                              ? workbenchRagGate?.healthy === false
+                                ? String(workbenchRagGate.message || questionWorkbenchGate.message)
+                                : workbenchEvidenceStatusText
+                              : selectedEvidenceReady
+                                ? "当前点位已有缓存证据，生成前会读取并展示。"
+                                : evidenceBlockedText}
+                          </Text>
+                        </div>
+                      </div>
+                      <div className="question-workbench-status-meta">
+                        <span>{questionWorkbenchGate.route}</span>
+                      </div>
+                    </div>
+
+                    <div className="question-authoring-evidence-section">
+                      <Flex justify="space-between" align="center" gap={10}>
+                        <div>
+                          <Text strong>教材证据详情</Text>
+                          <Text type="secondary" className="question-authoring-subtext">
+                            生成题目前会读取当前点位绑定的教材 chunk，点击来源可查看原文。
+                          </Text>
+                        </div>
+                        {aiWorkbenchSessionId ? <Tag color="green">{workbenchEvidenceSourceCount || 0} 条证据</Tag> : null}
+                      </Flex>
+                      {aiWorkbenchSessionId ? (
+                        <QueryState loading={aiWorkbench.isLoading || startWorkbench.isPending} error={aiWorkbench.error} empty={!workbenchEvidenceSections.length}>
+                          <Space orientation="vertical" size={8} className="full">
+                            {workbenchEvidenceSections.map((item) => (
+                              <div key={`${item.pointKey}-${item.section}`} className="question-evidence-row">
+                                <Text type="secondary">
+                                  {item.pointTitle} · {textbookSectionLabels[item.section] || item.section}
+                                </Text>
+                                <div className="question-evidence-values">
+                                  <Tag color={item.sufficient ? "green" : "orange"}>
+                                    {item.sufficient ? `${item.sourceCount} 条证据` : item.missingReason || "证据不足"}
+                                  </Tag>
+                                  {item.sources.slice(0, 3).map((source: Record<string, unknown>, index: number) => (
+                                    <button
+                                      key={`${source.chunk_id || index}`}
+                                      type="button"
+                                      className="question-evidence-source-button"
+                                      onClick={() => setSelectedEvidenceSource(source as SourceRef)}
+                                      title="查看教材证据原文"
+                                    >
+                                      原文 · {sourceRefLabel(source)}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </Space>
+                        </QueryState>
+                      ) : (
+                        <Alert
+                          type={selectedEvidenceReady ? "info" : "warning"}
+                          showIcon
+                          message={selectedEvidenceReady ? "证据尚未读取到页面" : "当前点位还不能出题"}
+                          description={selectedEvidenceReady ? "可以先读取证据核对原文，也可以直接生成待审题目。" : evidenceBlockedText}
+                          action={
+                            selectedEvidenceReady ? (
+                              <Button size="small" loading={startWorkbench.isPending} onClick={prepareWorkbenchSession}>
+                                读取证据
+                              </Button>
+                            ) : null
+                          }
+                        />
+                      )}
+                    </div>
+
+                    <div className="question-authoring-source-grid">
+                      <section>
+                        <Text strong>实验原理</Text>
+                        <Text className="block-text">{principleText(selectedPoint) || "暂无实验原理"}</Text>
+                      </section>
+                      <section>
+                        <Text strong>现象解释</Text>
+                        <Text className="block-text">{cleanText(selectedPoint.phenomenon_explanation) || "暂无现象解释"}</Text>
+                      </section>
+                      <section>
+                        <Text strong>安全提示</Text>
+                        <Text className="block-text">{cleanText(selectedPoint.safety_note) || "暂无安全提示"}</Text>
+                      </section>
+                    </div>
+                  </Space>
+                </Card>
+
+                <Card
+                  id="question-ai-authoring"
+                  className="question-authoring-card question-authoring-generate-card"
+                  title="AI 生成与审核"
+                  extra={
+                    <Space size={6} wrap>
+                      {workbenchStreaming && workbenchStreamStatus ? <Tag color="processing">{workbenchStreamStatus}</Tag> : null}
+                      <Tag>{reviewItems.length} 条待审</Tag>
+                    </Space>
+                  }
+                >
+                  <Space orientation="vertical" size={14} className="full">
+                    <div className="question-authoring-composer">
+                      <Space wrap>
+                        <Select
+                          mode="multiple"
+                          value={workbenchQuestionTypes}
+                          onChange={(value) => setWorkbenchQuestionTypes(value as Question["question_type"][])}
+                          options={[
+                            { value: "single_choice", label: "选择" },
+                            { value: "true_false", label: "判断" },
+                            { value: "fill_blank", label: "填空" },
+                          ]}
+                          disabled={workbenchStreaming || !questionWorkbenchGate.healthy}
+                          className="ai-workbench-type-select"
+                        />
+                        <InputNumber
+                          min={1}
+                          max={20}
+                          value={workbenchCount}
+                          onChange={(value) => setWorkbenchCount(Number(value || 1))}
+                          addonBefore="数量"
+                          disabled={workbenchStreaming || !questionWorkbenchGate.healthy}
+                        />
+                      </Space>
+                      <Input.TextArea
+                        rows={4}
+                        value={workbenchPrompt}
+                        disabled={workbenchStreaming || !questionWorkbenchGate.healthy}
+                        onChange={(event) => setWorkbenchPrompt(event.target.value)}
+                        placeholder="例如：生成 1 道选择题、1 道判断题、1 道填空题；题目必须能从教材证据直接推出答案。"
+                      />
+                      <Flex justify="space-between" align="center" gap={10} wrap="wrap">
+                        <Text type="secondary">
+                          {selectedEvidenceReady ? "生成结果会进入待审题目，发布后才进入题库。" : evidenceBlockedText}
+                        </Text>
+                        <Button
+                          type="primary"
+                          icon={<MessageOutlined />}
+                          loading={workbenchStreaming || startWorkbench.isPending}
+                          disabled={!canGenerateWithAI || startWorkbench.isPending}
+                          onClick={sendWorkbenchMessage}
+                        >
+                          生成待审题目
+                        </Button>
+                      </Flex>
+                    </div>
+
+                    {workbenchStreaming ? (
+                      <Alert type="info" showIcon message="正在生成待审题目" description={workbenchStreamStatus || "AI 正在读取证据并生成题目。"} />
+                    ) : null}
+
+                    <div className="question-authoring-candidate-block">
+                      <Flex justify="space-between" align="center" gap={10}>
+                        <Text strong>待审题目</Text>
+                        <Text type="secondary">本次生成和历史待审统一在这里审核</Text>
+                      </Flex>
+                      <div className="ai-workbench-candidate-list">
+                        <QueryState
+                          loading={drafts.isLoading || (Boolean(aiWorkbenchSessionId) && aiWorkbench.isLoading)}
+                          error={drafts.error || aiWorkbench.error}
+                          empty={false}
+                        >
+                          {reviewItems.length ? (
+                            reviewItems.map((item) => {
+                              const isCandidate = item.kind === "candidate";
+                              const draft = isCandidate ? item.draft : item.draft;
+                              const draftId = isCandidate ? item.candidate.draft_id : item.draft.id;
+                              const candidateId = isCandidate ? item.candidate.id : "";
+                              const payload = draft ? draftPayload(draft) : isCandidate ? candidatePayload(item.candidate) : draftPayload(item.draft);
+                              const errors = draft ? draftValidationErrors(draft) : isCandidate ? candidateValidationErrors(item.candidate) : draftValidationErrors(item.draft);
+                              const status = draft ? draft.status : isCandidate ? item.candidate.status : item.draft.status;
+                              const itemId = isCandidate ? item.candidate.id : item.draft.id;
+                              const questionType = normalizeQuestionType(payload.question_type);
+                              const stem = cleanText(String(payload.stem || ""));
+                              const pointTags = isCandidate
+                                ? draft
+                                  ? selectedPoint
+                                    ? [
+                                        {
+                                          point_node_id: selectedPoint.node_id,
+                                          point_key: selectedPoint.node_id,
+                                          point_title: selectedPoint.title,
+                                        },
+                                      ]
+                                    : []
+                                  : candidateQuestionPoints(item.candidate).slice(0, 3)
+                                : selectedPoint
+                                  ? [
+                                      {
+                                        point_node_id: selectedPoint.node_id,
+                                        point_key: selectedPoint.node_id,
+                                        point_title: selectedPoint.title,
+                                      },
+                                    ]
+                                  : [];
+                              return (
+                                <div key={item.key} className="ai-candidate-card">
+                                  <Space orientation="vertical" size={8} className="full">
+                                    <Flex justify="space-between" align="start" gap={8}>
+                                      <Space size={4} wrap>
+                                        <Tag color="blue">{questionTypeLabel(questionType)}</Tag>
+                                        <Tag color={isCandidate ? "green" : "default"}>{isCandidate ? "本次生成" : "历史待审"}</Tag>
+                                        {errors.length ? <Tag color="red">需修订</Tag> : <Tag color="green">可发布</Tag>}
+                                        {status !== "draft" ? <Tag>{status}</Tag> : null}
+                                      </Space>
+                                      <Text type="secondary">{itemId.slice(0, 8)}</Text>
+                                    </Flex>
+                                    <Text strong>{stem || "未生成题干"}</Text>
+                                    {Array.isArray(payload.options) && payload.options.length ? (
+                                      <div className="question-options">
+                                        {payload.options.map((option, index) => {
+                                          const label = typeof option === "string" ? String.fromCharCode(65 + index) : option.label || String.fromCharCode(65 + index);
+                                          const text = typeof option === "string" ? option : option.text || "";
+                                          return (
+                                            <div key={`${item.key}-${label}-${index}`} className="question-option">
+                                              <Text strong>{label}</Text>
+                                              <Text>{text}</Text>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : null}
+                                    <Descriptions size="small" column={1} className="question-workbench-descriptions">
+                                      <Descriptions.Item label="答案">{answerText(payload.answer as Record<string, unknown>)}</Descriptions.Item>
+                                      <Descriptions.Item label="解析">{String(payload.explanation || "暂无解析")}</Descriptions.Item>
+                                    </Descriptions>
+                                    <Space size={4} wrap>
+                                      {pointTags.map((point) => (
+                                        <Tag key={point.point_node_id || point.point_key || point.point_title} color="cyan">
+                                          {point.point_title || point.point_key || point.point_node_id}
+                                        </Tag>
+                                      ))}
+                                    </Space>
+                                    {errors.length ? <Alert type="warning" showIcon message={errors.join("；")} /> : null}
+                                    <Flex justify="space-between" align="center" gap={8} wrap="wrap">
+                                      <Button size="small" autoInsertSpace={false} disabled={!draftId} onClick={() => openDraftEditor(item)}>
+                                        编辑
+                                      </Button>
+                                      <Space size={4}>
+                                        <Popconfirm
+                                          title="发布这条待审题目？"
+                                          onConfirm={() => (draftId ? publishDraft.mutate(draftId) : publishCandidate.mutate(candidateId))}
+                                          disabled={Boolean(errors.length) || status !== "draft"}
+                                        >
+                                          <Button
+                                            type="link"
+                                            size="small"
+                                            disabled={Boolean(errors.length) || status !== "draft"}
+                                            loading={draftId ? publishDraft.isPending : publishCandidate.isPending}
+                                          >
+                                            发布
+                                          </Button>
+                                        </Popconfirm>
+                                        <Button
+                                          type="link"
+                                        danger
+                                        size="small"
+                                        disabled={status !== "draft"}
+                                        loading={draftId ? rejectDraft.isPending : rejectCandidate.isPending}
+                                        onClick={() => (draftId ? rejectDraft.mutate(draftId) : rejectCandidate.mutate(candidateId))}
+                                      >
+                                        拒绝
+                                      </Button>
+                                      </Space>
+                                    </Flex>
+                                  </Space>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="设置题型和提示后生成待审题目" />
+                          )}
+                        </QueryState>
+                      </div>
+                    </div>
+
+                    {workbenchTurns.length ? (
+                      <details className="question-authoring-log">
+                        <summary>生成记录（{workbenchTurns.length} 轮）</summary>
+                        <div className="ai-workbench-chat-timeline">
+                          {workbenchTurns.map((turn) => (
+                            <div key={turn.id} className={`ai-chat-turn ai-chat-turn-${turn.role}`}>
+                              <Text strong>{turn.role === "user" ? "老师" : "AI"}</Text>
+                              <Text className="block-text">{turn.content}</Text>
+                              {turn.error_state ? <Alert type="error" showIcon title="本轮生成失败" description={String(turn.error_state.message || "")} /> : null}
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ) : null}
+                  </Space>
+                </Card>
+              </div>
 
               <Card
                 className="question-bank-question-panel"
@@ -701,65 +1217,6 @@ export function QuestionBanksPage() {
                 </QueryState>
               </Card>
 
-              <Card className="question-bank-draft-panel" title="待审草稿" extra={<Tag>{visibleDrafts.length} 条</Tag>}>
-                <QueryState loading={drafts.isLoading} error={drafts.error} empty={!visibleDrafts.length}>
-                  <Table
-                    rowKey="id"
-                    size="small"
-                    dataSource={visibleDrafts}
-                    pagination={{ pageSize: 5, showSizeChanger: false }}
-                    columns={[
-                      {
-                        title: "题型",
-                        width: 76,
-                        render: (_: unknown, row: QuestionDraft) => questionTypeLabel(String(row.payload?.question_type || "")),
-                      },
-                      {
-                        title: "题干",
-                        render: (_: unknown, row: QuestionDraft) => String(row.payload?.stem || "未生成题干"),
-                      },
-                      {
-                        title: "校验",
-                        width: 140,
-                        render: (_: unknown, row: QuestionDraft) =>
-                          row.validation_errors?.length ? <Tag color="red">需修订</Tag> : <Tag color="green">可发布</Tag>,
-                      },
-                      {
-                        title: "操作",
-                        width: 132,
-                        render: (_: unknown, row: QuestionDraft) => (
-                          <Space size={4}>
-                            <Popconfirm
-                              title="发布这条草稿？"
-                              disabled={Boolean(row.validation_errors?.length) || row.status !== "draft"}
-                              onConfirm={() => publishDraft.mutate(row.id)}
-                            >
-                              <Button
-                                type="link"
-                                size="small"
-                                disabled={Boolean(row.validation_errors?.length) || row.status !== "draft"}
-                                loading={publishDraft.isPending}
-                              >
-                                发布
-                              </Button>
-                            </Popconfirm>
-                            <Button
-                              type="link"
-                              danger
-                              size="small"
-                              disabled={row.status !== "draft"}
-                              loading={rejectDraft.isPending}
-                              onClick={() => rejectDraft.mutate(row.id)}
-                            >
-                              拒绝
-                            </Button>
-                          </Space>
-                        ),
-                      },
-                    ]}
-                  />
-                </QueryState>
-              </Card>
             </>
           ) : null}
         </div>
@@ -817,244 +1274,111 @@ export function QuestionBanksPage() {
         )}
       </Modal>
 
-      <Drawer
-        title="AI 点位出题工作台"
-        open={aiWorkbenchOpen}
-        size="min(1280px, 96vw)"
-        onClose={() => setAiWorkbenchOpen(false)}
-        className="ai-question-workbench-drawer"
-        extra={
-          <Button
-            type="primary"
-            icon={<MessageOutlined />}
-            loading={workbenchStreaming}
-            disabled={!aiWorkbenchSessionId || !workbenchPrompt.trim() || workbenchStreaming || !questionWorkbenchGate.healthy}
-            onClick={sendWorkbenchMessage}
-          >
-            发送提示
-          </Button>
+      <Modal
+        title="编辑待审题目"
+        open={Boolean(draftEditor)}
+        width={760}
+        onCancel={() => setDraftEditor(null)}
+        footer={
+          <Space>
+            <Button onClick={() => setDraftEditor(null)}>取消</Button>
+            <Button type="primary" loading={updateDraft.isPending} onClick={saveDraftEditor}>
+              保存
+            </Button>
+          </Space>
         }
       >
-        <QueryState loading={aiWorkbench.isLoading || startWorkbench.isPending} error={aiWorkbench.error}>
-          <div className="ai-workbench-grid">
-            <section className="ai-workbench-panel ai-workbench-context">
-              <Flex justify="space-between" align="center" gap={10} className="ai-workbench-section-head">
-                <div>
-                  <Text className="eyebrow">点位上下文</Text>
-                  <Title level={4}>{selectedPoint?.title || aiWorkbench.data?.experiment_title || "当前点位"}</Title>
-                </div>
-                <Space size={6} wrap>
-                  <Tag color={workbenchEvidenceSourceCount ? "green" : "orange"}>{workbenchEvidenceSourceCount || 0} 条证据</Tag>
-                  <Tag color="blue">新增会话</Tag>
-                </Space>
-              </Flex>
-              <div className={`question-workbench-status question-workbench-status-${workbenchStatusTone}`}>
-                <div className="question-workbench-status-main">
-                  <span className="question-workbench-status-icon">
-                    {workbenchStatusTone === "ready" ? <CheckCircleOutlined /> : workbenchStatusTone === "checking" ? <ReloadOutlined /> : <CloseCircleOutlined />}
-                  </span>
-                  <div className="question-workbench-status-copy">
-                    <Text strong>{workbenchRagGate?.healthy === false ? "证据未生成" : "教材证据"}</Text>
-                    <Text type="secondary">
-                      {workbenchRagGate?.healthy === false
-                        ? String(workbenchRagGate.message || questionWorkbenchGate.message)
-                        : workbenchEvidenceStatusText}
-                    </Text>
-                  </div>
-                </div>
-              </div>
-              <Descriptions size="small" column={1} className="question-workbench-descriptions">
-                <Descriptions.Item label="目录路径">{nodePath(selectedPoint) || "-"}</Descriptions.Item>
-                <Descriptions.Item label="现有题量">{selectedPoint?.counts.question_count || 0}</Descriptions.Item>
-                <Descriptions.Item label="草稿候选">{selectedPoint?.counts.draft_candidate_count || 0}</Descriptions.Item>
-              </Descriptions>
-              {workbenchEvidenceSections.length ? (
-                <div className="question-source-section">
-                  <Text strong>教材证据分组</Text>
-                  <Space orientation="vertical" size={8} className="full">
-                    {workbenchEvidenceSections.map((item) => (
-                      <div key={`${item.pointKey}-${item.section}`} className="question-evidence-row">
-                        <Text type="secondary">
-                          {item.pointTitle} · {textbookSectionLabels[item.section] || item.section}
-                        </Text>
-                        <div className="question-evidence-values">
-                          <Tag color={item.sufficient ? "green" : "orange"}>
-                            {item.sufficient ? `${item.sourceCount} 条证据` : item.missingReason || "证据不足"}
-                          </Tag>
-                          {item.sources.slice(0, 3).map((source: Record<string, unknown>, index: number) => (
-                            <Tag key={`${source.chunk_id || index}`} color="default">
-                              {sourceRefLabel(source)}
-                            </Tag>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </Space>
-                </div>
-              ) : null}
-            </section>
+        {draftEditor ? (
+          <Space orientation="vertical" size={14} className="full question-draft-editor">
+            <Alert type="info" showIcon message="保存后仍需点击发布，题目才会进入正式题库。" />
+            <Space wrap>
+              <Select
+                value={draftEditor.questionType}
+                onChange={(value) => setDraftEditor((current) => (current ? { ...current, questionType: value as Question["question_type"] } : current))}
+                options={[
+                  { value: "single_choice", label: "选择" },
+                  { value: "true_false", label: "判断" },
+                  { value: "fill_blank", label: "填空" },
+                ]}
+                className="question-bank-compact-select"
+              />
+            </Space>
+            <label>
+              <Text strong>题干</Text>
+              <Input.TextArea
+                rows={3}
+                value={draftEditor.stem}
+                onChange={(event) => setDraftEditor((current) => (current ? { ...current, stem: event.target.value } : current))}
+              />
+            </label>
+            {draftEditor.questionType === "single_choice" ? (
+              <label>
+                <Text strong>选项</Text>
+                <Input.TextArea
+                  rows={5}
+                  value={draftEditor.optionsText}
+                  placeholder={"A. 选项内容\nB. 选项内容"}
+                  onChange={(event) => setDraftEditor((current) => (current ? { ...current, optionsText: event.target.value } : current))}
+                />
+              </label>
+            ) : null}
+            <label>
+              <Text strong>答案</Text>
+              <Input.TextArea
+                rows={draftEditor.questionType === "fill_blank" ? 3 : 2}
+                value={draftEditor.answerText}
+                placeholder={draftEditor.questionType === "fill_blank" ? "多个可接受答案用分号、逗号或换行分隔" : "选择题填写选项字母；判断题填写正确或错误"}
+                onChange={(event) => setDraftEditor((current) => (current ? { ...current, answerText: event.target.value } : current))}
+              />
+            </label>
+            <label>
+              <Text strong>解析</Text>
+              <Input.TextArea
+                rows={4}
+                value={draftEditor.explanation}
+                onChange={(event) => setDraftEditor((current) => (current ? { ...current, explanation: event.target.value } : current))}
+              />
+            </label>
+          </Space>
+        ) : null}
+      </Modal>
 
-            <section className="ai-workbench-panel ai-workbench-chat">
-              <Flex justify="space-between" align="center" gap={10} className="ai-workbench-section-head">
-                <div>
-                  <Text className="eyebrow">多轮提示</Text>
-                  <Title level={4}>会话记录</Title>
+      <Drawer
+        title="教材证据原文"
+        open={Boolean(selectedEvidenceSource)}
+        width={620}
+        onClose={() => setSelectedEvidenceSource(null)}
+        className="question-evidence-source-drawer"
+      >
+        {selectedEvidenceSource ? (
+          <Space orientation="vertical" size={16} className="full">
+            <div>
+              <Text className="eyebrow">
+                {textbookSectionLabels[String(selectedEvidenceSource.evidence_role || selectedEvidenceSource.section || "")] || "教材证据"}
+              </Text>
+              <Title level={4}>{sourceRefLabel(selectedEvidenceSource)}</Title>
+            </div>
+            <Descriptions size="small" column={1} bordered>
+              <Descriptions.Item label="教材">
+                {cleanSourceText(selectedEvidenceSource.source_file) || cleanSourceText(selectedEvidenceSource.source_title) || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="页码">{sourcePageLabel(selectedEvidenceSource)}</Descriptions.Item>
+              <Descriptions.Item label="章节路径">{sourceSectionPathLabel(selectedEvidenceSource)}</Descriptions.Item>
+              <Descriptions.Item label="Chunk ID">{cleanSourceText(selectedEvidenceSource.chunk_id) || "-"}</Descriptions.Item>
+              <Descriptions.Item label="Rerank 分数">{sourceScoreLabel(selectedEvidenceSource.rerank_score)}</Descriptions.Item>
+            </Descriptions>
+            <div className="question-evidence-source-text-card">
+              <Text strong>原文</Text>
+              {sourceEvidenceText(selectedEvidenceSource) ? (
+                <div className="question-evidence-source-markdown">
+                  <AssistantMarkdownContent text={sourceEvidenceMarkdown(selectedEvidenceSource)} />
                 </div>
-                <Space size={6} wrap>
-                  {workbenchStreaming && workbenchStreamStatus ? <Tag color="processing">{workbenchStreamStatus}</Tag> : null}
-                  <Tag>{workbenchTurns.length} 轮</Tag>
-                </Space>
-              </Flex>
-              <div className="ai-workbench-chat-timeline">
-                {workbenchTurns.length ? (
-                  workbenchTurns.map((turn) => (
-                    <div key={turn.id} className={`ai-chat-turn ai-chat-turn-${turn.role}`}>
-                      <Text strong>{turn.role === "user" ? "老师" : "AI"}</Text>
-                      <Text className="block-text">{turn.content}</Text>
-                      {turn.error_state ? <Alert type="error" showIcon title="本轮生成失败" description={String(turn.error_state.message || "")} /> : null}
-                    </div>
-                  ))
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="发送提示后生成候选题" />
-                )}
-                {workbenchStreaming ? (
-                  <div className="ai-chat-turn ai-chat-turn-assistant">
-                    <Flex align="center" gap={8}>
-                      <Text strong>AI</Text>
-                      <Spin size="small" />
-                    </Flex>
-                    <Text className="block-text">{workbenchStreamStatus || "正在生成候选题..."}</Text>
-                  </div>
-                ) : null}
-              </div>
-              <div className="ai-workbench-composer">
-                <Space orientation="vertical" size={10} className="full">
-                  <Space wrap>
-                    <Select
-                      mode="multiple"
-                      value={workbenchQuestionTypes}
-                      onChange={(value) => setWorkbenchQuestionTypes(value as Question["question_type"][])}
-                      options={[
-                        { value: "single_choice", label: "选择" },
-                        { value: "true_false", label: "判断" },
-                        { value: "fill_blank", label: "填空" },
-                      ]}
-                      disabled={workbenchStreaming || !questionWorkbenchGate.healthy}
-                      className="ai-workbench-type-select"
-                    />
-                    <InputNumber
-                      min={1}
-                      max={20}
-                      value={workbenchCount}
-                      onChange={(value) => setWorkbenchCount(Number(value || 1))}
-                      addonBefore="数量"
-                      disabled={workbenchStreaming || !questionWorkbenchGate.healthy}
-                    />
-                  </Space>
-                  <Input.TextArea
-                    rows={4}
-                    value={workbenchPrompt}
-                    disabled={workbenchStreaming || !questionWorkbenchGate.healthy}
-                    onChange={(event) => setWorkbenchPrompt(event.target.value)}
-                    placeholder="例如：生成 1 道选择题、1 道判断题、1 道填空题；题目必须能从教材证据直接推出答案。"
-                  />
-                </Space>
-              </div>
-            </section>
-
-            <section className="ai-workbench-panel ai-workbench-candidates">
-              <Flex justify="space-between" align="center" gap={10} className="ai-workbench-section-head">
-                <div>
-                  <Text className="eyebrow">候选版本</Text>
-                  <Title level={4}>建议草稿</Title>
-                </div>
-                <Tag>{workbenchCandidates.length} 条</Tag>
-              </Flex>
-              <div className="ai-workbench-candidate-list">
-                {workbenchCandidates.length ? (
-                  workbenchCandidates.map((candidate) => {
-                    const payload = candidatePayload(candidate);
-                    const errors = candidateValidationErrors(candidate);
-                    return (
-                      <div key={candidate.id} className="ai-candidate-card">
-                        <Space orientation="vertical" size={8} className="full">
-                          <Flex justify="space-between" align="start" gap={8}>
-                            <Space size={4} wrap>
-                              <Tag color="blue">{questionTypeLabel(candidateQuestionType(candidate))}</Tag>
-                              {errors.length ? <Tag color="red">需修订</Tag> : <Tag color="green">可发布</Tag>}
-                              {candidate.status !== "draft" ? <Tag>{candidate.status}</Tag> : null}
-                            </Space>
-                            <Text type="secondary">{candidate.id.slice(0, 8)}</Text>
-                          </Flex>
-                          <Text strong>{candidateStem(candidate) || "未生成题干"}</Text>
-                          {Array.isArray(payload.options) && payload.options.length ? (
-                            <div className="question-options">
-                              {payload.options.map((option, index) => {
-                                const label = typeof option === "string" ? String.fromCharCode(65 + index) : option.label || String.fromCharCode(65 + index);
-                                const text = typeof option === "string" ? option : option.text || "";
-                                return (
-                                  <div key={`${candidate.id}-${label}-${index}`} className="question-option">
-                                    <Text strong>{label}</Text>
-                                    <Text>{text}</Text>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : null}
-                          <Descriptions size="small" column={1} className="question-workbench-descriptions">
-                            <Descriptions.Item label="答案">{answerText(payload.answer as Record<string, unknown>)}</Descriptions.Item>
-                            <Descriptions.Item label="解析">{String(payload.explanation || "暂无解析")}</Descriptions.Item>
-                          </Descriptions>
-                          <Space size={4} wrap>
-                            {candidateQuestionPoints(candidate).slice(0, 3).map((point) => (
-                              <Tag key={point.point_node_id || point.point_key || point.point_title} color="cyan">
-                                {point.point_title || point.point_key || point.point_node_id}
-                              </Tag>
-                            ))}
-                          </Space>
-                          {errors.length ? <Alert type="warning" showIcon title={errors.join("；")} /> : null}
-                          <Flex justify="space-between" align="center" gap={8} wrap="wrap">
-                            <Button size="small" onClick={() => setWorkbenchPrompt(`请继续修订候选 ${candidate.id.slice(0, 8)}：`)}>
-                              继续修
-                            </Button>
-                            <Space size={4}>
-                              <Popconfirm
-                                title="发布这条候选？"
-                                onConfirm={() => publishCandidate.mutate(candidate.id)}
-                                disabled={Boolean(errors.length) || candidate.status !== "draft"}
-                              >
-                                <Button
-                                  type="link"
-                                  size="small"
-                                  disabled={Boolean(errors.length) || candidate.status !== "draft"}
-                                  loading={publishCandidate.isPending}
-                                >
-                                  发布
-                                </Button>
-                              </Popconfirm>
-                              <Button
-                                type="link"
-                                danger
-                                size="small"
-                                disabled={candidate.status !== "draft"}
-                                loading={rejectCandidate.isPending}
-                                onClick={() => rejectCandidate.mutate(candidate.id)}
-                              >
-                                拒绝
-                              </Button>
-                            </Space>
-                          </Flex>
-                        </Space>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无候选，先发送一条提示" />
-                )}
-              </div>
-            </section>
-          </div>
-        </QueryState>
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="该证据没有可显示的原文" />
+              )}
+            </div>
+          </Space>
+        ) : null}
       </Drawer>
     </Space>
   );
