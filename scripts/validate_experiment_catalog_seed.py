@@ -13,6 +13,8 @@ from server.app.domains.catalog_tree.catalog_seed import (
     CATALOG_SEED_VALIDATION_REPORT_PATH,
     CATALOG_TREE_SEED_PATH,
     POINT_CONTENT_SEED_PATH,
+    load_catalog_seed,
+    validate_catalog_seed,
     validate_catalog_seed_files,
 )
 
@@ -21,11 +23,23 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Validate the committed experiment catalog outline seed.")
     parser.add_argument("--catalog", type=Path, default=CATALOG_TREE_SEED_PATH)
     parser.add_argument("--content", type=Path, default=POINT_CONTENT_SEED_PATH)
+    parser.add_argument(
+        "--include-point-content",
+        action="store_true",
+        help="Also validate the legacy 76-record point_content_seed.json against the catalog tree.",
+    )
     parser.add_argument("--report", type=Path, default=CATALOG_SEED_VALIDATION_REPORT_PATH)
     parser.add_argument("--write-report", action="store_true")
     args = parser.parse_args()
 
-    result = validate_catalog_seed_files(catalog_path=args.catalog, content_path=args.content)
+    if args.include_point_content:
+        result = validate_catalog_seed_files(catalog_path=args.catalog, content_path=args.content)
+    else:
+        result = {
+            **validate_catalog_seed(load_catalog_seed(args.catalog)),
+            "catalog_seed": str(args.catalog.relative_to(ROOT).as_posix()),
+            "point_content_seed": None,
+        }
     if args.write_report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

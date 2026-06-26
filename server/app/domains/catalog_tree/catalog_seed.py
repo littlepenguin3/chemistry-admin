@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -24,8 +25,8 @@ EXPECTED_CATALOG_COUNTS = {
     "point_nodes": 393,
     "point_placements": 393,
     "canonical_points": 357,
-    "duplicate_group_count": 32,
-    "duplicate_placement_surplus": 36,
+    "duplicate_group_count": 33,
+    "duplicate_placement_surplus": 37,
     "chapter_21_nodes": 0,
     "point_content_records": 76,
     "equation_content_records": 71,
@@ -35,11 +36,12 @@ EXPECTED_CATALOG_COUNTS = {
 
 CORRECTED_HYPOCHLORITE_PARENT = (
     "第13章 卤族元素",
-    "五、卤素含氧酸盐的氧化性",
+    "卤素含氧酸盐的氧化性",
     "次氯酸盐的氧化性",
 )
-CORRECTED_HYPOCHLORITE_POINTS = {"NaClO + MnSO₄", "NaClO + 品红溶液"}
-CORRECTED_SAMPLE_WORDING = "NaClO + 品红溶液"
+CORRECTED_HYPOCHLORITE_POINTS = {"NaClO + MnSO₄"}
+CORRECTED_SAMPLE_WORDING = "NaClO + MnSO₄"
+REVIEWED_DISTINCT_DUPLICATE_TITLES = {"NaClO + MnSO₄"}
 LEGACY_IDENTITY_KEYS = {
     "experiment_id",
     "legacy_experiment_id",
@@ -103,6 +105,180 @@ def load_point_content_seed(path: Path = POINT_CONTENT_SEED_PATH) -> list[dict[s
         raise ValueError(f"{path} must contain a top-level records list")
     return [dict(item) for item in records if isinstance(item, dict)]
 
+
+def _chapter_number_from_id(chapter_id: Any, path_titles: list[Any] | None = None) -> int:
+    raw_chapter = str(chapter_id or "").strip()
+    digits = "".join(char for char in raw_chapter if char.isdigit())
+    if digits:
+        return int(digits)
+    for title in path_titles or []:
+        value = str(title or "")
+        if value.startswith("第") and "章" in value:
+            extracted = "".join(char for char in value.split("章", 1)[0] if char.isdigit())
+            if extracted:
+                return int(extracted)
+    return 0
+
+
+def _source_doc(metadata: dict[str, Any]) -> str:
+    source_doc = str(metadata.get("source_doc") or "").strip()
+    if source_doc and not source_doc.startswith("/"):
+        return source_doc
+    return "docs/实验目录_整理版.md"
+
+
+def _path_titles_for_node(node: dict[str, Any], by_id: dict[str, dict[str, Any]]) -> list[str]:
+    metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+    stored = metadata.get("path_titles")
+    if isinstance(stored, list) and stored:
+        return [str(item) for item in stored]
+
+    titles = [str(node.get("title") or "")]
+    parent_id = node.get("parent_id")
+    while parent_id:
+        parent = by_id.get(str(parent_id))
+        if parent is None:
+            break
+        titles.append(str(parent.get("title") or ""))
+        parent_id = parent.get("parent_id")
+    titles.reverse()
+    chapter_number = _chapter_number_from_id(node.get("chapter_id"), titles)
+    chapter_title = f"第{chapter_number}章"
+    if not titles or not titles[0].startswith("第"):
+        titles.insert(0, chapter_title)
+    return titles
+
+
+def export_catalog_seed(session: Any) -> dict[str, Any]:
+    rows = [
+        dict(row)
+        for row in session.execute(
+            text(
+                """
+                SELECT id, chapter_id, parent_id, node_kind, title, status, display_order,
+                       canonical_point_id, metadata
+                FROM experiment_catalog_nodes
+                WHERE status <> 'archived'
+                ORDER BY chapter_id, parent_id NULLS FIRST, display_order, id
+                """
+            )
+        )
+        .mappings()
+        .all()
+    ]
+    by_id = {str(row["id"]): row for row in rows}
+    children: dict[str | None, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        parent_id = str(row["parent_id"]) if row.get("parent_id") else None
+        children[parent_id].append(row)
+    for child_rows in children.values():
+        child_rows.sort(
+            key=lambda item: (
+                _chapter_number_from_id(item.get("chapter_id")),
+                int(item.get("display_order") or 0),
+                str(item.get("id") or ""),
+            )
+        )
+
+    ordered_rows: list[dict[str, Any]] = []
+
+    def visit(row: dict[str, Any]) -> None:
+        ordered_rows.append(row)
+        for child in children.get(str(row["id"]), []):
+            visit(child)
+
+    for root in children.get(None, []):
+        visit(root)
+
+    nodes: list[dict[str, Any]] = []
+    placement_by_canonical: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in ordered_rows:
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        path_titles = _path_titles_for_node(row, by_id)
+        node = {
+            "chapter_number": _chapter_number_from_id(row.get("chapter_id"), path_titles),
+            "chapter_id": row["chapter_id"],
+            "seed_key": row["id"],
+            "parent_seed_key": row.get("parent_id") or "",
+            "node_kind": row["node_kind"],
+            "title": row["title"],
+            "path_titles": path_titles,
+            "display_order": int(row.get("display_order") or 0),
+            "source_doc": _source_doc(metadata),
+            "source_line": metadata.get("source_line"),
+            "source_kind": metadata.get("source") or "textbook_markdown_catalog_import",
+        }
+        if row.get("node_kind") == "point":
+            node["canonical_point_id"] = row.get("canonical_point_id")
+            if row.get("canonical_point_id"):
+                placement_by_canonical[str(row["canonical_point_id"])].append(node)
+        nodes.append(node)
+
+    canonical_rows = {
+        str(row["id"]): dict(row)
+        for row in session.execute(
+            text(
+                """
+                SELECT id, title, summary, status, metadata
+                FROM experiment_catalog_points
+                WHERE status <> 'archived'
+                ORDER BY id
+                """
+            )
+        )
+        .mappings()
+        .all()
+    }
+    canonical_points: list[dict[str, Any]] = []
+    for canonical_point_id in sorted(placement_by_canonical):
+        placements = placement_by_canonical[canonical_point_id]
+        canonical_row = canonical_rows.get(canonical_point_id, {})
+        metadata = canonical_row.get("metadata") if isinstance(canonical_row.get("metadata"), dict) else {}
+        placement_seed_keys = [str(node["seed_key"]) for node in placements]
+        placement_paths = [" / ".join(str(part) for part in node.get("path_titles") or []) for node in placements]
+        grouping_decision = (
+            str(metadata.get("grouping_decision") or metadata.get("grouping_policy") or "").strip()
+            or ("reviewed_duplicate_title_group" if len(placements) > 1 else "singleton_point_node")
+        )
+        canonical_points.append(
+            {
+                "canonical_point_id": canonical_point_id,
+                "title": canonical_row.get("title") or placements[0].get("title") or "",
+                "summary": canonical_row.get("summary") or "",
+                "status": canonical_row.get("status") or "published",
+                "grouping_decision": grouping_decision,
+                "placement_seed_keys": placement_seed_keys,
+                "placement_paths": placement_paths,
+                "source_doc": _source_doc(metadata),
+                "metadata": {
+                    "catalog_outline_seed": True,
+                    "source": metadata.get("source") or "textbook_markdown_catalog_import",
+                    "grouping_decision": grouping_decision,
+                    "placement_paths": placement_paths,
+                },
+            }
+        )
+
+    payload = {
+        "metadata": {
+            "artifact_type": "experiment_catalog_outline_seed",
+            "version": "catalog-md-current-v1",
+            "source_doc": "docs/实验目录_整理版.md",
+            "expected_counts": EXPECTED_CATALOG_COUNTS,
+            "classification": (
+                "Markdown headings and non-leaf bullets are directories; leaf bullets are point placements "
+                "targeting canonical experiment points."
+            ),
+            "content_seed": "data/seed/experiment_catalog/full_point_content_seed.json",
+        },
+        "canonical_points": canonical_points,
+        "nodes": nodes,
+    }
+    validation = validate_catalog_seed(nodes)
+    if not validation["ok"]:
+        raise ValueError("Exported catalog seed validation failed:\n" + "\n".join(validation["errors"][:80]))
+    return payload
+
 def validate_catalog_seed(
     nodes: list[dict[str, Any]],
     point_content: list[dict[str, Any]] | None = None,
@@ -157,7 +333,11 @@ def validate_catalog_seed(
     duplicate_placement_surplus = sum(len(rows) - 1 for rows in duplicate_groups.values())
     for title, rows in duplicate_groups.items():
         grouped_canonical_ids = {str(row.get("canonical_point_id") or "").strip() for row in rows}
-        if len(grouped_canonical_ids) != 1:
+        reviewed_distinct_duplicate = (
+            title in REVIEWED_DISTINCT_DUPLICATE_TITLES
+            and all(tuple(row.get("path_titles") or [])[: len(CORRECTED_HYPOCHLORITE_PARENT)] == CORRECTED_HYPOCHLORITE_PARENT for row in rows)
+        )
+        if len(grouped_canonical_ids) != 1 and not reviewed_distinct_duplicate:
             errors.append(f"duplicate placement title {title!r} must resolve to one reviewed canonical_point_id")
     chapter_21_nodes = [node for node in nodes if int(node.get("chapter_number") or 0) == 21]
     placeholder_nodes = [
@@ -208,8 +388,11 @@ def validate_catalog_seed(
         for node in hypochlorite_nodes
         if str(node.get("title") or "") in CORRECTED_HYPOCHLORITE_POINTS
     }
-    if len(hypochlorite_canonical_ids) != len(CORRECTED_HYPOCHLORITE_POINTS):
-        errors.append("corrected hypochlorite sibling points must target distinct canonical experiments")
+    reviewed_hypochlorite_nodes = [
+        node for node in hypochlorite_nodes if str(node.get("title") or "") in CORRECTED_HYPOCHLORITE_POINTS
+    ]
+    if len(reviewed_hypochlorite_nodes) != 2 or len(hypochlorite_canonical_ids) != len(reviewed_hypochlorite_nodes):
+        errors.append("reviewed hypochlorite duplicate placements must target distinct canonical experiments")
 
     content_counts: dict[str, int] = {
         "point_content_records": 0,
@@ -385,11 +568,15 @@ def import_catalog_seed(
     nodes: list[dict[str, Any]] | None = None,
     canonical_points: list[dict[str, Any]] | None = None,
     point_content: list[dict[str, Any]] | None = None,
+    include_point_content: bool = False,
     reset: bool = False,
 ) -> dict[str, Any]:
-    nodes = nodes or load_catalog_seed()
-    canonical_points = canonical_points or load_canonical_point_seed()
-    point_content = point_content or load_point_content_seed()
+    if nodes is None:
+        nodes = load_catalog_seed()
+    if canonical_points is None:
+        canonical_points = load_canonical_point_seed()
+    if include_point_content and point_content is None:
+        point_content = load_point_content_seed()
     validation = validate_catalog_seed(nodes, point_content)
     if not validation["ok"]:
         raise ValueError("Catalog outline seed validation failed:\n" + "\n".join(validation["errors"][:80]))
@@ -488,7 +675,8 @@ def import_catalog_seed(
         )
         imported_nodes += 1
 
-    for content_record in point_content:
+    content_records = point_content or []
+    for content_record in content_records:
         mode = str(content_record.get("principle_mode") or "text").strip()
         reaction_inputs = (
             content_record.get("reaction_equations")

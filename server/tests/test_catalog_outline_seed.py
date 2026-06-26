@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
@@ -8,7 +7,6 @@ import pytest
 from server.app.domains.questions import bank as question_bank_domain
 from server.app.domains.catalog_tree import catalog_seed as catalog_seed_domain
 from server.app.domains.catalog_tree.catalog_seed import (
-    CANONICAL_POINT_GROUPS_SEED_PATH,
     import_catalog_seed,
     load_catalog_seed,
     load_canonical_point_seed,
@@ -18,14 +16,14 @@ from server.app.domains.catalog_tree.catalog_seed import (
 )
 from server.app.domains.questions.generation import _catalog_node_evidence_ready
 from server.app.domains.video_library.search import _build_documents
+from scripts import seed_full_catalog_point_content as full_point_content_seed
 from scripts.generate_experiment_catalog_seed import ExampleMapping, _build_semantic_mapping_report
 
 
 def test_catalog_outline_seed_matches_required_counts_and_corrected_siblings() -> None:
     nodes = load_catalog_seed()
-    point_content = load_point_content_seed()
 
-    result = validate_catalog_seed(nodes, point_content)
+    result = validate_catalog_seed(nodes)
 
     assert result["ok"] is True
     assert result["counts"]["total_nodes"] == 569
@@ -33,39 +31,47 @@ def test_catalog_outline_seed_matches_required_counts_and_corrected_siblings() -
     assert result["counts"]["point_nodes"] == 393
     assert result["counts"]["point_placements"] == 393
     assert result["counts"]["canonical_points"] == 357
-    assert result["counts"]["duplicate_group_count"] == 32
-    assert result["counts"]["duplicate_placement_surplus"] == 36
+    assert result["counts"]["duplicate_group_count"] == 33
+    assert result["counts"]["duplicate_placement_surplus"] == 37
     assert result["counts"]["chapter_21_nodes"] == 0
-    assert result["counts"]["point_content_records"] == 76
-    assert result["counts"]["equation_content_records"] == 71
-    assert result["counts"]["text_content_records"] == 5
-    assert result["counts"]["reaction_equation_rows"] == 122
-    assert result["counts"]["unique_target_seed_keys"] == 76
-    assert result["counts"]["unique_target_canonical_point_ids"] == 76
-    assert result["counts"]["semantic_mapped_records"] == 76
-    assert result["counts"]["user_kept_source_records"] == 3
-    assert result["counts"]["researched_update_records"] == 7
-    assert result["corrected_hypochlorite_points"] == ["NaClO + MnSO₄", "NaClO + 品红溶液"]
-    assert result["corrected_sample_wording"] == "NaClO + 品红溶液"
-    assert all(record.get("semantic_mapping", {}).get("mapping_status") == "matched" for record in point_content)
-    assert all(record["reaction_equations"] for record in point_content if record["principle_mode"] == "equation")
-    assert all(not record["reaction_equations"] for record in point_content if record["principle_mode"] == "text")
+    assert result["counts"]["point_content_records"] == 0
+    assert result["corrected_hypochlorite_points"] == ["NaClO + MnSO₄"]
+    assert result["corrected_sample_wording"] == "NaClO + MnSO₄"
+
+    full_content = full_point_content_seed.load_seed(full_point_content_seed.DEFAULT_SEED_PATH)
+    full_result = full_point_content_seed.validate_seed_payload(full_content)
+    assert full_result["ok"] is True
+    assert full_result["summary"]["records"] == 393
+    assert full_result["summary"]["equation_mode_records"] == 182
+    assert full_result["summary"]["text_mode_records"] == 211
+    assert full_result["summary"]["reaction_equation_rows"] == 219
 
 
 def test_catalog_seed_reviewed_duplicate_groups_share_canonical_points() -> None:
     canonical_points = load_canonical_point_seed()
-    grouping_seed = json.loads(CANONICAL_POINT_GROUPS_SEED_PATH.read_text(encoding="utf-8-sig"))
     nodes = [node for node in load_catalog_seed() if node["node_kind"] == "point"]
     by_title: dict[str, list[dict[str, Any]]] = {}
     for node in nodes:
         by_title.setdefault(node["title"], []).append(node)
+    duplicate_groups = {title: rows for title, rows in by_title.items() if len(rows) > 1}
+    same_canonical_groups = {
+        title: rows for title, rows in duplicate_groups.items() if len({row["canonical_point_id"] for row in rows}) == 1
+    }
+    distinct_canonical_groups = {
+        title: rows for title, rows in duplicate_groups.items() if len({row["canonical_point_id"] for row in rows}) > 1
+    }
 
-    assert grouping_seed["counts"]["canonical_points"] == 357
-    assert grouping_seed["counts"]["duplicate_group_count"] == 32
-    assert grouping_seed["counts"]["ambiguous_duplicate_count"] == 0
     assert len(canonical_points) == 357
+    assert len(duplicate_groups) == 33
+    assert len(same_canonical_groups) == 32
+    assert set(distinct_canonical_groups) == {"NaClO + MnSO₄"}
+    assert len(distinct_canonical_groups["NaClO + MnSO₄"]) == 2
+    assert len({row["canonical_point_id"] for row in distinct_canonical_groups["NaClO + MnSO₄"]}) == 2
 
-    reviewed_groups = {group["title"]: group for group in grouping_seed["groups"]}
+    reviewed_groups = {
+        title: {"placement_count": len(rows), "canonical_point_id": rows[0]["canonical_point_id"]}
+        for title, rows in same_canonical_groups.items()
+    }
     assert reviewed_groups["Na2SiO3 + CO2"]["placement_count"] == 2
     assert reviewed_groups["Al2(SO4)3 + NH3·H2O + NaOH"]["placement_count"] == 4
     assert reviewed_groups["BeSO4 + NH3·H2O + NaOH"]["placement_count"] == 4
@@ -74,10 +80,6 @@ def test_catalog_seed_reviewed_duplicate_groups_share_canonical_points() -> None
         rows = by_title[title]
         assert len(rows) == reviewed_groups[title]["placement_count"]
         assert {row["canonical_point_id"] for row in rows} == {reviewed_groups[title]["canonical_point_id"]}
-
-    hypochlorite_rows = by_title["NaClO + MnSO₄"] + by_title["NaClO + 品红溶液"]
-    assert len(hypochlorite_rows) == 2
-    assert len({row["canonical_point_id"] for row in hypochlorite_rows}) == 2
 
 
 def test_catalog_seed_validation_rejects_legacy_identity_and_missing_mapping_report() -> None:
@@ -95,7 +97,7 @@ def test_catalog_seed_validation_rejects_legacy_identity_and_missing_mapping_rep
     assert any("semantic_mapping report is required" in error for error in result["errors"])
 
 
-def test_import_catalog_seed_preserves_equation_mode_and_writes_reaction_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_import_catalog_seed_defaults_to_catalog_only(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeResult:
         rowcount = 1
 
@@ -125,15 +127,10 @@ def test_import_catalog_seed_preserves_equation_mode_and_writes_reaction_rows(mo
 
     result = import_catalog_seed(session, reset=False)
 
-    assert result["point_content_records"] == 76
-    assert result["reaction_equation_rows"] == 122
-    assert len(session.point_content_params) == 76
-    assert sum(1 for params in session.point_content_params if params["principle_mode"] == "equation") == 71
-    assert sum(1 for params in session.point_content_params if params["principle_mode"] == "text") == 5
-    assert all(params["principle_equation"] for params in session.point_content_params if params["principle_mode"] == "equation")
-    assert all(params["principle_text"] for params in session.point_content_params if params["principle_mode"] == "text")
-    assert len(replace_calls) == 71
-    assert sum(len(call["equations"]) for call in replace_calls) == 122
+    assert result["point_content_records"] == 0
+    assert result["reaction_equation_rows"] == 0
+    assert session.point_content_params == []
+    assert replace_calls == []
 
 
 def test_ambiguous_sample_mapping_requires_reviewed_override() -> None:
@@ -201,8 +198,8 @@ def test_catalog_outline_reset_deletes_retired_seed_tables_but_preserves_canonic
     reset_legacy_experiment_seed_data(session)
 
     joined_sql = "\n".join(session.sql)
-    assert "experiment_questions" in joined_sql
-    assert "experiment_question_banks" in joined_sql
+    assert "experiment_questions" not in joined_sql
+    assert "experiment_question_banks" not in joined_sql
     assert "experiment_video_point_evidence" in joined_sql
     assert "experiment_video_points" in joined_sql
     assert "experiment_catalog_nodes" in joined_sql
@@ -369,17 +366,17 @@ def test_question_bank_regeneration_audit_reports_catalog_node_coverage() -> Non
 
 def test_point_content_seed_builds_search_documents_without_flattening_equations() -> None:
     nodes = {node["seed_key"]: node for node in load_catalog_seed()}
-    point_content = load_point_content_seed()
+    point_content = full_point_content_seed.load_seed(full_point_content_seed.DEFAULT_SEED_PATH)["records"]
     point_rows = []
     for record in point_content:
-        target = nodes[record["target_seed_key"]]
-        path_titles = list(record["target_path_titles"])
+        target = nodes[record["node_id"]]
+        path_titles = list(target["path_titles"])
         principle_equation = "\n".join(row["raw_text"] for row in record["reaction_equations"])
         point_rows.append(
             {
-                "node_id": record["target_seed_key"],
-                "placement_node_id": record["target_seed_key"],
-                "canonical_point_id": record["target_canonical_point_id"],
+                "node_id": record["node_id"],
+                "placement_node_id": record["node_id"],
+                "canonical_point_id": record["canonical_point_id"],
                 "chapter_id": target["chapter_id"],
                 "chapter_title": path_titles[0],
                 "node_title": path_titles[-1],
@@ -400,12 +397,12 @@ def test_point_content_seed_builds_search_documents_without_flattening_equations
     documents = _build_documents([], [], point_rows=point_rows)
     search_text = "\n".join(document.search_text for document in documents)
 
-    assert len(documents) == 76
+    assert len(documents) == 393
     assert all(document.target and document.target.node_id for document in documents)
     assert all(document.target and document.target.placement_node_id for document in documents)
     assert all(document.target and document.target.canonical_point_id for document in documents)
     assert "source_chunks" not in search_text
     assert "experiment_video_point_evidence" not in search_text
     assert any(record["principle_mode"] == "equation" for record in point_content)
-    assert any("Cl2 + 2Br-" in document.search_text or "Cl2 + 2 Br-" in document.search_text for document in documents)
+    assert any("Cl₂ + 2KBr" in document.search_text for document in documents)
     assert any("焰色反应" in document.search_text for document in documents)

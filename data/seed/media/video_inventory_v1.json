@@ -1,0 +1,90 @@
+{
+  "seed_type": "experiment_video_inventory",
+  "version": 1,
+  "seed_version": "experiment-videos-new-v1",
+  "generated_at": "2026-06-26T16:54:23.363581+00:00",
+  "source_archive": "实验视频（新）.rar",
+  "files": [
+    {
+      "path": "data/seed/media/experiment-videos-new-v1/real/亚硝酸根的检验方法.mp4",
+      "original_file_name": "亚硝酸根的检验方法.mp4",
+      "title": "亚硝酸根的检验方法",
+      "kind": "real_video",
+      "size_bytes": 26155134,
+      "sha256": "a6615a56d2c71580b155ff80abb9499c77d5af82cd24c8fe10b2781c467f684e",
+      "duration_seconds": 41.122,
+      "width": 1920,
+      "height": 1080,
+      "fps": 60.0,
+      "bitrate": 5088300,
+      "video_codec": "hevc",
+      "audio_codec": "aac"
+    },
+    {
+      "path": "data/seed/media/experiment-videos-new-v1/real/亚硝酸的氧化性.mp4",
+      "original_file_name": "亚硝酸的氧化性.mp4",
+      "title": "亚硝酸的氧化性",
+      "kind": "real_video",
+      "size_bytes": 48457712,
+      "sha256": "9b2f78cb99c95ff8c481c768a9b8e955fb71d8bb8a9df5d2ceeffcc0953e98f5",
+      "duration_seconds": 74.907,
+      "width": 1920,
+      "height": 1080,
+      "fps": 60.0,
+      "bitrate": 5175239,
+      "video_codec": "hevc",
+      "audio_codec": "aac"
+    },
+    {
+      "path": "data/seed/media/experiment-videos-new-v1/real/亚硝酸的生成与分解.mp4",
+      "original_file_name": "亚硝酸的生成与分解.mp4",
+      "title": "亚硝酸的生成与分解",
+      "kind": "real_video",
+      "size_bytes": 26319670,
+      "sha256": "1a67154a15343799b0797cf5ecef19ec72ed8ad4e7b77fa2bd6d6d9029ba53f3",
+      "duration_seconds": 39.683,
+      "width": 1920,
+      "height": 1080,
+      "fps": 60.0,
+      "bitrate": 5305984,
+      "video_codec": "hevc",
+      "audio_codec": "aac"
+    },
+    {
+      "path": "data/seed/media/experiment-videos-new-v1/real/亚硝酸的还原性.mp4",
+      "original_file_name": "亚硝酸的还原性.mp4",
+      "title": "亚硝酸的还原性",
+      "kind": "real_video",
+      "size_bytes": 35774302,
+      "sha256": "f8c875d85b40d0f9c6bbf69fc8450f92ab561e98f4791aa37f57c3a0d2926182",
+      "duration_seconds": 51.687,
+      "width": 1920,
+      "height": 1080,
+      "fps": 60.0,
+      "bitrate": 5537066,
+      "video_codec": "hevc",
+      "audio_codec": "aac"
+    },
+    {
+      "path": "data/seed/media/experiment-videos-new-v1/placeholder/no-video-placeholder.mp4",
+      "original_file_name": "no-video-placeholder.mp4",
+      "title": "点位暂无真实视频（占位视频）",
+      "kind": "placeholder_video",
+      "size_bytes": 35988,
+      "sha256": "7f610e398072067b9ed28f678cd72bb53320f485cdbbe531d0bf9a96c197372b",
+      "duration_seconds": 8.0,
+      "width": 1280,
+      "height": 720,
+      "fps": 30.0,
+      "bitrate": 35988,
+      "video_codec": "h264",
+      "audio_codec": "aac"
+    }
+  ],
+  "summary": {
+    "files": 5,
+    "real_videos": 4,
+    "placeholder_videos": 1,
+    "total_size_bytes": 136742806
+  }
+}

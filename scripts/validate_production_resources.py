@@ -32,6 +32,13 @@ EXPECTED_DATABASE_COUNTS = {
     "point_evidence_bindings_with_node": 0,
     "catalog_point_textbook_evidence_states": 2,
     "catalog_point_textbook_evidence_bindings": 18,
+    "seed_teacher_accounts": 1,
+    "seed_classes": 1,
+    "seed_students": 30,
+    "seed_media_assets": 5,
+    "seed_active_point_media_bindings": 357,
+    "seed_video_covered_point_nodes": 393,
+    "seed_placeholder_video_covered_point_nodes": 388,
 }
 
 
@@ -190,6 +197,63 @@ def _current_question_bank_seed_count(path: Path) -> dict[str, int]:
             and isinstance(item.get("metadata"), dict)
             and item["metadata"].get("point_aware_question_bank") is True
         ),
+    }
+
+
+def _demo_identity_seed_count(path: Path) -> dict[str, int]:
+    data = _json(path)
+    students = data.get("students") or []
+    expected = data.get("expected_counts") or {}
+    if not isinstance(students, list):
+        raise ValueError(f"{path} students must be a list")
+    return {
+        "teachers": 1 if isinstance(data.get("teacher"), dict) else 0,
+        "classes": 1 if isinstance(data.get("class"), dict) else 0,
+        "students": len(students),
+        "expected_students": int(expected.get("students") or 0),
+        "shared_password_policy": 1
+        if (data.get("registration_settings") or {}).get("default_password_mode") == "shared"
+        else 0,
+    }
+
+
+def _video_inventory_count(path: Path) -> dict[str, int]:
+    data = _json(path)
+    files = data.get("files") or []
+    if not isinstance(files, list):
+        raise ValueError(f"{path} files must be a list")
+    return {
+        "files": len(files),
+        "real_videos": sum(1 for item in files if isinstance(item, dict) and item.get("kind") == "real_video"),
+        "placeholder_videos": sum(
+            1 for item in files if isinstance(item, dict) and item.get("kind") == "placeholder_video"
+        ),
+        "files_with_duration": sum(1 for item in files if isinstance(item, dict) and item.get("duration_seconds")),
+    }
+
+
+def _experiment_video_media_seed_count(path: Path) -> dict[str, int]:
+    data = _json(path)
+    assets = data.get("assets") or []
+    bindings = data.get("bindings") or []
+    expected = data.get("expected_counts") or {}
+    if not isinstance(assets, list) or not isinstance(bindings, list):
+        raise ValueError(f"{path} assets and bindings must be lists")
+    return {
+        "assets": len(assets),
+        "real_video_assets": sum(1 for item in assets if isinstance(item, dict) and item.get("kind") == "real_video"),
+        "placeholder_video_assets": sum(
+            1 for item in assets if isinstance(item, dict) and item.get("kind") == "placeholder_video"
+        ),
+        "bindings": len(bindings),
+        "real_video_bindings": sum(
+            1 for item in bindings if isinstance(item, dict) and item.get("coverage_kind") == "real_video"
+        ),
+        "placeholder_video_bindings": sum(
+            1 for item in bindings if isinstance(item, dict) and item.get("coverage_kind") == "placeholder_video"
+        ),
+        "covered_point_nodes": int(expected.get("active_catalog_point_nodes") or 0),
+        "placeholder_video_covered_point_nodes": int(expected.get("placeholder_video_covered_point_nodes") or 0),
     }
 
 
@@ -556,6 +620,83 @@ RESOURCE_SPECS: list[dict[str, Any]] = [
             "questions_with_point_aware_metadata": 2311,
         },
         "source_path": "experiment_question_banks + experiment_questions",
+    },
+    {
+        "id": "demo_identity_seed",
+        "role": "Default teacher account, demo class, and active student roster/accounts",
+        "path": "data/seed/identity/demo_identity_seed_v1.json",
+        "kind": "json",
+        "count": _demo_identity_seed_count,
+        "expected_counts": {
+            "teachers": 1,
+            "classes": 1,
+            "students": 30,
+            "expected_students": 30,
+            "shared_password_policy": 1,
+        },
+        "source_path": "demo seed manifest",
+    },
+    {
+        "id": "experiment_video_inventory",
+        "role": "Inventory of reviewed experiment video seed files with checksums and durations",
+        "path": "data/seed/media/video_inventory_v1.json",
+        "kind": "json",
+        "count": _video_inventory_count,
+        "expected_counts": {"files": 5, "real_videos": 4, "placeholder_videos": 1, "files_with_duration": 5},
+        "source_path": "实验视频（新）.rar + generated ffmpeg placeholder",
+    },
+    {
+        "id": "experiment_video_media_seed",
+        "role": "Reviewed media asset and point-video binding seed with placeholder coverage",
+        "path": "data/seed/media/experiment_video_seed_v1.json",
+        "kind": "json",
+        "count": _experiment_video_media_seed_count,
+        "expected_counts": {
+            "assets": 5,
+            "real_video_assets": 4,
+            "placeholder_video_assets": 1,
+            "bindings": 357,
+            "real_video_bindings": 5,
+            "placeholder_video_bindings": 352,
+            "covered_point_nodes": 393,
+            "placeholder_video_covered_point_nodes": 388,
+        },
+        "source_path": "media_assets + experiment_catalog_point_media_bindings",
+    },
+    {
+        "id": "experiment_video_real_nitrite_test",
+        "role": "Seed video: 亚硝酸根的检验方法",
+        "path": "data/seed/media/experiment-videos-new-v1/real/亚硝酸根的检验方法.mp4",
+        "kind": "binary",
+        "source_path": "实验视频（新）.rar",
+    },
+    {
+        "id": "experiment_video_real_nitrous_oxidizing",
+        "role": "Seed video: 亚硝酸的氧化性",
+        "path": "data/seed/media/experiment-videos-new-v1/real/亚硝酸的氧化性.mp4",
+        "kind": "binary",
+        "source_path": "实验视频（新）.rar",
+    },
+    {
+        "id": "experiment_video_real_nitrous_generation_decomposition",
+        "role": "Seed video: 亚硝酸的生成与分解",
+        "path": "data/seed/media/experiment-videos-new-v1/real/亚硝酸的生成与分解.mp4",
+        "kind": "binary",
+        "source_path": "实验视频（新）.rar",
+    },
+    {
+        "id": "experiment_video_real_nitrous_reducing",
+        "role": "Seed video: 亚硝酸的还原性",
+        "path": "data/seed/media/experiment-videos-new-v1/real/亚硝酸的还原性.mp4",
+        "kind": "binary",
+        "source_path": "实验视频（新）.rar",
+    },
+    {
+        "id": "experiment_video_placeholder",
+        "role": "Generated placeholder video for unfilmed catalog points",
+        "path": "data/seed/media/experiment-videos-new-v1/placeholder/no-video-placeholder.mp4",
+        "kind": "binary",
+        "source_path": "ffmpeg generated placeholder",
     },
     {
         "id": "chemical_search_aliases",
