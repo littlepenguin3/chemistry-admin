@@ -675,7 +675,7 @@ def main() -> None:
                 student_password=args.student_password,
                 dry_run=args.dry_run,
             )
-    print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    sys.stdout.buffer.write((json.dumps(result, ensure_ascii=False, indent=2, default=str) + "\n").encode("utf-8"))
     if isinstance(result, dict) and result.get("ok") is False:
         raise SystemExit(1)
 

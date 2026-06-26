@@ -258,7 +258,7 @@ def main() -> None:
         teacher_username=args.teacher_username,
         class_id=args.class_id,
     )
-    print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    sys.stdout.buffer.write((json.dumps(result, ensure_ascii=False, indent=2, default=str) + "\n").encode("utf-8"))
     if not result["ok"]:
         raise SystemExit(1)
 
