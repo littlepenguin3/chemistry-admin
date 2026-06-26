@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
@@ -283,6 +284,66 @@ async def test_smart_custom_point_report_creation_keeps_mode_and_fallback(monkey
     assert captured[0]["payload"]["assessment_mode"] == mode
     assert captured[0]["source_table"] == "student_smart_assessment_sessions"
     assert captured[0]["wrong_count"] == 1
+
+
+@pytest.mark.anyio
+async def test_assessment_report_ai_generation_uses_direct_chat(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    class _FakeCompletions:
+        async def create(self, **kwargs: Any) -> Any:
+            captured.update(kwargs)
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="真实 AI 学情总结。"))])
+
+    class _FakeClient:
+        chat = SimpleNamespace(completions=_FakeCompletions())
+
+    monkeypatch.setattr(reports_module, "_ai_ready", lambda: True)
+    monkeypatch.setattr(reports_module, "effective_ai_settings", lambda _settings: SimpleNamespace(agent_llm_model="qwen-max"))
+    monkeypatch.setattr(reports_module, "_async_openai_client", lambda _settings, *, timeout: _FakeClient())
+
+    generated = await reports_module._generate_with_ai(
+        user=_user(),
+        prompt="请生成测评报告。",
+        context={"student_id": "20249999"},
+        attempts=[_attempt(correct=False)],
+        fallback_text="本地兜底报告。",
+    )
+
+    assert generated.text == "真实 AI 学情总结。"
+    assert generated.source == "ai"
+    assert generated.mode == "openai_chat_report"
+    assert captured["model"] == "qwen-max"
+    assert "不调用工具" in captured["messages"][0]["content"]
+    assert "不要求外部检索" in captured["messages"][0]["content"]
+    assert "assessment_report_context" in captured["messages"][1]["content"]
+
+
+@pytest.mark.anyio
+async def test_assessment_report_ai_generation_times_out_to_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _SlowCompletions:
+        async def create(self, **_kwargs: Any) -> Any:
+            await asyncio.sleep(1)
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="late answer"))])
+
+    class _SlowClient:
+        chat = SimpleNamespace(completions=_SlowCompletions())
+
+    monkeypatch.setattr(reports_module, "_ai_ready", lambda: True)
+    monkeypatch.setattr(reports_module, "effective_ai_settings", lambda _settings: SimpleNamespace(agent_llm_model="qwen-max"))
+    monkeypatch.setattr(reports_module, "_async_openai_client", lambda _settings, *, timeout: _SlowClient())
+    monkeypatch.setattr(reports_module, "ASSESSMENT_REPORT_AI_TIMEOUT_SECONDS", 0.01)
+
+    generated = await reports_module._generate_with_ai(
+        user=_user(),
+        prompt="请生成测评报告。",
+        context={"student_id": "20249999"},
+        attempts=[_attempt(correct=False)],
+        fallback_text="本地兜底报告。",
+    )
+
+    assert generated.text == "本地兜底报告。"
+    assert generated.mode == "report_ai_timeout_fallback"
 
 
 def test_student_report_list_and_detail_are_scoped_to_authenticated_student(monkeypatch: pytest.MonkeyPatch) -> None:

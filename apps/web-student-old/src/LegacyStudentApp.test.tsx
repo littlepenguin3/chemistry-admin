@@ -4,7 +4,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LegacyStudentApp } from "./LegacyStudentApp";
 import { ApiError, legacyStudentErrorMessage, setAuthToken } from "./api";
 
-const forbiddenVisibleTerms = ["Atom", "RAG", "Agent", "chunk", "embedding", "rerank", "Qwen", "BGE", "OpenAI", "学习助手", "智能监控"];
+const forbiddenVisibleTerms = [
+  "Atom",
+  "RAG",
+  "Agent",
+  "chunk",
+  "embedding",
+  "rerank",
+  "Qwen",
+  "BGE",
+  "OpenAI",
+  "学习助手",
+  "智能监控",
+  "TKE",
+  "TKT",
+  "mastery_score",
+  "mastery_prob",
+  "检索增强",
+  "知识检索",
+];
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -549,24 +567,107 @@ function installStudentFetchMock() {
         assessment_report: {
           id: "assessment-report-1",
           title: "智能测评报告",
+          report_type: "smart",
+          source_session_id: "session-1",
           score: 66.7,
           correct_count: 2,
           total_count: 3,
           correct_rate: 0.667,
+          wrong_count: 1,
           completed_at: "2026-06-26T10:30:00Z",
         },
       });
     }
-    if (url.includes("/api/student/assessment-reports")) {
+    if (url.includes("/api/student/legacy/reports/assessment-report-1") || url.includes("/api/student/legacy/reports/report-1")) {
+      return jsonResponse({
+        id: url.includes("assessment-report-1") ? "assessment-report-1" : "report-1",
+        title: "卤族元素测评",
+        report_type: "smart",
+        source_session_id: "session-1",
+        score: 82,
+        correct_count: 8,
+        total_count: 10,
+        correct_rate: 0.8,
+        wrong_count: 1,
+        completed_at: "2026-06-26T10:00:00Z",
+        ai_summary: {
+          text: "本次报告显示你对卤素氧化性判断已经有基础，但需要继续复盘氯水漂白性实验。",
+          source: "fallback",
+          mode: "legacy_local_summary",
+          generated_at: "2026-06-26T10:00:01Z",
+        },
+        mistake_explanation: {
+          text: "AI 已根据本次错题生成解析：新制氯水含有氯气和次氯酸，判断氧化性时要把实验现象与有效成分对应起来。",
+          source: "ai",
+          mode: "ai_generated",
+          generated_at: "2026-06-26T10:00:02Z",
+        },
+        next_steps: "先复盘错题解析，再回到相关实验视频巩固现象和原理。",
+        covered_experiments: ["氯水漂白性实验"],
+        wrong_questions: [
+          {
+            question_id: "q1",
+            stem: "新制氯水具有氧化性。",
+            experiment_title: "氯水漂白性实验",
+            question_type: "true_false",
+            submitted_answer: "错误",
+            correct_answer: "正确",
+            explanation: "新制氯水中含有氯气和次氯酸，能体现氧化性。",
+            explanation_source: "stored",
+            options: [],
+          },
+        ],
+      });
+    }
+    if (url.includes("/api/student/legacy/reports/report-perfect")) {
+      return jsonResponse({
+        id: "report-perfect",
+        title: "全部正确测评",
+        report_type: "custom",
+        source_session_id: "session-perfect",
+        score: 100,
+        correct_count: 5,
+        total_count: 5,
+        correct_rate: 1,
+        wrong_count: 0,
+        completed_at: "2026-06-26T11:00:00Z",
+        ai_summary: {
+          text: "本次测评全部答对，可以继续保持当前学习节奏。",
+          source: "fallback",
+          mode: "legacy_local_summary",
+          generated_at: "2026-06-26T11:00:01Z",
+        },
+        next_steps: "",
+        covered_experiments: [],
+        wrong_questions: [],
+      });
+    }
+    if (url.includes("/api/student/legacy/reports")) {
       return jsonResponse({
         reports: [
           {
             id: "report-1",
             title: "卤族元素测评",
+            report_type: "smart",
+            source_session_id: "session-1",
             score: 82,
             correct_count: 8,
             total_count: 10,
+            correct_rate: 0.8,
+            wrong_count: 1,
             completed_at: "2026-06-26T10:00:00Z",
+          },
+          {
+            id: "report-perfect",
+            title: "全部正确测评",
+            report_type: "custom",
+            source_session_id: "session-perfect",
+            score: 100,
+            correct_count: 5,
+            total_count: 5,
+            correct_rate: 1,
+            wrong_count: 0,
+            completed_at: "2026-06-26T11:00:00Z",
           },
         ],
       });
@@ -603,7 +704,8 @@ describe("LegacyStudentApp", () => {
     expect(screen.getByRole("button", { name: "主页" }).className).toContain("active");
     expect(screen.getByRole("button", { name: "学习" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "评测" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "我的" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "报告" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "我的" })).toBeNull();
     expect(container.querySelectorAll(".legacy-tabbar-icon svg")).toHaveLength(4);
     expect(await screen.findByText("氯水漂白性实验")).toBeTruthy();
     expect(await screen.findByText("钠与水反应观察")).toBeTruthy();
@@ -826,6 +928,8 @@ describe("LegacyStudentApp", () => {
     expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes("/api/student/smart-assessment/submit"))).toBe(false);
     expect(await screen.findByRole("heading", { name: "智能薄弱项测试完成" })).toBeTruthy();
     expect(screen.getByText("66.7")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "返回测评" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "查看报告" })).toBeTruthy();
     assertNoForbiddenVisibleTerms(container);
   });
 
@@ -860,17 +964,41 @@ describe("LegacyStudentApp", () => {
     expect(JSON.parse(String(calls.at(-1)?.[1]?.body)).experiment_ids).toEqual(["exp-1", "exp-2"]);
   });
 
-  it("renders profile report copy from shared student APIs", async () => {
+  it("renders report list and legacy AI wrong-question detail", async () => {
     const { container } = render(<LegacyStudentApp />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "我的" }));
+    fireEvent.click(await screen.findByRole("button", { name: "报告" }));
     expect(screen.getByRole("button", { name: "退出登录" })).toBeTruthy();
     expect(await screen.findByText("学号")).toBeTruthy();
     expect(screen.getByText("2026001")).toBeTruthy();
     expect(screen.getByText("李同学")).toBeTruthy();
     expect(screen.getByText("数智一班")).toBeTruthy();
-    expect(await screen.findByText("BKT 学情报告")).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "报告" })).toBeTruthy();
+    expect(screen.getByText("待复盘错题")).toBeTruthy();
     expect(screen.getByText("卤族元素测评")).toBeTruthy();
+    expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes("/api/student/legacy/reports"))).toBe(true);
+    expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes("/api/student/assessment-reports"))).toBe(false);
+
+    fireEvent.click(screen.getAllByText("查看报告")[0]);
+    await waitFor(() => expect(window.location.pathname).toBe("/reports/report-1"));
+    expect(await screen.findByRole("heading", { name: "卤族元素测评" })).toBeTruthy();
+    expect(screen.getByText("AI 学情总结")).toBeTruthy();
+    expect(screen.getByText("错题解析")).toBeTruthy();
+    expect(screen.getByText(/AI 已根据本次错题生成解析/)).toBeTruthy();
+    expect(screen.getByText("新制氯水具有氧化性。")).toBeTruthy();
+    expect(screen.queryByText("你的答案")).toBeNull();
+    expect(screen.queryByText("参考答案")).toBeNull();
+    expect(screen.getByRole("button", { name: "返回报告" })).toBeTruthy();
+    assertNoForbiddenVisibleTerms(container);
+  });
+
+  it("shows a clear state when a legacy report has no wrong questions", async () => {
+    window.history.pushState({}, "", "/reports/report-perfect");
+    const { container } = render(<LegacyStudentApp />);
+
+    expect(await screen.findByRole("heading", { name: "全部正确测评" })).toBeTruthy();
+    expect(screen.getByText("本次没有错题。")).toBeTruthy();
+    expect(screen.getByText("AI 学情总结")).toBeTruthy();
     assertNoForbiddenVisibleTerms(container);
   });
 

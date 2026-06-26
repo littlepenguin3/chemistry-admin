@@ -256,16 +256,45 @@ export type PointDetail = {
 export type AssessmentReportSummary = {
   id: string;
   title: string;
+  report_type?: string;
+  source_session_id?: string;
   score: number;
   correct_count: number;
   total_count: number;
   correct_rate?: number;
+  wrong_count?: number;
   completed_at: string;
-  report_type?: string;
 };
 
 export type AssessmentReportListResponse = {
   reports: AssessmentReportSummary[];
+};
+
+export type LegacyReportGeneratedText = {
+  text: string;
+  source?: "ai" | "fallback";
+  mode?: string;
+  generated_at?: string | null;
+};
+
+export type LegacyWrongQuestionExplanation = {
+  question_id: string;
+  stem: string;
+  experiment_title?: string;
+  question_type?: string;
+  submitted_answer: string;
+  correct_answer: string;
+  explanation: string;
+  explanation_source?: "stored" | "fallback";
+  options?: string[];
+};
+
+export type LegacyAssessmentReportDetail = AssessmentReportSummary & {
+  ai_summary: LegacyReportGeneratedText;
+  mistake_explanation?: LegacyReportGeneratedText | null;
+  next_steps?: string;
+  covered_experiments?: string[];
+  wrong_questions: LegacyWrongQuestionExplanation[];
 };
 
 export type AssessmentMode = "smart" | "custom" | "point";
@@ -588,8 +617,12 @@ export function submitSmartAssessment(sessionId: string, answers: SmartAssessmen
   });
 }
 
-export function loadAssessmentReports(): Promise<AssessmentReportListResponse> {
-  return api<AssessmentReportListResponse>("/api/student/assessment-reports");
+export function loadLegacyAssessmentReports(): Promise<AssessmentReportListResponse> {
+  return api<AssessmentReportListResponse>("/api/student/legacy/reports");
+}
+
+export function loadLegacyAssessmentReport(reportId: string): Promise<LegacyAssessmentReportDetail> {
+  return api<LegacyAssessmentReportDetail>(`/api/student/legacy/reports/${encodeURIComponent(reportId)}`);
 }
 
 export function mediaUrl(path?: string | null): string {

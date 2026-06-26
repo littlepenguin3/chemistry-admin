@@ -466,6 +466,48 @@
     },
     {
       "method": "GET",
+      "path": "/api/admin/legacy/teacher-demo/classes",
+      "name": "admin_legacy_teacher_demo_classes",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/legacy/teacher-demo/classes/{class_id}/analytics",
+      "name": "admin_legacy_teacher_demo_class_analytics",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/legacy/teacher-demo/classes/{class_id}/weak-points",
+      "name": "admin_legacy_teacher_demo_class_weak_points",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/legacy/teacher-demo/evaluation-system",
+      "name": "admin_legacy_teacher_demo_evaluation_system",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/legacy/teacher-demo/overview",
+      "name": "admin_legacy_teacher_demo_overview",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/legacy/teacher-demo/question-resources",
+      "name": "admin_legacy_teacher_demo_question_resources",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/legacy/teacher-demo/video-resources",
+      "name": "admin_legacy_teacher_demo_video_resources",
+      "owner": "admin-api"
+    },
+    {
+      "method": "GET",
       "path": "/api/admin/legacy/video-points",
       "name": "admin_legacy_video_points",
       "owner": "admin-api"
@@ -1044,6 +1086,18 @@
       "method": "GET",
       "path": "/api/student/learning-page",
       "name": "learning_page",
+      "owner": "student-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/legacy/reports",
+      "name": "legacy_reports",
+      "owner": "student-api"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/legacy/reports/{report_id}",
+      "name": "legacy_report_detail",
       "owner": "student-api"
     },
     {

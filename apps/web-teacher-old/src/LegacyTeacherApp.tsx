@@ -1,33 +1,60 @@
-import { FormEvent, type ReactNode, useEffect, useState } from "react";
+import { FormEvent, type DependencyList, type ReactNode, useEffect, useMemo, useState } from "react";
 
 import {
-  createQuestionWorkbenchSession,
-  getAnalyticsDashboard,
   getAuthToken,
+  getTeacherDemoClassAnalytics,
+  getTeacherDemoClasses,
+  getTeacherDemoClassWeakPoints,
+  getTeacherDemoEvaluationSystem,
+  getTeacherDemoOverview,
+  getTeacherDemoQuestionResources,
+  getTeacherDemoVideoResources,
   legacyTeacherErrorMessage,
-  listLegacyVideoPoints,
-  listCatalogQuestionBank,
-  listClasses,
-  listExperiments,
-  listQuestionBanks,
   loadCurrentUser,
   setLegacyVideoPointRecommendation,
   setAuthToken,
   teacherLogin,
-  type AnalyticsDashboard,
-  type CatalogQuestionBankNode,
-  type ClassItem,
-  type Experiment,
-  type LegacyVideoPointItem,
-  type QuestionBankSummary,
+  type TeacherDemoAnalytics,
+  type TeacherDemoClassSummary,
+  type TeacherDemoClasses,
+  type TeacherDemoEvaluationSystem,
+  type TeacherDemoOverview,
+  type TeacherDemoQuestionResource,
+  type TeacherDemoQuestionResources,
+  type TeacherDemoVideoResource,
+  type TeacherDemoVideoResources,
+  type TeacherDemoWeakPoint,
+  type TeacherDemoWeakPoints,
   type User,
 } from "./api";
 
 const logoSrc = `${import.meta.env.BASE_URL}assets/sysu-lockup-red.svg`;
-const emblemSrc = `${import.meta.env.BASE_URL}assets/sysu-emblem-red.svg`;
-const forbiddenPathSegments = ["/learning-assistant", "/ai-config", "/monitoring", "/rag", "/agent", "/provider", "/web-admin"];
+const forbiddenPathSegments = [
+  "/learning-assistant",
+  "/ai-config",
+  "/monitoring",
+  "/rag",
+  "/agent",
+  "/provider",
+  "/web-admin",
+  "/recommend",
+  "/question-bank",
+  "/scores",
+  "/workbench",
+  "/import",
+  "/publish",
+];
 
-type RouteKey = "overview" | "experiments" | "recommend" | "question-bank" | "scores";
+type RouteKey = "overview" | "videos" | "questions" | "classes" | "analytics" | "evaluation";
+
+const navItems: Array<{ key: RouteKey; label: string; path: string }> = [
+  { key: "overview", label: "工作台", path: "/" },
+  { key: "videos", label: "视频资源", path: "/videos" },
+  { key: "questions", label: "题库资源", path: "/questions" },
+  { key: "classes", label: "班级", path: "/classes" },
+  { key: "analytics", label: "学情分析", path: "/analytics" },
+  { key: "evaluation", label: "评价体系", path: "/evaluation" },
+];
 
 function currentPath(): string {
   return window.location.pathname || "/";
@@ -53,10 +80,11 @@ function isForbiddenPath(path: string): boolean {
 }
 
 function routeFromPath(path: string): RouteKey {
-  if (path.startsWith("/experiments")) return "experiments";
-  if (path.startsWith("/recommend")) return "recommend";
-  if (path.startsWith("/question-bank")) return "question-bank";
-  if (path.startsWith("/scores")) return "scores";
+  if (path.startsWith("/videos")) return "videos";
+  if (path.startsWith("/questions")) return "questions";
+  if (path.startsWith("/classes")) return "classes";
+  if (path.startsWith("/analytics")) return "analytics";
+  if (path.startsWith("/evaluation")) return "evaluation";
   return "overview";
 }
 
@@ -71,7 +99,7 @@ export function LegacyTeacherApp() {
     setCheckingSession(true);
     loadCurrentUser()
       .then((value) => {
-        if (active && (value.role === "admin" || value.role === "teacher")) setUser(value);
+        if (active && (value.role === "admin" || value.role === "teacher" || value.role === "platform_admin")) setUser(value);
       })
       .catch(() => {
         if (active) setUser(null);
@@ -99,21 +127,18 @@ export function LegacyTeacherApp() {
   return (
     <div className="legacy-teacher-shell">
       <aside className="legacy-sidebar">
-        <img src={emblemSrc} alt="" className="legacy-sidebar-emblem" />
         <img src={logoSrc} alt="中山大学" className="legacy-sidebar-logo" />
         <strong>无机化学实验教学平台</strong>
         <nav aria-label="旧版教师导航">
-          <NavButton active={activeRoute === "overview"} label="工作台" path="/" />
-          <NavButton active={activeRoute === "experiments"} label="实验资源" path="/experiments" />
-          <NavButton active={activeRoute === "recommend"} label="推荐学习" path="/recommend" />
-          <NavButton active={activeRoute === "question-bank"} label="AI出题与题库" path="/question-bank" />
-          <NavButton active={activeRoute === "scores"} label="学情分数" path="/scores" />
+          {navItems.map((item) => (
+            <NavButton key={item.key} active={activeRoute === item.key} label={item.label} path={item.path} />
+          ))}
         </nav>
       </aside>
       <div className="legacy-teacher-main">
         <header className="legacy-teacher-header">
           <div>
-            <span>BKT 教学管理工作台</span>
+            <span>旧版教师展示台</span>
             <strong>{user.display_name || user.username}</strong>
           </div>
           <button
@@ -123,17 +148,19 @@ export function LegacyTeacherApp() {
               window.location.assign("/");
             }}
           >
-            退出
+            退出登录
           </button>
         </header>
-        {activeRoute === "experiments" ? (
-          <ExperimentsPage />
-        ) : activeRoute === "recommend" ? (
-          <RecommendLearningPage />
-        ) : activeRoute === "question-bank" ? (
-          <QuestionBankPage />
-        ) : activeRoute === "scores" ? (
-          <ScoresPage />
+        {activeRoute === "videos" ? (
+          <VideosPage />
+        ) : activeRoute === "questions" ? (
+          <QuestionsPage />
+        ) : activeRoute === "classes" ? (
+          <ClassesPage />
+        ) : activeRoute === "analytics" ? (
+          <AnalyticsPage />
+        ) : activeRoute === "evaluation" ? (
+          <EvaluationPage />
         ) : (
           <OverviewPage />
         )}
@@ -162,7 +189,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
     setError("");
     try {
       const response = await teacherLogin(username, password);
-      if (response.user.role !== "admin" && response.user.role !== "teacher") {
+      if (!["admin", "teacher", "platform_admin"].includes(response.user.role)) {
         throw new Error("该账号不能进入教师端。");
       }
       setAuthToken(response.access_token);
@@ -180,7 +207,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
         <img src={logoSrc} alt="中山大学" />
         <span className="eyebrow">Teacher Console Classic</span>
         <h1>无机化学实验教学管理平台</h1>
-        <p>围绕实验资源、AI出题、教师审核、题库建设、学生测评和 BKT 学情分数形成教学反馈闭环。</p>
+        <p>围绕实验视频、题库资源、班级学情和 BKT 评价体系展示教学反馈闭环。</p>
         <form onSubmit={submit}>
           <label>
             账号
@@ -192,7 +219,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
           </label>
           {error ? <div className="legacy-error">{error}</div> : null}
           <button className="primary-button" disabled={submitting}>
-            {submitting ? "登录中..." : "进入教师端"}
+            {submitting ? "登录中..." : "进入教师端" }
           </button>
         </form>
       </section>
@@ -200,375 +227,508 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   );
 }
 
-function OverviewPage() {
-  const [experiments, setExperiments] = useState<Experiment[]>([]);
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [banks, setBanks] = useState<QuestionBankSummary[]>([]);
+function useAsyncData<T>(loader: () => Promise<T>, deps: DependencyList): { data: T | null; error: string; loading: boolean } {
+  const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([listExperiments(), listClasses(), listQuestionBanks()])
-      .then(([experimentResponse, classResponse, bankResponse]) => {
-        setExperiments(experimentResponse.items || []);
-        setClasses(classResponse || []);
-        setBanks(bankResponse.items || []);
-      })
-      .catch((caught) => setError(legacyTeacherErrorMessage(caught)));
-  }, []);
-
-  const questionCount = banks.reduce((sum, item) => sum + item.banks.reduce((bankSum, bank) => bankSum + Number(bank.question_count || 0), 0), 0);
-
-  return (
-    <section className="legacy-teacher-page">
-      <PageHead eyebrow="BKT 闭环" title="教学工作台" description="以实验为知识单元，串起 AI出题、教师审核、学生测评、掌握度更新、视频推荐和学情分数。" />
-      {error ? <div className="legacy-error">{error}</div> : null}
-      <div className="legacy-metric-grid">
-        <Metric label="实验资源" value={experiments.length} />
-        <Metric label="班级" value={classes.length} />
-        <Metric label="题库题目" value={questionCount} />
-        <Metric label="核心模型" value="BKT" />
-      </div>
-      <div className="legacy-flow" aria-label="BKT 教学反馈闭环">
-        {["教材与实验资料", "AI出题", "教师审核", "学生测评", "BKT掌握度", "视频推荐", "学情分数"].map((item) => (
-          <span key={item}>{item}</span>
-        ))}
-      </div>
-      <div className="legacy-panel-grid">
-        <Panel title="实验知识图谱式导航" text="元素、元素性质、实验和视频资源按知识单元串联，比单纯章节目录更贴近无机化学实验教学。" />
-        <Panel title="智能组卷依据" text="掌握度偏低、证据不足和未充分测量的实验点位会优先进入测评计划。" />
-        <Panel title="教师反馈回路" text="教师查看班级与学生学情分数，定位薄弱实验点并安排复习与再测。" />
-      </div>
-    </section>
-  );
-}
-
-function ExperimentsPage() {
-  const [experiments, setExperiments] = useState<Experiment[]>([]);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    listExperiments()
-      .then((response) => setExperiments(response.items || []))
-      .catch((caught) => setError(legacyTeacherErrorMessage(caught)));
-  }, []);
-
-  return (
-    <section className="legacy-teacher-page">
-      <PageHead eyebrow="实验资源" title="实验与视频资源" description="查看共享实验资源、已发布题目和待审核草稿，旧版教师端不拆分数据库或题库。" />
-      {error ? <div className="legacy-error">{error}</div> : null}
-      <div className="legacy-table">
-        <div className="legacy-table-head cols-5">
-          <span>实验</span>
-          <span>状态</span>
-          <span>视频</span>
-          <span>已发布题</span>
-          <span>待审核</span>
-        </div>
-        {experiments.slice(0, 40).map((item) => (
-          <div className="legacy-table-row cols-5" key={item.id}>
-            <span>
-              <strong>{item.title}</strong>
-              <small>{item.code || item.id}</small>
-            </span>
-            <span>{item.status}</span>
-            <span>{item.media_resources?.length ?? 0}</span>
-            <span>{item.published_question_count ?? 0}</span>
-            <span>{Number(item.draft_question_count || 0) + Number(item.generated_draft_count || 0)}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function RecommendLearningPage() {
-  const [points, setPoints] = useState<LegacyVideoPointItem[]>([]);
-  const [query, setQuery] = useState("");
-  const [draft, setDraft] = useState("");
-  const [busyNodeId, setBusyNodeId] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
-  const load = (nextQuery = query) => {
+    let active = true;
+    setLoading(true);
     setError("");
-    return listLegacyVideoPoints(nextQuery)
-      .then((response) => setPoints(response.items || []))
-      .catch((caught) => setError(legacyTeacherErrorMessage(caught)));
-  };
+    loader()
+      .then((value) => {
+        if (active) setData(value);
+      })
+      .catch((caught) => {
+        if (active) setError(legacyTeacherErrorMessage(caught));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, deps);
 
-  useEffect(() => {
-    load("");
-  }, []);
+  return { data, error, loading };
+}
+
+function PageFrame({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: ReactNode }) {
+  return (
+    <main className="legacy-teacher-page">
+      <section className="legacy-page-head">
+        <span className="eyebrow">{eyebrow}</span>
+        <h1>{title}</h1>
+        <p>{description}</p>
+      </section>
+      {children}
+    </main>
+  );
+}
+
+function StateBlock({ loading, error, children }: { loading: boolean; error: string; children: ReactNode }) {
+  if (loading) return <div className="legacy-empty">正在读取展示数据...</div>;
+  if (error) return <div className="legacy-error">{error}</div>;
+  return <>{children}</>;
+}
+
+function MetricGrid({ metrics }: { metrics: Array<{ label: string; value: ReactNode; unit?: string; description?: string }> }) {
+  return (
+    <div className="legacy-metric-grid">
+      {metrics.map((metric) => (
+        <div className="legacy-metric" key={metric.label}>
+          <span>{metric.label}</span>
+          <strong>
+            {metric.value}
+            {metric.unit ? <em>{metric.unit}</em> : null}
+          </strong>
+          {metric.description ? <small>{metric.description}</small> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OverviewPage() {
+  const { data, error, loading } = useAsyncData<TeacherDemoOverview>(getTeacherDemoOverview, []);
+
+  return (
+    <PageFrame
+      eyebrow="只读教学资源总览"
+      title="教学工作台"
+      description="展示实验视频、题库、班级与 BKT 反馈闭环，用于评奖现场快速说明系统已有教学资源。"
+    >
+      <StateBlock loading={loading} error={error}>
+        {data ? (
+          <>
+            <MetricGrid
+              metrics={data.metrics.map((metric) => ({
+                label: metric.label,
+                value: metric.value,
+                unit: metric.unit,
+                description: metric.description,
+              }))}
+            />
+            <section className="legacy-card">
+              <h2>BKT 教学反馈闭环</h2>
+              <div className="legacy-flow">
+                {data.loop.map((step) => (
+                  <article key={step.title}>
+                    <strong>{step.title}</strong>
+                    <p>{step.description}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+            <section className="legacy-panel-grid">
+              <ModuleCard title="视频资源" description="按实验点位查看可学习视频、题目覆盖和推荐学习标签。" path="/videos" />
+              <ModuleCard title="题库资源" description="查看题库数量、题型分布和章节点位覆盖情况。" path="/questions" />
+              <ModuleCard title="学情分析" description="查看班级平均分、掌握度证据和薄弱点位排行。" path="/analytics" />
+            </section>
+          </>
+        ) : null}
+      </StateBlock>
+    </PageFrame>
+  );
+}
+
+function ModuleCard({ title, description, path }: { title: string; description: string; path: string }) {
+  return (
+    <button className="legacy-module-card" onClick={() => navigate(path)}>
+      <strong>{title}</strong>
+      <span>{description}</span>
+    </button>
+  );
+}
+
+function VideosPage() {
+  const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [updatingNodeId, setUpdatingNodeId] = useState("");
+  const [notice, setNotice] = useState("");
+  const [actionError, setActionError] = useState("");
+  const { data, error, loading } = useAsyncData<TeacherDemoVideoResources>(() => getTeacherDemoVideoResources(submittedQuery), [submittedQuery, reloadKey]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const nextQuery = draft.trim();
-    setQuery(nextQuery);
-    load(nextQuery);
+    setSubmittedQuery(query.trim());
   };
 
-  const toggleRecommendation = async (point: LegacyVideoPointItem) => {
-    setError("");
-    setMessage("");
-    setBusyNodeId(point.node_id);
+  const items = data?.items || [];
+  const playableCount = items.filter((item) => item.has_video).length;
+  const recommendedCount = items.filter((item) => item.is_recommended).length;
+
+  const toggleRecommendation = async (item: TeacherDemoVideoResource, recommended: boolean) => {
+    setUpdatingNodeId(item.node_id);
+    setNotice("");
+    setActionError("");
     try {
-      const response = await setLegacyVideoPointRecommendation(point.node_id, !point.is_recommended, point.recommended_order ?? 0);
-      setPoints(response.items || []);
-      setMessage(!point.is_recommended ? `已设为推荐学习：${point.title}` : `已取消推荐学习：${point.title}`);
-      setDraft("");
-      setQuery("");
+      await setLegacyVideoPointRecommendation(item.node_id, recommended);
+      setNotice(recommended ? `已设为推荐学习：${item.title}` : `已取消推荐学习：${item.title}`);
+      setReloadKey((value) => value + 1);
     } catch (caught) {
-      setError(legacyTeacherErrorMessage(caught));
+      setActionError(legacyTeacherErrorMessage(caught));
     } finally {
-      setBusyNodeId("");
+      setUpdatingNodeId("");
     }
   };
 
   return (
-    <section className="legacy-teacher-page">
-      <PageHead eyebrow="推荐学习" title="推荐学习点位" description="手动设置旧版学生端视频库的推荐学习点位；推荐点位会在学生端视频库优先显示，并带有推荐学习标记。" />
-      {error ? <div className="legacy-error">{error}</div> : null}
-      {message ? <div className="legacy-success">{message}</div> : null}
-      <form className="legacy-admin-search" onSubmit={submit}>
-        <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="搜索点位、现象、试剂或目录" />
-        <button className="primary-button" type="submit">
-          搜索
-        </button>
-        {query ? (
-          <button
-            className="text-button"
-            type="button"
-            onClick={() => {
-              setDraft("");
-              setQuery("");
-              load("");
-            }}
-          >
-            返回全部点位
-          </button>
-        ) : null}
+    <PageFrame
+      eyebrow="实验视频证据"
+      title="视频资源"
+      description="以实验点位为单位展示视频资源，已有视频的点位排在前面；教师推荐学习仅作为静态标签展示。"
+    >
+      <form className="legacy-search-row" onSubmit={submit}>
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入实验、试剂、现象或点位名称" />
+        <button className="primary-button">搜索</button>
       </form>
-      <div className="legacy-table legacy-recommend-table">
-        <div className="legacy-table-head cols-recommend">
-          <span>点位</span>
-          <span>目录</span>
-          <span>视频</span>
-          <span>状态</span>
-          <span>操作</span>
-        </div>
-        {points.map((point) => {
-          const path = point.catalog_path?.slice(0, -1).join(" / ") || "实验视频库";
-          return (
-            <div className="legacy-table-row cols-recommend" key={point.node_id}>
-              <span>
-                <strong>{point.title}</strong>
-                <small>{point.summary || point.snippet || point.node_id}</small>
-              </span>
-              <span>{path}</span>
-              <span>{point.published_media_count || 0}</span>
-              <span>{point.is_recommended ? <b className="legacy-pill">推荐学习</b> : "普通点位"}</span>
-              <span>
-                <button className={point.is_recommended ? "secondary-button" : "primary-button"} disabled={busyNodeId === point.node_id} onClick={() => toggleRecommendation(point)}>
-                  {busyNodeId === point.node_id ? "保存中..." : point.is_recommended ? "取消推荐" : "设为推荐"}
-                </button>
-              </span>
-            </div>
-          );
-        })}
-        {!points.length ? <div className="legacy-empty-row">没有找到点位。</div> : null}
+      {notice ? <div className="legacy-notice">{notice}</div> : null}
+      {actionError ? <div className="legacy-error">{actionError}</div> : null}
+      <StateBlock loading={loading} error={error}>
+        <MetricGrid
+          metrics={[
+            { label: submittedQuery ? "搜索结果" : "全部点位", value: data?.total || 0, unit: "项" },
+            { label: "已绑定视频", value: playableCount, unit: "项" },
+            { label: "推荐学习", value: recommendedCount, unit: "项" },
+            { label: "题目覆盖", value: items.reduce((sum, item) => sum + item.published_question_count, 0), unit: "题" },
+          ]}
+        />
+        <section className="legacy-table-card">
+          <header>
+            <h2>视频点位列表</h2>
+            <span>{items.length ? `当前显示 ${items.length} 项` : "暂无数据"}</span>
+          </header>
+          <div className="legacy-resource-list">
+            {items.map((item) => (
+              <VideoResourceRow
+                key={item.node_id}
+                item={item}
+                updating={updatingNodeId === item.node_id}
+                onToggle={(recommended) => void toggleRecommendation(item, recommended)}
+              />
+            ))}
+          </div>
+        </section>
+      </StateBlock>
+    </PageFrame>
+  );
+}
+
+function VideoResourceRow({
+  item,
+  updating,
+  onToggle,
+}: {
+  item: TeacherDemoVideoResource;
+  updating: boolean;
+  onToggle: (recommended: boolean) => void;
+}) {
+  return (
+    <article className="legacy-resource-row">
+      <div>
+        <span className="legacy-row-label">{item.has_video ? "已绑定视频" : "待补充视频"}</span>
+        {item.is_recommended ? <span className="legacy-row-label gold">推荐学习</span> : null}
       </div>
-    </section>
-  );
-}
-
-function QuestionBankPage() {
-  const [banks, setBanks] = useState<QuestionBankSummary[]>([]);
-  const [nodes, setNodes] = useState<CatalogQuestionBankNode[]>([]);
-  const [selectedExperimentId, setSelectedExperimentId] = useState("");
-  const [prompt, setPrompt] = useState("围绕实验现象、操作安全和结论判断生成 5 道客观题。");
-  const [sessionMessage, setSessionMessage] = useState("");
-  const [reviewMessage, setReviewMessage] = useState("草稿生成后需教师通过、退回修改或暂不入库。");
-  const [error, setError] = useState("");
-  const selectedExperiment = banks.find((item) => item.id === selectedExperimentId) || banks[0];
-
-  useEffect(() => {
-    Promise.all([listQuestionBanks(), listCatalogQuestionBank()])
-      .then(([bankResponse, catalogResponse]) => {
-        setBanks(bankResponse.items || []);
-        setNodes(catalogResponse.items || []);
-        setSelectedExperimentId(bankResponse.items?.[0]?.id || "");
-      })
-      .catch((caught) => setError(legacyTeacherErrorMessage(caught)));
-  }, []);
-
-  const createSession = async () => {
-    if (!selectedExperiment) return;
-    setError("");
-    setSessionMessage("");
-    try {
-      const session = await createQuestionWorkbenchSession({
-        mode: "create",
-        experiment_id: selectedExperiment.id,
-        prompt,
-      });
-      setSessionMessage(`已创建教师审核会话：${session.id}`);
-      setReviewMessage("草稿已进入教师审核，确认后才会进入学生可见题库。");
-    } catch (caught) {
-      setError(legacyTeacherErrorMessage(caught));
-    }
-  };
-
-  return (
-    <section className="legacy-teacher-page">
-      <PageHead eyebrow="AI出题" title="题库建设与教师审核" description="教师选择实验或点位上下文后生成客观题草稿，再审核通过、退回修改或暂不入库。" />
-      {error ? <div className="legacy-error">{error}</div> : null}
-      <div className="legacy-question-layout">
-        <aside className="legacy-list-panel">
-          <h2>实验题库</h2>
-          {banks.slice(0, 30).map((item) => (
-            <button className={item.id === selectedExperiment?.id ? "active" : ""} key={item.id} onClick={() => setSelectedExperimentId(item.id)}>
-              <span>{item.title}</span>
-              <small>{item.banks.reduce((sum, bank) => sum + Number(bank.question_count || 0), 0)} 题</small>
-            </button>
-          ))}
-        </aside>
-        <div className="legacy-workbench">
-          <section className="legacy-card">
-            <span className="eyebrow">出题依据</span>
-            <h2>{selectedExperiment?.title || "请选择实验"}</h2>
-            <p>依据教材与实验资料生成题目草稿，教师确认后再进入学生测评与 BKT 掌握度计算。</p>
-            <label>
-              出题要求
-              <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-            </label>
-            <button className="primary-button" onClick={createSession} disabled={!selectedExperiment}>
-              AI出题
-            </button>
-            {sessionMessage ? <div className="legacy-success">{sessionMessage}</div> : null}
-          </section>
-          <section className="legacy-card">
-            <h2>教师审核</h2>
-            <p>{reviewMessage}</p>
-            <div className="legacy-review-actions">
-              <button onClick={() => setReviewMessage("教师审核通过后，题目按共享题库规则进入学生测评。")}>通过入库</button>
-              <button onClick={() => setReviewMessage("已退回修改，需补充教材依据或实验资料依据。")}>退回修改</button>
-              <button onClick={() => setReviewMessage("已暂不入库，学生端不会看到该草稿。")}>暂不入库</button>
-            </div>
-          </section>
-          <section className="legacy-card">
-            <h2>点位覆盖</h2>
-            <div className="legacy-table compact">
-              <div className="legacy-table-head cols-4">
-                <span>点位</span>
-                <span>类型</span>
-                <span>已发布题</span>
-                <span>依据</span>
-              </div>
-              {nodes.slice(0, 12).map((node, index) => (
-                <div className="legacy-table-row cols-4" key={node.node_id}>
-                  <span>{node.title}</span>
-                  <span>{node.node_kind === "point" ? "实验点" : "目录"}</span>
-                  <span>{node.counts.published_count}</span>
-                  <span>{index % 2 === 0 ? "教材依据" : "实验资料依据"}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
+      <div className="legacy-row-main">
+        <strong>{item.title}</strong>
+        <p>{item.summary || "暂无摘要。"}</p>
+        <small>{item.catalog_path.join(" / ") || "未绑定目录路径"}</small>
       </div>
-    </section>
-  );
-}
-
-function ScoresPage() {
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [classId, setClassId] = useState("");
-  const [dashboard, setDashboard] = useState<AnalyticsDashboard | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    listClasses()
-      .then((items) => {
-        setClasses(items || []);
-        setClassId(items?.[0]?.id || "");
-      })
-      .catch((caught) => setError(legacyTeacherErrorMessage(caught)));
-  }, []);
-
-  useEffect(() => {
-    if (!classId) return;
-    getAnalyticsDashboard(classId)
-      .then(setDashboard)
-      .catch((caught) => setError(legacyTeacherErrorMessage(caught)));
-  }, [classId]);
-
-  return (
-    <section className="legacy-teacher-page">
-      <PageHead eyebrow="学情分数" title="BKT 班级学情" description="用学生测评和学习活动沉淀掌握度证据，帮助教师定位薄弱实验点并安排跟进。" />
-      {error ? <div className="legacy-error">{error}</div> : null}
-      <select value={classId} onChange={(event) => setClassId(event.target.value)} aria-label="选择班级">
-        {classes.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.class_name}
-          </option>
-        ))}
-      </select>
-      <div className="legacy-metric-grid">
-        <Metric label="学生数" value={dashboard?.metrics.class_size ?? 0} />
-        <Metric label="活跃学生" value={dashboard?.metrics.active_students ?? 0} />
-        <Metric label="平均分" value={(dashboard?.metrics.average_score ?? 0).toFixed(1)} />
-        <Metric label="完成率" value={`${(dashboard?.metrics.completion_rate ?? 0).toFixed(1)}%`} />
+      <div className="legacy-row-stats">
+        <span>视频 {item.published_media_count}</span>
+        <span>题目 {item.published_question_count}</span>
+        <button className="legacy-secondary-button" disabled={updating} onClick={() => onToggle(!item.is_recommended)}>
+          {updating ? "处理中..." : item.is_recommended ? "取消推荐" : "设为推荐"}
+        </button>
       </div>
-      <div className="legacy-table">
-        <div className="legacy-table-head cols-4">
-          <span>学生</span>
-          <span>平均分</span>
-          <span>掌握度证据</span>
-          <span>状态</span>
-        </div>
-        {(dashboard?.matrix || []).slice(0, 30).map((row) => {
-          const evidence = Object.values(row.experiment_groups || {}).reduce((sum, item) => sum + Number(item.evidence_count || 0), 0);
-          return (
-            <div className="legacy-table-row cols-4" key={row.student_id}>
-              <span>
-                <strong>{row.student_name || row.student_id}</strong>
-                <small>{row.student_id}</small>
-              </span>
-              <span>{(row.average_score ?? 0).toFixed(1)}</span>
-              <span>{evidence}</span>
-              <span>{evidence > 0 ? "已有BKT证据" : "待测评"}</span>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function PageHead({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
-  return (
-    <div className="legacy-page-head">
-      <span className="eyebrow">{eyebrow}</span>
-      <h1>{title}</h1>
-      <p>{description}</p>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="legacy-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function Panel({ title, text }: { title: string; text: string }) {
-  return (
-    <article className="legacy-card">
-      <h2>{title}</h2>
-      <p>{text}</p>
     </article>
+  );
+}
+
+function QuestionsPage() {
+  const { data, error, loading } = useAsyncData<TeacherDemoQuestionResources>(getTeacherDemoQuestionResources, []);
+  const pointItems = useMemo(() => (data?.items || []).filter((item) => item.node_kind === "point"), [data]);
+  const directoryItems = useMemo(() => (data?.items || []).filter((item) => item.node_kind !== "point"), [data]);
+
+  return (
+    <PageFrame
+      eyebrow="智能辅助题库建设"
+      title="题库资源"
+      description="展示教材与实验点位沉淀出的题库资源、题型分布和覆盖情况，说明题库建设流程与资源规模。"
+    >
+      <StateBlock loading={loading} error={error}>
+        {data ? (
+          <>
+            <MetricGrid
+              metrics={[
+                { label: "题目总数", value: Number(data.totals.question_count || 0), unit: "题" },
+                { label: "已发布", value: Number(data.totals.published_count || 0), unit: "题" },
+                { label: "点位覆盖", value: Number(data.totals.point_count || pointItems.length), unit: "项" },
+                { label: "目录单元", value: directoryItems.length, unit: "项" },
+              ]}
+            />
+            <section className="legacy-card">
+              <h2>题库建设流程</h2>
+              <div className="legacy-process-grid">
+                <span>教材资料</span>
+                <span>智能辅助命题</span>
+                <span>教师审核</span>
+                <span>正式题库</span>
+              </div>
+            </section>
+            <section className="legacy-table-card">
+              <header>
+                <h2>点位题库覆盖</h2>
+                <span>{pointItems.length} 个实验点位</span>
+              </header>
+              <div className="legacy-resource-list">
+                {pointItems.slice(0, 120).map((item) => (
+                  <QuestionResourceRow key={item.node_id} item={item} />
+                ))}
+              </div>
+            </section>
+          </>
+        ) : null}
+      </StateBlock>
+    </PageFrame>
+  );
+}
+
+function QuestionResourceRow({ item }: { item: TeacherDemoQuestionResource }) {
+  return (
+    <article className="legacy-resource-row">
+      <div>
+        <span className="legacy-row-label">{item.published_count > 0 ? "有题" : "待补题"}</span>
+      </div>
+      <div className="legacy-row-main">
+        <strong>{item.title}</strong>
+        <p>{item.breadcrumb_titles.join(" / ") || "未绑定目录路径"}</p>
+      </div>
+      <div className="legacy-row-stats">
+        <span>总题 {item.question_count}</span>
+        <span>选择 {item.choice_count}</span>
+        <span>判断 {item.true_false_count}</span>
+        <span>填空 {item.fill_blank_count}</span>
+      </div>
+    </article>
+  );
+}
+
+function ClassesPage() {
+  const { data, error, loading } = useAsyncData<TeacherDemoClasses>(getTeacherDemoClasses, []);
+  const classes = data?.classes || [];
+
+  return (
+    <PageFrame
+      eyebrow="班级与学生范围"
+      title="班级"
+      description="展示已有班级、学生规模、参与情况和平均掌握表现，作为后续学情分析的数据范围。"
+    >
+      <StateBlock loading={loading} error={error}>
+        <MetricGrid
+          metrics={[
+            { label: "班级数", value: classes.length, unit: "个" },
+            { label: "学生数", value: classes.reduce((sum, item) => sum + item.student_count, 0), unit: "人" },
+            { label: "参与学生", value: classes.reduce((sum, item) => sum + item.active_students, 0), unit: "人" },
+            { label: "待开始", value: classes.reduce((sum, item) => sum + item.missing_students, 0), unit: "人" },
+          ]}
+        />
+        <section className="legacy-table-card">
+          <header>
+            <h2>班级列表</h2>
+            <span>{classes.length ? `当前共 ${classes.length} 个班级` : "暂无班级"}</span>
+          </header>
+          <div className="legacy-class-grid">
+            {classes.map((item) => (
+              <ClassCard key={item.id} item={item} />
+            ))}
+          </div>
+        </section>
+      </StateBlock>
+    </PageFrame>
+  );
+}
+
+function ClassCard({ item }: { item: TeacherDemoClassSummary }) {
+  return (
+    <article className="legacy-card class-card">
+      <span className="legacy-row-label">{item.status === "active" ? "使用中" : item.status}</span>
+      <h2>{item.class_name}</h2>
+      <p>{item.description || "无备注。"}</p>
+      <div className="legacy-card-stats">
+        <span>学生 {item.student_count}</span>
+        <span>参与 {item.active_students}</span>
+        <span>平均 {item.average_score}</span>
+        <span>完成 {item.completion_rate}%</span>
+      </div>
+    </article>
+  );
+}
+
+function AnalyticsPage() {
+  const classState = useAsyncData<TeacherDemoClasses>(getTeacherDemoClasses, []);
+  const classes = classState.data?.classes || [];
+  const [selectedClassId, setSelectedClassId] = useState("");
+
+  useEffect(() => {
+    if (!selectedClassId && classes[0]?.id) setSelectedClassId(classes[0].id);
+  }, [classes, selectedClassId]);
+
+  const analyticsState = useAsyncData<TeacherDemoAnalytics | null>(
+    () => (selectedClassId ? getTeacherDemoClassAnalytics(selectedClassId) : Promise.resolve(null)),
+    [selectedClassId],
+  );
+  const weakState = useAsyncData<TeacherDemoWeakPoints | null>(
+    () => (selectedClassId ? getTeacherDemoClassWeakPoints(selectedClassId) : Promise.resolve(null)),
+    [selectedClassId],
+  );
+
+  const analytics = analyticsState.data;
+  const weakPoints = weakState.data?.point_items || [];
+
+  return (
+    <PageFrame
+      eyebrow="BKT 学情展示"
+      title="学情分析"
+      description="按班级展示学生掌握情况、答题证据和薄弱实验点位，帮助教师说明个性化复习与智能组卷依据。"
+    >
+      <StateBlock loading={classState.loading} error={classState.error}>
+        <section className="legacy-card">
+          <label className="legacy-select-label">
+            当前班级
+            <select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)}>
+              {classes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.class_name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+        <StateBlock loading={analyticsState.loading || weakState.loading} error={analyticsState.error || weakState.error}>
+          {analytics ? (
+            <>
+              <MetricGrid
+                metrics={[
+                  { label: "班级人数", value: Number(analytics.metrics.class_size || 0), unit: "人" },
+                  { label: "参与学生", value: Number(analytics.metrics.active_students || 0), unit: "人" },
+                  { label: "平均分", value: Number(analytics.metrics.average_score || 0), unit: "分" },
+                  { label: "薄弱点位", value: weakPoints.length, unit: "项" },
+                ]}
+              />
+              <section className="legacy-table-card">
+                <header>
+                  <h2>学生掌握情况</h2>
+                  <span>{analytics.students.length} 名学生</span>
+                </header>
+                <div className="legacy-student-table">
+                  {analytics.students.map((student) => (
+                    <article key={student.student_id}>
+                      <strong>{student.student_name}</strong>
+                      <span>{student.student_id}</span>
+                      <span>平均 {student.average_score}</span>
+                      <span>证据 {student.evidence_count}</span>
+                      <span>{student.status}</span>
+                    </article>
+                  ))}
+                </div>
+              </section>
+              <section className="legacy-table-card">
+                <header>
+                  <h2>薄弱点位排行</h2>
+                  <span>{weakPoints.length ? `当前共 ${weakPoints.length} 项` : "暂无薄弱点位"}</span>
+                </header>
+                <div className="legacy-resource-list">
+                  {(weakPoints.length ? weakPoints : weakState.data?.items || []).slice(0, 20).map((item, index) => (
+                    <WeakPointRow key={`${item.point_node_id || item.point_key || item.point_title}-${index}`} item={item} />
+                  ))}
+                </div>
+              </section>
+            </>
+          ) : null}
+        </StateBlock>
+      </StateBlock>
+    </PageFrame>
+  );
+}
+
+function WeakPointRow({ item }: { item: TeacherDemoWeakPoint }) {
+  return (
+    <article className="legacy-resource-row">
+      <div>
+        <span className="legacy-row-label">薄弱</span>
+      </div>
+      <div className="legacy-row-main">
+        <strong>{item.point_title}</strong>
+        <p>{item.experiment_title || item.representative_questions[0]?.stem || "暂无代表题。"}</p>
+      </div>
+      <div className="legacy-row-stats">
+        <span>错误 {item.incorrect_count}</span>
+        <span>尝试 {item.attempt_count}</span>
+        <span>{item.incorrect_rate}%</span>
+      </div>
+    </article>
+  );
+}
+
+function EvaluationPage() {
+  const { data, error, loading } = useAsyncData<TeacherDemoEvaluationSystem>(getTeacherDemoEvaluationSystem, []);
+
+  return (
+    <PageFrame
+      eyebrow="分数评价体系"
+      title="评价体系"
+      description="说明旧版展示中 BKT 掌握度的评价对象、证据来源、分档含义和教学输出。"
+    >
+      <StateBlock loading={loading} error={error}>
+        {data ? (
+          <div className="legacy-evaluation-grid">
+            <section className="legacy-card">
+              <h2>评价对象</h2>
+              <TagList values={data.evaluated_objects} />
+            </section>
+            <section className="legacy-card">
+              <h2>证据来源</h2>
+              <TagList values={data.evidence_sources} />
+            </section>
+            <section className="legacy-card wide">
+              <h2>更新机制</h2>
+              <p>{data.update_mechanism}</p>
+            </section>
+            <section className="legacy-card wide">
+              <h2>掌握度分档</h2>
+              <div className="legacy-band-list">
+                {data.score_bands.map((band) => (
+                  <article key={band.label}>
+                    <strong>{band.label}</strong>
+                    <span>
+                      {band.min_score ?? 0} - {band.max_score ?? 100}
+                    </span>
+                    <p>{band.description}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+            <section className="legacy-card wide">
+              <h2>教学输出</h2>
+              <TagList values={data.outputs} />
+            </section>
+          </div>
+        ) : null}
+      </StateBlock>
+    </PageFrame>
+  );
+}
+
+function TagList({ values }: { values: string[] }) {
+  return (
+    <div className="legacy-tag-list">
+      {values.map((value) => (
+        <span key={value}>{value}</span>
+      ))}
+    </div>
   );
 }

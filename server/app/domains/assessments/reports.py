@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from datetime import datetime, timezone
@@ -7,7 +8,7 @@ from typing import Any
 
 from sqlalchemy import text
 
-from server.app.domains.assistant.adapters.assessment import run_assessment_agent
+from server.app.domains.assistant.providers import async_openai_client as _async_openai_client
 from server.app.domains.errors import DomainHTTPException as HTTPException, domain_status as status
 from server.app.domains.platform.settings import (
     _load_setting_value,
@@ -19,7 +20,6 @@ from server.app.domains.platform.settings import (
 from server.app.domains.roster.classes import require_class_access
 from server.app.infrastructure.database import db_session
 from server.app.infrastructure.settings import get_settings
-from server.app.schemas import AgentAskRequest
 from server.app.student_assessment_report_schemas import (
     AssessmentReportGeneratedText,
     AssessmentReportPromptSettings,
@@ -47,6 +47,8 @@ SUPPORTED_PROMPT_VARIABLES = [
     "mastery_changes",
     "experiment_points",
 ]
+ASSESSMENT_REPORT_AI_TIMEOUT_SECONDS = 15.0
+ASSESSMENT_REPORT_AI_MAX_TOKENS = 900
 
 DEFAULT_SUMMARY_PROMPT = (
     "请基于本次测评报告生成一段中性的学习记录总结，面向学生和老师共同阅读。"
@@ -379,7 +381,7 @@ def _ai_ready() -> bool:
     )
 
 
-async def _generate_with_agent(
+async def _generate_with_ai(
     *,
     user: Any,
     prompt: str,
@@ -389,41 +391,51 @@ async def _generate_with_agent(
 ) -> AssessmentReportGeneratedText:
     if not _ai_ready():
         return _generated_text(fallback_text, mode="local_fallback")
-    chapter_ids = [
-        str(chapter_id)
-        for item in attempts
-        for chapter_id in _as_list(item.get("related_chapter_ids"))
-        if str(chapter_id).strip()
-    ]
-    kp_ids = sorted(
+    settings = effective_ai_settings(get_settings())
+    client = _async_openai_client(settings, timeout=ASSESSMENT_REPORT_AI_TIMEOUT_SECONDS)
+    user_payload = json.dumps(
         {
-            str(kp_id)
-            for item in attempts
-            for kp_id in _as_list(item.get("related_knowledge_point_ids"))
-            if str(kp_id).strip()
-        }
-    )
-    experiment_id = str(attempts[0].get("experiment_id")) if attempts else None
-    request = AgentAskRequest(
-        student_id=str(context.get("student_id") or getattr(user, "student_id", "") or getattr(user, "username", "")),
-        user_id=user.id,
-        user_role="student",
-        question=json.dumps({"task": prompt, "assessment_report_context": context}, ensure_ascii=False),
-        chapter_id=chapter_ids[0] if chapter_ids else None,
-        experiment_id=experiment_id,
-        knowledge_point_ids=kp_ids,
-        allow_progress_lookup=True,
-        allow_rag_lookup=True,
-        assessment_review=True,
-        max_answer_chars=1800,
+            "task": prompt,
+            "assessment_report_context": context,
+        },
+        ensure_ascii=False,
+        default=str,
     )
     try:
-        response = await run_assessment_agent(request, settings=effective_ai_settings(get_settings()))
+        response = await asyncio.wait_for(
+            client.chat.completions.create(
+                model=settings.agent_llm_model,
+                temperature=0.2,
+                max_tokens=ASSESSMENT_REPORT_AI_MAX_TOKENS,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "你是无机化学实验学习平台的测评报告生成器。"
+                            "只基于用户提供的测评 JSON 生成报告内容，不调用工具，不要求外部检索。"
+                            "表达要面向学生和教师，清晰、克制、可复盘。"
+                            "严格遵守用户 task 中的字数、格式和输出范围要求；不要自行添加标题、编号或 Markdown 章节，除非 task 明确要求。"
+                            "不要出现 AI、模型、提示词、Agent、RAG、检索、工具、provider 等实现词。"
+                            "如果输入信息不足，基于已给题目、答案、错题和分数生成保守结论；不要提醒核对系统记录，不要评论数据缺失或冲突。"
+                        ),
+                    },
+                    {"role": "user", "content": user_payload},
+                ],
+            ),
+            timeout=ASSESSMENT_REPORT_AI_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        return _generated_text(fallback_text, mode="report_ai_timeout_fallback")
     except Exception:
-        return _generated_text(fallback_text, mode="agent_error_fallback")
-    if not response.answer or response.mode in {"guardrail_refusal", "guardrail_hint"}:
-        return _generated_text(fallback_text, mode=response.mode or "agent_guardrail_fallback")
-    return _generated_text(response.answer, source="ai", mode=response.mode)
+        return _generated_text(fallback_text, mode="report_ai_error_fallback")
+    answer = ""
+    try:
+        answer = str(response.choices[0].message.content or "").strip()
+    except Exception:
+        answer = ""
+    if not answer:
+        return _generated_text(fallback_text, mode="report_ai_empty_fallback")
+    return _generated_text(answer, source="ai", mode="openai_chat_report")
 
 
 def _report_type_label(report_type: str) -> str:
@@ -507,7 +519,7 @@ async def _generate_report_texts(
     context = {**variables, "report_type": report_type, "payload": payload}
     summary_prompt = _render_prompt(settings.summary_prompt, variables)
     mistake_prompt = _render_prompt(settings.mistake_prompt, variables)
-    summary = await _generate_with_agent(
+    summary = await _generate_with_ai(
         user=user,
         prompt=summary_prompt,
         context=context,
@@ -515,7 +527,7 @@ async def _generate_report_texts(
         fallback_text=_fallback_summary(context),
     )
     if wrong_answers:
-        mistake = await _generate_with_agent(
+        mistake = await _generate_with_ai(
             user=user,
             prompt=mistake_prompt,
             context=context,

@@ -1,14 +1,15 @@
 import { FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { BookOpenCheck, ChevronRight, ClipboardList, Folder, Home, PlayCircle, UserRound, Video, type LucideIcon } from "lucide-react";
+import { BookOpenCheck, ChevronRight, ClipboardList, FileText, Folder, Home, PlayCircle, Video, type LucideIcon } from "lucide-react";
 
 import {
   getAuthToken,
   legacyStudentErrorMessage,
   loadCustomAssessmentOptions,
-  loadAssessmentReports,
   loadCatalogNode,
   loadChapterCatalog,
   loadCurrentUser,
+  loadLegacyAssessmentReport,
+  loadLegacyAssessmentReports,
   loadLegacyVideoPoints,
   loadLearningPage,
   loadPointDetail,
@@ -23,6 +24,7 @@ import {
   type AuthUser,
   type CustomAssessmentExperimentOption,
   type CustomAssessmentOptionsResponse,
+  type LegacyAssessmentReportDetail,
   type LegacyVideoPointItem,
   type PointDetail,
   type PublicSmartAssessmentQuestion,
@@ -59,13 +61,13 @@ const forbiddenPathSegments = ["/ai", "/assistant", "/artifact", "/learning-assi
 const legacyAssessmentSessionPrefix = "chem_student_old_assessment_session:";
 const legacyAssessmentReportPrefix = "chem_student_old_assessment_report:";
 
-type LegacyRootTab = "home" | "learn" | "assessment" | "profile";
+type LegacyRootTab = "home" | "learn" | "assessment" | "reports";
 
 const legacyNavItems: Array<{ id: LegacyRootTab; label: string; path: string; Icon: LucideIcon }> = [
   { id: "home", label: "主页", path: "/", Icon: Home },
   { id: "learn", label: "学习", path: "/learn", Icon: BookOpenCheck },
   { id: "assessment", label: "评测", path: "/assessment", Icon: ClipboardList },
-  { id: "profile", label: "我的", path: "/profile", Icon: UserRound },
+  { id: "reports", label: "报告", path: "/reports", Icon: FileText },
 ];
 
 function currentLocation(): string {
@@ -121,7 +123,7 @@ function safeBackPath(value: string | null, fallback = "/"): string {
 function activeTabFor(location: string): LegacyRootTab {
   const path = pathOnly(location);
   if (path.startsWith("/assessment")) return "assessment";
-  if (path.startsWith("/profile") || path.startsWith("/reports")) return "profile";
+  if (path.startsWith("/profile") || path.startsWith("/reports")) return "reports";
   if (path.startsWith("/learn")) return "learn";
   if (path.startsWith("/videos/")) {
     const from = queryFor(location).get("from");
@@ -323,6 +325,8 @@ export function LegacyStudentApp() {
         <AssessmentSessionPage sessionId={decodePathTail(safePath, "/assessment/session/")} />
       ) : safePath.startsWith("/assessment") ? (
         <AssessmentPage />
+      ) : safePath.startsWith("/reports/") ? (
+        <ReportDetailPage reportId={decodePathTail(safePath, "/reports/")} />
       ) : safePath.startsWith("/profile") || safePath.startsWith("/reports") ? (
         <ReportsPage user={user} />
       ) : (
@@ -1413,6 +1417,7 @@ function AssessmentSessionPage({ sessionId }: { sessionId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [report, setReport] = useState<SmartAssessmentReport | null>(null);
+  const [resultReportId, setResultReportId] = useState<string | null>(null);
 
   if (!assessment) {
     return (
@@ -1425,7 +1430,7 @@ function AssessmentSessionPage({ sessionId }: { sessionId: string }) {
     );
   }
 
-  if (report) return <AssessmentResultPage report={report} />;
+  if (report) return <AssessmentResultPage report={report} reportId={resultReportId} />;
 
   const questions = assessment.questions || [];
   const allAnswered = questions.length > 0 && questions.every((question) => isAnswered(answers[question.id]));
@@ -1448,6 +1453,7 @@ function AssessmentSessionPage({ sessionId }: { sessionId: string }) {
         Object.entries(answers).map(([questionId, answer]) => ({ question_id: questionId, answer })),
       );
       storeLegacyAssessmentReport(response.report);
+      setResultReportId(response.assessment_report?.id || null);
       setReport(response.report);
     } catch (caught) {
       setError(legacyStudentErrorMessage(caught));
@@ -1457,7 +1463,7 @@ function AssessmentSessionPage({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <section className="legacy-page legacy-assessment-page">
+    <section className="legacy-page legacy-assessment-page legacy-assessment-session-page">
       <div className="legacy-exam-topbar">
         <strong>{modeLabel}</strong>
         <button className="text-button" onClick={() => navigate("/assessment")}>
@@ -1533,7 +1539,7 @@ function AssessmentQuestionCard({
   );
 }
 
-function AssessmentResultPage({ report }: { report: SmartAssessmentReport }) {
+function AssessmentResultPage({ report, reportId }: { report: SmartAssessmentReport; reportId: string | null }) {
   return (
     <section className="legacy-page legacy-assessment-page">
       <article className="legacy-detail-card">
@@ -1546,9 +1552,14 @@ function AssessmentResultPage({ report }: { report: SmartAssessmentReport }) {
         </div>
         <p>{report.next_recommendation || "请根据错题和掌握度变化继续复盘薄弱实验点。"}</p>
         {report.wrong_answers?.length ? <div className="legacy-error">本次共有 {report.wrong_answers.length} 道题需要复盘。</div> : null}
-        <button className="primary-button legacy-assessment-start" type="button" onClick={() => navigate("/assessment")}>
-          返回测评主页
-        </button>
+        <div className="legacy-result-actions">
+          <button className="secondary-button legacy-assessment-start" type="button" onClick={() => navigate("/assessment")}>
+            返回测评
+          </button>
+          <button className="primary-button legacy-assessment-start" type="button" onClick={() => navigate(reportId ? `/reports/${encodeURIComponent(reportId)}` : "/reports")}>
+            查看报告
+          </button>
+        </div>
       </article>
     </section>
   );
@@ -1628,7 +1639,7 @@ function ReportsPage({ user }: { user: AuthUser }) {
 
   useEffect(() => {
     let active = true;
-    loadAssessmentReports()
+    loadLegacyAssessmentReports()
       .then((value) => {
         if (active) setReports(value.reports || []);
       })
@@ -1647,6 +1658,7 @@ function ReportsPage({ user }: { user: AuthUser }) {
     if (!reports.length) return 0;
     return reports.reduce((sum, item) => sum + Number(item.score || 0), 0) / reports.length;
   }, [reports]);
+  const wrongTotal = useMemo(() => reports.reduce((sum, item) => sum + Number(item.wrong_count || 0), 0), [reports]);
   const studentId = user.student_id || user.username || "未登记学号";
   const className = user.class_name || user.class_id || "未分班";
 
@@ -1670,31 +1682,159 @@ function ReportsPage({ user }: { user: AuthUser }) {
       </section>
 
       <div className="legacy-section-head">
-        <span className="eyebrow">我的学习记录</span>
-        <h1>BKT 学情报告</h1>
-        <p>报告展示得分、错题复盘和掌握度变化，用于指导下一轮视频学习与测评巩固。</p>
+        <span className="eyebrow">学习报告</span>
+        <h1>报告</h1>
+        <p>每次测评完成后生成一份学习报告，查看本轮得分、AI 学情总结和错题解析，继续复盘薄弱实验点。</p>
       </div>
       {loading ? <div className="legacy-state">正在载入报告...</div> : null}
       {error ? <div className="legacy-error">{error}</div> : null}
       <div className="legacy-metrics">
         <Metric label="报告数" value={reports.length} />
         <Metric label="平均分" value={average.toFixed(1)} />
-        <Metric label="反馈模型" value="BKT" />
+        <Metric label="待复盘错题" value={wrongTotal} />
       </div>
       <div className="legacy-report-list">
         {reports.map((report) => (
-          <article className="legacy-report-card" key={report.id}>
+          <button className="legacy-report-card" key={report.id} type="button" onClick={() => navigate(`/reports/${encodeURIComponent(report.id)}`)}>
             <strong>{report.title}</strong>
-            <span>{new Date(report.completed_at).toLocaleString()}</span>
+            <span>{formatReportDate(report.completed_at)}</span>
             <p>
-              得分 {Number(report.score || 0).toFixed(1)}，答对 {report.correct_count}/{report.total_count}，建议继续复盘薄弱实验点。
+              得分 {formatScore(report.score)}，答对 {report.correct_count}/{report.total_count}，错题 {report.wrong_count || 0} 道。
             </p>
-          </article>
+            <em>查看报告</em>
+          </button>
         ))}
         {!loading && !reports.length ? <div className="legacy-state">暂无测评报告。</div> : null}
       </div>
     </section>
   );
+}
+
+function ReportDetailPage({ reportId }: { reportId: string }) {
+  const [report, setReport] = useState<LegacyAssessmentReportDetail | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    loadLegacyAssessmentReport(reportId)
+      .then((value) => {
+        if (active) setReport(value);
+      })
+      .catch((caught) => {
+        if (active) setError(legacyStudentErrorMessage(caught));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [reportId]);
+
+  const mistakeExplanationText = report?.mistake_explanation?.text?.trim() || "";
+  const hasAiMistakeExplanation = report?.mistake_explanation?.source === "ai" && mistakeExplanationText.length > 0;
+
+  return (
+    <section className="legacy-page legacy-report-detail-page">
+      <div className="legacy-exam-topbar">
+        <strong>学习报告</strong>
+        <button className="text-button" onClick={() => navigate("/reports")}>
+          返回报告
+        </button>
+      </div>
+
+      {loading ? <div className="legacy-state">正在载入报告...</div> : null}
+      {error ? <div className="legacy-error">{error}</div> : null}
+      {!loading && !error && !report ? <div className="legacy-state">没有找到这份报告。</div> : null}
+
+      {report ? (
+        <>
+          <article className="legacy-report-detail-head">
+            <span className="eyebrow">{reportTypeLabel(report.report_type)}</span>
+            <h1>{report.title}</h1>
+            <p>{formatReportDate(report.completed_at)}</p>
+            <div className="legacy-metrics">
+              <Metric label="得分" value={formatScore(report.score)} />
+              <Metric label="答对" value={`${report.correct_count}/${report.total_count}`} />
+              <Metric label="错题" value={report.wrong_count || report.wrong_questions.length} />
+            </div>
+          </article>
+
+          <section className="legacy-ai-summary">
+            <h2>AI 学情总结</h2>
+            <p>{report.ai_summary?.text || "本次报告暂无总结，请继续完成测评以获得学习反馈。"}</p>
+            {report.next_steps ? <p className="legacy-report-next">{report.next_steps}</p> : null}
+          </section>
+
+          <section className="legacy-wrong-section">
+            <h2>错题解析</h2>
+            {mistakeExplanationText ? (
+              <section className="legacy-answer-explanation legacy-ai-mistake-overview">
+                <h4>AI 错题解析</h4>
+                <p>{mistakeExplanationText}</p>
+              </section>
+            ) : null}
+            {report.wrong_questions.length ? (
+              <div className="legacy-wrong-list">
+                {report.wrong_questions.map((question, index) => (
+                  <article className="legacy-wrong-question" key={`${question.question_id || "question"}-${index}`}>
+                    <div className="legacy-question-head">
+                      <span>第 {index + 1} 题</span>
+                      {question.experiment_title ? <em>{question.experiment_title}</em> : null}
+                    </div>
+                    <h3>{question.stem}</h3>
+                    {question.options?.length ? (
+                      <ul className="legacy-report-options">
+                        {question.options.map((option) => (
+                          <li key={option}>{option}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {!hasAiMistakeExplanation ? (
+                      <>
+                        <div className="legacy-answer-grid">
+                          <div>
+                            <span>你的答案</span>
+                            <strong>{question.submitted_answer}</strong>
+                          </div>
+                          <div>
+                            <span>参考答案</span>
+                            <strong>{question.correct_answer}</strong>
+                          </div>
+                        </div>
+                        <section className="legacy-answer-explanation">
+                          <h4>解析</h4>
+                          <p>{question.explanation}</p>
+                        </section>
+                      </>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="legacy-state">本次没有错题。</div>
+            )}
+          </section>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function reportTypeLabel(type?: string): string {
+  if (type === "custom") return "自选范围测评";
+  if (type === "point") return "学后测评";
+  if (type === "pretest") return "课前测评";
+  if (type === "posttest") return "课后测评";
+  return "智能薄弱项测试";
+}
+
+function formatReportDate(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
 }
 
 function Metric({ label, value }: { label: string; value: ReactNode }) {

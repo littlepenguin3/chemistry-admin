@@ -8,6 +8,8 @@
   --legacy-paper: #fffdfb;
   --legacy-bg: #f6f2ee;
   --legacy-gold: #c79a37;
+  --legacy-header-height: 68px;
+  --legacy-exam-meta-height: 46px;
   font-family:
     "Microsoft YaHei",
     "PingFang SC",
@@ -474,6 +476,15 @@ p {
   opacity: 0.7;
 }
 
+.secondary-button {
+  min-height: 42px;
+  border: 1px solid var(--legacy-line);
+  background: #fff;
+  color: var(--legacy-sysu-red);
+  padding: 8px 16px;
+  font-weight: 800;
+}
+
 .legacy-error {
   border: 1px solid #e3b5b5;
   background: #fff4f3;
@@ -666,6 +677,10 @@ p {
 
 .legacy-assessment-page {
   max-width: 980px;
+}
+
+.legacy-assessment-session-page {
+  padding-top: calc(18px + var(--legacy-exam-meta-height));
 }
 
 .legacy-assessment-setup,
@@ -935,27 +950,35 @@ p {
 }
 
 .legacy-exam-meta {
-  position: sticky;
-  top: 82px;
+  position: fixed;
+  top: var(--legacy-header-height);
+  right: max(34px, calc((100vw - 980px) / 2 + 34px));
+  left: max(34px, calc((100vw - 980px) / 2 + 34px));
   z-index: 4;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin: 0 0 12px;
-  border-top: 1px solid var(--legacy-line);
-  background: rgba(255, 253, 251, 0.96);
-  padding: 10px 0 0;
-  box-shadow: 0 8px 16px rgba(75, 0, 2, 0.06);
+  gap: 0;
+  margin: 0;
+  border: 1px solid #efcf9d;
+  background: #fff8e8;
+  padding: 0;
+  box-shadow: 0 8px 16px rgba(75, 0, 2, 0.08);
 }
 
 .legacy-exam-meta span {
   display: grid;
-  min-height: 42px;
+  min-height: var(--legacy-exam-meta-height);
   place-items: center;
+  border: 0;
   padding: 7px 10px;
+  background: transparent;
   text-align: center;
   font-size: 13px;
   font-weight: 900;
+}
+
+.legacy-exam-meta span + span {
+  border-left: 1px solid #efcf9d;
 }
 
 .legacy-exam-meta span.is-complete {
@@ -1453,6 +1476,11 @@ p {
 .legacy-report-card {
   display: grid;
   gap: 6px;
+  width: 100%;
+  color: var(--legacy-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .legacy-report-card strong {
@@ -1464,7 +1492,142 @@ p {
   font-size: 13px;
 }
 
+.legacy-report-card em {
+  justify-self: start;
+  border: 1px solid #efcf9d;
+  background: #fff8e8;
+  color: #7b4a00;
+  padding: 3px 8px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.legacy-report-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.legacy-report-actions .legacy-assessment-start {
+  margin-top: 0;
+}
+
+.legacy-result-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.legacy-result-actions .legacy-assessment-start {
+  margin-top: 0;
+}
+
+.legacy-report-detail-page,
+.legacy-wrong-list {
+  display: grid;
+  gap: 14px;
+}
+
+.legacy-report-detail-head,
+.legacy-ai-summary,
+.legacy-wrong-section,
+.legacy-wrong-question {
+  border: 1px solid var(--legacy-line);
+  background: #fff;
+  padding: 16px;
+}
+
+.legacy-report-detail-head {
+  display: grid;
+  gap: 10px;
+}
+
+.legacy-report-detail-head h1,
+.legacy-ai-summary h2,
+.legacy-wrong-section h2,
+.legacy-wrong-question h3 {
+  margin: 0;
+}
+
+.legacy-report-detail-head p,
+.legacy-ai-summary p,
+.legacy-wrong-question p {
+  margin: 0;
+  color: var(--legacy-muted);
+  line-height: 1.7;
+}
+
+.legacy-report-next {
+  border-left: 4px solid var(--legacy-sysu-red);
+  background: #fff8e8;
+  padding: 8px 10px;
+}
+
+.legacy-wrong-section {
+  display: grid;
+  gap: 12px;
+}
+
+.legacy-wrong-question {
+  display: grid;
+  gap: 12px;
+}
+
+.legacy-report-options {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--legacy-muted);
+}
+
+.legacy-answer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.legacy-answer-grid div {
+  border: 1px solid #efcf9d;
+  background: #fff8e8;
+  padding: 10px;
+}
+
+.legacy-answer-grid span {
+  display: block;
+  color: #7b4a00;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.legacy-answer-grid strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--legacy-ink);
+  font-size: 18px;
+}
+
+.legacy-answer-explanation {
+  border-left: 4px solid var(--legacy-sysu-red);
+  background: #fff8e8;
+  padding: 10px 12px;
+}
+
+.legacy-answer-explanation h4 {
+  margin: 0 0 6px;
+  color: var(--legacy-sysu-red);
+}
+
+.legacy-ai-summary p,
+.legacy-ai-mistake-overview p,
+.legacy-answer-explanation p {
+  white-space: pre-line;
+}
+
 @media (max-width: 860px) {
+  :root {
+    --legacy-header-height: 58px;
+  }
+
   .legacy-student-header {
     align-items: center;
     min-height: 58px;
