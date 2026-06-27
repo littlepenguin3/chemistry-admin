@@ -1,25 +1,28 @@
 ## ADDED Requirements
 
 ### Requirement: Legacy teacher demo console is demo-safe
-The legacy teacher product SHALL behave as a competition demo console and MUST NOT expose broad live resource-creation or mutation workflows. The old-only recommended-learning video-point toggle MAY remain because it is part of the legacy competition profile.
+The legacy teacher product SHALL behave as a competition demo console and MUST NOT expose broad live resource-creation or mutation workflows. It MAY expose narrow existing mainline class and roster creation workflows needed to make the old student frontend usable, and the old-only recommended-learning video-point toggle MAY remain because it is part of the legacy competition profile.
 
 #### Scenario: Teacher opens legacy teacher product
 - **WHEN** an authenticated teacher or admin opens `web-teacher-old`
 - **THEN** the visible teacher modules MUST focus on resource evidence, class evidence, learning analytics, and BKT evaluation
-- **AND** the visible UI MUST NOT show broad live mutation controls such as `创建`, `新增`, `保存`, `发布`, `导入`, `重置密码`, `AI出题`, `通过入库`, or `退回修改` when those controls would mutate shared data
+- **AND** the visible UI MAY show `创建班级` and `创建学生` only on the old class page when those actions call existing class/roster APIs
+- **AND** the visible UI MUST NOT show broad live mutation controls such as `保存`, `发布`, `导入`, `重置密码`, `AI出题`, `通过入库`, or `退回修改` when those controls would mutate shared resource, catalog, question, report, prompt, media, analytics, or account-state data
 - **AND** the video-resource page MAY show `设为推荐` and `取消推荐` controls only for the old-scoped recommended-learning point association
 - **AND** the old teacher product MUST remain separate from the current `web-teacher` operational console
 
 #### Scenario: Old teacher frontend API usage is inspected
 - **WHEN** maintainers inspect `apps/web-teacher-old/src/api.ts` and old teacher data-loading code
 - **THEN** old teacher demo resource functions MUST use read-only requests for demo data
-- **AND** old teacher demo resource functions MUST NOT call `POST`, `PUT`, `PATCH`, or `DELETE` for classes, rosters, questions, question workbench sessions, prompt settings, reports, media, catalog nodes, or analytics
+- **AND** old teacher class management MAY call existing mainline `GET /api/admin/classes`, `POST /api/admin/classes`, `GET /api/admin/classes/{class_id}/students`, and `POST /api/admin/classes/{class_id}/students`
+- **AND** old teacher demo resource functions MUST NOT call `PUT`, `PATCH`, or `DELETE` for classes or rosters
+- **AND** old teacher demo resource functions MUST NOT call `POST`, `PUT`, `PATCH`, or `DELETE` for questions, question workbench sessions, prompt settings, reports, media, catalog nodes, or analytics
 - **AND** the frontend MAY call the existing old-scoped recommendation `PUT` route to mark or unmark recommended-learning video points
 - **AND** login/session calls MAY remain because authentication is not teacher demo data mutation
 
 #### Scenario: Old teacher action affordances are tested
 - **WHEN** old teacher pages are rendered in tests
-- **THEN** tests MUST fail if a user interaction sends a non-GET request after login for teacher demo data, except the old-scoped recommendation `PUT`
+- **THEN** tests MUST fail if a user interaction sends a non-GET request after login for teacher demo data, except the existing class/roster creation `POST` calls and the old-scoped recommendation `PUT`
 - **AND** tests MUST fail if visible mutation-only labels are shown as active primary commands
 
 ### Requirement: Legacy teacher demo uses old-scoped read-only aggregation APIs
@@ -88,14 +91,18 @@ The old teacher question resources page SHALL present AI-assisted question-bank 
 - **THEN** rows and counts MUST be derived from current question-bank, catalog, experiment, or draft records
 - **AND** question, experiment, and point identifiers MUST remain current backend identities
 
-### Requirement: Legacy teacher class page presents read-only roster and participation evidence
-The old teacher class page SHALL present class and student participation evidence without roster or account administration.
+### Requirement: Legacy teacher class page provides basic class and student management
+The old teacher class page SHALL provide the minimal operational class and student roster management needed for the old student frontend while leaving broad administration in the current teacher console.
 
 #### Scenario: Teacher opens class resources
 - **WHEN** the teacher opens the old class page
-- **THEN** the page MUST list teacher-visible classes with class name, status, student count, active student count, completion rate, average score, or missing-student count when available
-- **AND** selecting a class MAY load read-only class analytics for that class
-- **AND** the page MUST NOT allow creating classes, editing classes, assigning teachers, importing rosters, creating students, editing students, disabling students, or resetting passwords
+- **THEN** the page MUST list teacher-visible classes with class name, status, description, and student count when available
+- **AND** the page MUST allow creating a class through the existing mainline class creation API
+- **AND** selecting a class MUST load the existing roster entries for that class
+- **AND** the page MUST allow creating a roster student with student id and student name through the existing mainline roster creation API
+- **AND** the page MUST explain that the old student login account is the student id and the first-login password follows the current class initial-password strategy, such as a shared class password or the student id
+- **AND** the page MUST show student id, student name, activation status, and login mode for visible roster entries
+- **AND** the page MUST NOT allow editing classes, assigning teachers, importing rosters, editing students, disabling students, or resetting passwords
 
 #### Scenario: Teacher cannot access a class
 - **WHEN** the teacher tries to load a class outside their access boundary
@@ -148,12 +155,12 @@ The old teacher demo console SHALL preserve the legacy SYSU-red teaching-platfor
 - **AND** it MUST NOT adopt the current green modern teacher shell, current monitoring dashboard style, or rounded modern AI assistant surface
 
 ### Requirement: Legacy teacher validation proves demo-safe behavior
-Validation for the old teacher demo console SHALL prove both product behavior and API usage are demo-safe, with only old-scoped recommendation writes allowed.
+Validation for the old teacher demo console SHALL prove both product behavior and API usage are demo-safe, with only existing class/roster creation writes and old-scoped recommendation writes allowed.
 
 #### Scenario: Old teacher tests are run
 - **WHEN** old teacher frontend tests run
 - **THEN** tests MUST cover navigation, overview, video resources, question resources, class list, analytics, evaluation-system copy, and forbidden-term gating
-- **AND** tests MUST assert that old teacher data interactions after login do not issue non-GET requests except the old-scoped recommendation `PUT`
+- **AND** tests MUST assert that old teacher data interactions after login do not issue non-GET requests except `POST /api/admin/classes`, `POST /api/admin/classes/{class_id}/students`, and the old-scoped recommendation `PUT`
 
 #### Scenario: Backend route tests are run
 - **WHEN** backend route inventory or targeted route tests run
@@ -177,6 +184,13 @@ The legacy student video library, legacy student learning drilldown, and paired 
 - **THEN** any copied or adapted periodic-table and catalog logic MUST remain scoped to the old frontend or shared frontend-safe utilities
 - **AND** it MUST NOT modify chemistry seed data, production resource manifests, BKT model state, or current student app behavior merely to support the old UI
 
+#### Scenario: Legacy student first-login activation uses current roster accounts
+- **WHEN** a roster student created from the old teacher class page signs in to `web-student-old` with the class initial password
+- **THEN** the old student frontend MUST call the current student login API and accept the returned activated student session
+- **AND** if the returned student user has `must_change_password`, the old frontend MUST show a legacy-styled first-login password page before entering learning content
+- **AND** changing the password MUST call the current student password API and then continue with the returned student session
+- **AND** the old frontend MUST NOT create a separate old activation API, old student account table, or old-only password store
+
 #### Scenario: Legacy backend support becomes necessary
 - **WHEN** the old competition profile requires backend support that cannot be satisfied by existing shared student APIs
 - **THEN** the implementation MUST add old-scoped backend adapters, routes, schemas, or services rather than changing existing mainline student or teacher API semantics
@@ -189,6 +203,7 @@ The legacy student video library, legacy student learning drilldown, and paired 
 - **THEN** it MAY call a legacy namespaced endpoint that returns only old-home point-library fields
 - **AND** that endpoint MUST include published point nodes without playable video media
 - **AND** point nodes with playable published video media MUST be returned before point nodes without playable video media
+- **AND** seed placeholder videos such as `no-video-placeholder.mp4` or media marked `placeholder_video` MUST be treated as no playable video for counts, thumbnails, and ordering
 - **AND** point thumbnails returned by the endpoint MUST use student-accessible media thumbnail API routes rather than raw media storage-relative file paths
 - **AND** existing teacher-selected recommended learning points MAY be returned before ordinary point nodes only within the same video-availability group
 - **AND** it MUST NOT return modern browse recommendations, AI prompt targets, diagnostic metadata, provider names, retrieval fields, or category-chip payloads

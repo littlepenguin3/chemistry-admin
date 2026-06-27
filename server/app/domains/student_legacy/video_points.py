@@ -58,6 +58,16 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _real_video_media_filter(alias: str = "ma") -> str:
+    return f"""
+                    AND COALESCE({alias}.metadata->>'seed_kind', '') <> 'placeholder_video'
+                    AND COALESCE({alias}.original_file_name, '') <> 'no-video-placeholder.mp4'
+                    AND COALESCE({alias}.playback_relative_path, '') NOT LIKE '%no-video-placeholder.mp4'
+                    AND COALESCE({alias}.relative_path, '') NOT LIKE '%no-video-placeholder.mp4'
+                    AND COALESCE({alias}.source_relative_path, '') NOT LIKE '%no-video-placeholder.mp4'
+    """
+
+
 def _legacy_point_sort_key(row: dict[str, Any]) -> tuple[int, int, int]:
     has_video_rank = 0 if _safe_int(row.get("media_count")) > 0 else 1
     recommendation_rank = 0 if row.get("is_recommended") else 1
@@ -103,10 +113,11 @@ def _point_item(row: dict[str, Any]) -> LegacyStudentVideoPointItem:
 
 
 def _legacy_video_point_rows(session: Any) -> list[dict[str, Any]]:
+    real_video_filter = _real_video_media_filter("ma")
     rows = (
         session.execute(
             text(
-                """
+                f"""
                 SELECT
                   n.id AS node_id,
                   n.chapter_id,
@@ -160,6 +171,7 @@ def _legacy_video_point_rows(session: Any) -> list[dict[str, Any]]:
                     AND ma.upload_status = 'ready'
                     AND COALESCE(ma.lifecycle_status, 'active') = 'active'
                     AND mb.binding_status = 'published'
+                    {real_video_filter}
                 ) media_counts ON true
                 LEFT JOIN LATERAL (
                   SELECT ma.id AS thumbnail_media_id
@@ -170,6 +182,7 @@ def _legacy_video_point_rows(session: Any) -> list[dict[str, Any]]:
                     AND ma.upload_status = 'ready'
                     AND COALESCE(ma.lifecycle_status, 'active') = 'active'
                     AND mb.binding_status = 'published'
+                    {real_video_filter}
                     AND ma.thumbnail_relative_path IS NOT NULL
                   ORDER BY mb.display_order, mb.created_at, ma.id
                   LIMIT 1

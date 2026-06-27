@@ -92,6 +92,28 @@ export type TeacherDemoClasses = {
   classes: TeacherDemoClassSummary[];
 };
 
+export type ClassItem = {
+  id: string;
+  class_name: string;
+  description?: string | null;
+  status: string;
+  student_count: number;
+};
+
+export type RosterStudent = {
+  id: string;
+  class_id: string;
+  student_id: string;
+  student_name: string;
+  status: "pending" | "active" | "disabled";
+  activation_mode: "default_password" | "self_registration";
+  activated: boolean;
+  user_id?: string | null;
+  activated_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 export type TeacherDemoStudentAnalytics = {
   student_id: string;
   student_name: string;
@@ -239,6 +261,29 @@ export function getTeacherDemoQuestionResources(): Promise<TeacherDemoQuestionRe
 
 export function getTeacherDemoClasses(): Promise<TeacherDemoClasses> {
   return api<TeacherDemoClasses>("/api/admin/legacy/teacher-demo/classes");
+}
+
+export function listClasses(): Promise<ClassItem[]> {
+  return api<ClassItem[]>("/api/admin/classes");
+}
+
+export function createClass(values: { class_name: string; description?: string }): Promise<ClassItem> {
+  return postJson<ClassItem>("/api/admin/classes", values);
+}
+
+export function listRosterStudents(classId: string): Promise<RosterStudent[]> {
+  return api<RosterStudent[]>(`/api/admin/classes/${encodeURIComponent(classId)}/students`);
+}
+
+export function createRosterStudent(
+  classId: string,
+  values: { student_id: string; student_name: string },
+): Promise<RosterStudent> {
+  return postJson<RosterStudent>(`/api/admin/classes/${encodeURIComponent(classId)}/students`, {
+    ...values,
+    status: "pending",
+    activation_mode: "default_password",
+  });
 }
 
 export function getTeacherDemoClassAnalytics(classId: string): Promise<TeacherDemoAnalytics> {

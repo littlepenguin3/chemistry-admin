@@ -1,11 +1,12 @@
 ## Why
 
-The legacy student frontend is now able to demonstrate the BKT-centered learning and assessment loop, but the paired legacy teacher frontend still reads like an operational admin console and includes broad real write actions such as creating question-workbench sessions. For competition judging, the teacher side should act as an evidence console that proves the platform already has video resources, question-bank resources, class data, and BKT learning analytics without exposing modern Agent/RAG/Atom product surfaces. The old competition profile still needs one narrow legacy operation: teachers must be able to maintain `推荐学习` video-point labels used by the old student video library.
+The legacy student frontend is now able to demonstrate the BKT-centered learning and assessment loop, but the paired legacy teacher frontend still reads like an operational admin console and includes broad real write actions such as creating question-workbench sessions. For competition judging, the teacher side should act as an evidence console that proves the platform already has video resources, question-bank resources, class data, and BKT learning analytics without exposing modern Agent/RAG/Atom product surfaces. The old competition profile still needs two narrow operational paths: teachers must be able to maintain `推荐学习` video-point labels used by the old student video library, and they must be able to create classes and roster students through existing mainline class APIs so old student login and reports can be demonstrated end to end.
 
 ## What Changes
 
 - Convert `web-teacher-old` into a mostly read-only legacy teacher demo console focused on resource evidence and the BKT teaching feedback loop.
-- Remove or disable broad real create/update/delete actions from the old teacher surface, including question generation/session creation, class/student mutation, roster import, prompt settings, and publish/review actions.
+- Keep only minimal class/student creation on the old teacher class page, backed by existing mainline class and roster APIs.
+- Remove or disable broad real create/update/delete actions from the old teacher surface, including question generation/session creation, class/student editing, roster import, prompt settings, account reset, and publish/review actions.
 - Keep the old-only recommendation toggle for video points so teachers can mark and unmark `推荐学习` point labels used by the old student video library.
 - Add old-scoped read-only teacher demo APIs that aggregate existing shared data for:
   - overview metrics and loop explanation;
@@ -27,7 +28,7 @@ None. This extends the existing legacy competition profile rather than introduci
 
 ### Modified Capabilities
 
-- `bkt-legacy-competition-profile`: Add requirements for a mostly read-only legacy teacher demo console that presents video resources, question-bank resources, classes, BKT learning analytics, and the score evaluation system while prohibiting broad teacher-side creation or mutation actions, except old-only recommendation labels.
+- `bkt-legacy-competition-profile`: Add requirements for a mostly read-only legacy teacher demo console that presents video resources, question-bank resources, classes, BKT learning analytics, and the score evaluation system while prohibiting broad teacher-side creation or mutation actions, except old-only recommendation labels and existing class/roster creation.
 
 ## Impact
 

@@ -2,7 +2,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LegacyStudentApp } from "./LegacyStudentApp";
-import { ApiError, legacyStudentErrorMessage, setAuthToken, startCustomAssessment, startSmartAssessment } from "./api";
+import {
+  ApiError,
+  legacyStudentErrorMessage,
+  legacyStudentLoginErrorMessage,
+  setAuthToken,
+  startCustomAssessment,
+  startSmartAssessment,
+} from "./api";
 
 const forbiddenVisibleTerms = [
   "Atom",
@@ -105,7 +112,7 @@ function alkaliProfile() {
 }
 
 function installStudentFetchMock() {
-  return vi.fn(async (input: RequestInfo | URL) => {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/api/auth/me")) {
       return jsonResponse({
@@ -114,8 +121,48 @@ function installStudentFetchMock() {
         display_name: "李同学",
         role: "student",
         status: "active",
+        must_change_password: false,
+        password_version: 2,
         student_id: "2026001",
         class_name: "数智一班",
+      });
+    }
+    if (url.includes("/api/auth/student/login")) {
+      const body = JSON.parse(String(init?.body || "{}"));
+      const studentId = String(body.student_id || "2026999").toUpperCase();
+      return jsonResponse({
+        access_token: "first-login-token",
+        token_type: "bearer",
+        expires_at: "2026-06-27T12:00:00Z",
+        user: {
+          id: "student-pending-1",
+          username: studentId,
+          display_name: "待激活学生",
+          role: "student",
+          status: "active",
+          must_change_password: true,
+          password_version: 1,
+          student_id: studentId,
+          class_name: "旧端演示班",
+        },
+      });
+    }
+    if (url.includes("/api/auth/student/password")) {
+      return jsonResponse({
+        access_token: "changed-password-token",
+        token_type: "bearer",
+        expires_at: "2026-06-27T12:30:00Z",
+        user: {
+          id: "student-pending-1",
+          username: "2026999",
+          display_name: "待激活学生",
+          role: "student",
+          status: "active",
+          must_change_password: false,
+          password_version: 2,
+          student_id: "2026999",
+          class_name: "旧端演示班",
+        },
       });
     }
     if (url.includes("/api/student/legacy/video-points")) {
@@ -710,6 +757,31 @@ describe("LegacyStudentApp", () => {
     vi.unstubAllGlobals();
   });
 
+  it("activates a pending roster student before entering the old learning shell", async () => {
+    setAuthToken("");
+    const { container } = render(<LegacyStudentApp />);
+
+    const loginInputs = container.querySelectorAll(".legacy-login-panel input");
+    fireEvent.change(loginInputs[0], { target: { value: "2026999" } });
+    fireEvent.change(loginInputs[1], { target: { value: "2026999" } });
+    fireEvent.click(container.querySelector(".legacy-login-panel .primary-button")!);
+
+    expect(await screen.findByRole("heading", { name: "设置新的登录密码" })).toBeTruthy();
+    expect(window.localStorage.getItem("chem_student_old_token")).toBe("first-login-token");
+    expect(screen.getByRole("button", { name: "取消激活" })).toBeTruthy();
+
+    const passwordInputs = container.querySelectorAll(".legacy-login-panel input");
+    fireEvent.change(passwordInputs[0], { target: { value: "newpass123" } });
+    fireEvent.change(passwordInputs[1], { target: { value: "newpass123" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存并进入学习" }));
+
+    await waitFor(() => expect(window.localStorage.getItem("chem_student_old_token")).toBe("changed-password-token"));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes("/api/student/legacy/video-points"))).toBe(true));
+    const passwordCall = vi.mocked(fetch).mock.calls.find((call) => String(call[0]).includes("/api/auth/student/password"));
+    expect(JSON.parse(String(passwordCall?.[1]?.body))).toMatchObject({ new_password: "newpass123" });
+    expect(screen.queryByRole("heading", { name: "设置新的登录密码" })).toBeNull();
+  });
+
   it("opens a four-module old student shell with a finite all-point home library", async () => {
     const { container } = render(<LegacyStudentApp />);
 
@@ -949,6 +1021,12 @@ describe("LegacyStudentApp", () => {
   it("explains stale legacy assessment submit sessions", () => {
     expect(legacyStudentErrorMessage(new ApiError(409, "No active assessment session"))).toBe(
       "本轮测评已经提交或已失效，请返回评测重新开始。",
+    );
+  });
+
+  it("explains first-login password failures without treating them as stale sessions", () => {
+    expect(legacyStudentLoginErrorMessage(new ApiError(401, "Invalid credentials"))).toBe(
+      "学号或初始密码不正确。若班级使用统一初始密码，请使用教师端设置的统一初始密码首次登录。",
     );
   });
 

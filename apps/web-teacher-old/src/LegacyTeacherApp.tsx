@@ -1,6 +1,8 @@
 import { FormEvent, type DependencyList, type ReactNode, useEffect, useMemo, useState } from "react";
 
 import {
+  createClass,
+  createRosterStudent,
   getAuthToken,
   getTeacherDemoClassAnalytics,
   getTeacherDemoClasses,
@@ -10,12 +12,15 @@ import {
   getTeacherDemoQuestionResources,
   getTeacherDemoVideoResources,
   legacyTeacherErrorMessage,
+  listClasses,
+  listRosterStudents,
   loadCurrentUser,
   setLegacyVideoPointRecommendation,
   setAuthToken,
   teacherLogin,
+  type ClassItem,
+  type RosterStudent,
   type TeacherDemoAnalytics,
-  type TeacherDemoClassSummary,
   type TeacherDemoClasses,
   type TeacherDemoEvaluationSystem,
   type TeacherDemoOverview,
@@ -518,52 +523,194 @@ function QuestionResourceRow({ item }: { item: TeacherDemoQuestionResource }) {
 }
 
 function ClassesPage() {
-  const { data, error, loading } = useAsyncData<TeacherDemoClasses>(getTeacherDemoClasses, []);
-  const classes = data?.classes || [];
+  const [classReloadKey, setClassReloadKey] = useState(0);
+  const [rosterReloadKey, setRosterReloadKey] = useState(0);
+  const [selectedClassId, setSelectedClassId] = useState("");
+  const [className, setClassName] = useState("");
+  const [classDescription, setClassDescription] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [studentName, setStudentName] = useState("");
+  const [notice, setNotice] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [submittingClass, setSubmittingClass] = useState(false);
+  const [submittingStudent, setSubmittingStudent] = useState(false);
+  const classState = useAsyncData<ClassItem[]>(listClasses, [classReloadKey]);
+  const classes = classState.data || [];
+
+  useEffect(() => {
+    if (!selectedClassId && classes[0]?.id) setSelectedClassId(classes[0].id);
+  }, [classes, selectedClassId]);
+
+  const selectedClass = classes.find((item) => item.id === selectedClassId) || null;
+  const rosterState = useAsyncData<RosterStudent[]>(
+    () => (selectedClassId ? listRosterStudents(selectedClassId) : Promise.resolve([])),
+    [selectedClassId, rosterReloadKey],
+  );
+  const roster = rosterState.data || [];
+  const activeCount = roster.filter((item) => item.activated || item.status === "active").length;
+  const pendingCount = roster.filter((item) => !item.activated && item.status !== "active" && item.status !== "disabled").length;
+
+  const submitClass = async (event: FormEvent) => {
+    event.preventDefault();
+    const nextName = className.trim();
+    if (!nextName) {
+      setActionError("请先填写班级名称。");
+      return;
+    }
+    setSubmittingClass(true);
+    setNotice("");
+    setActionError("");
+    try {
+      const created = await createClass({ class_name: nextName, description: classDescription.trim() || undefined });
+      setSelectedClassId(created.id);
+      setClassName("");
+      setClassDescription("");
+      setNotice(`已创建班级：${created.class_name}`);
+      setClassReloadKey((value) => value + 1);
+    } catch (caught) {
+      setActionError(legacyTeacherErrorMessage(caught));
+    } finally {
+      setSubmittingClass(false);
+    }
+  };
+
+  const submitStudent = async (event: FormEvent) => {
+    event.preventDefault();
+    const nextStudentId = studentId.trim();
+    const nextStudentName = studentName.trim();
+    if (!selectedClassId) {
+      setActionError("请先选择班级。");
+      return;
+    }
+    if (!nextStudentId || !nextStudentName) {
+      setActionError("请填写学号和姓名。");
+      return;
+    }
+    setSubmittingStudent(true);
+    setNotice("");
+    setActionError("");
+    try {
+      const created = await createRosterStudent(selectedClassId, { student_id: nextStudentId, student_name: nextStudentName });
+      setStudentId("");
+      setStudentName("");
+      setNotice(`已创建学生：${created.student_name}（${created.student_id}），初始密码以当前班级设置为准。`);
+      setRosterReloadKey((value) => value + 1);
+      setClassReloadKey((value) => value + 1);
+    } catch (caught) {
+      setActionError(legacyTeacherErrorMessage(caught));
+    } finally {
+      setSubmittingStudent(false);
+    }
+  };
 
   return (
     <PageFrame
-      eyebrow="班级与学生范围"
+      eyebrow="班级与学生管理"
       title="班级"
-      description="展示已有班级、学生规模、参与情况和平均掌握表现，作为后续学情分析的数据范围。"
+      description="使用现有班级与花名册接口维护旧学生端可登录的学习范围；新增学生首次登录时使用当前班级的初始密码策略。"
     >
-      <StateBlock loading={loading} error={error}>
+      <StateBlock loading={classState.loading} error={classState.error}>
         <MetricGrid
           metrics={[
             { label: "班级数", value: classes.length, unit: "个" },
-            { label: "学生数", value: classes.reduce((sum, item) => sum + item.student_count, 0), unit: "人" },
-            { label: "参与学生", value: classes.reduce((sum, item) => sum + item.active_students, 0), unit: "人" },
-            { label: "待开始", value: classes.reduce((sum, item) => sum + item.missing_students, 0), unit: "人" },
+            { label: "当前班级学生", value: roster.length, unit: "人" },
+            { label: "已激活", value: activeCount, unit: "人" },
+            { label: "待首次登录", value: pendingCount, unit: "人" },
           ]}
         />
-        <section className="legacy-table-card">
-          <header>
-            <h2>班级列表</h2>
-            <span>{classes.length ? `当前共 ${classes.length} 个班级` : "暂无班级"}</span>
-          </header>
-          <div className="legacy-class-grid">
-            {classes.map((item) => (
-              <ClassCard key={item.id} item={item} />
-            ))}
-          </div>
-        </section>
+        {notice ? <div className="legacy-notice">{notice}</div> : null}
+        {actionError ? <div className="legacy-error">{actionError}</div> : null}
+        <div className="legacy-class-management-grid">
+          <section className="legacy-table-card">
+            <header>
+              <h2>班级列表</h2>
+              <span>{classes.length ? `当前共 ${classes.length} 个班级` : "暂无班级"}</span>
+            </header>
+            <form className="legacy-inline-form" onSubmit={submitClass}>
+              <label>
+                班级名称
+                <input value={className} onChange={(event) => setClassName(event.target.value)} placeholder="例如：无机化学一班" />
+              </label>
+              <label>
+                班级说明
+                <input value={classDescription} onChange={(event) => setClassDescription(event.target.value)} placeholder="选填" />
+              </label>
+              <button className="primary-button" disabled={submittingClass}>
+                {submittingClass ? "创建中..." : "创建班级"}
+              </button>
+            </form>
+            <div className="legacy-class-grid management">
+              {classes.map((item) => (
+                <ClassCard key={item.id} item={item} selected={item.id === selectedClassId} onSelect={() => setSelectedClassId(item.id)} />
+              ))}
+            </div>
+          </section>
+
+          <section className="legacy-table-card">
+            <header>
+              <h2>学生名单</h2>
+              <span>{selectedClass ? selectedClass.class_name : "未选择班级"}</span>
+            </header>
+            <div className="legacy-roster-note">
+              账号为学号；初始密码以当前班级设置为准，可能是统一初始密码或学号。学生首次登录旧学生端后，系统会自动激活账号并关联到当前班级。
+            </div>
+            <form className="legacy-inline-form two-column" onSubmit={submitStudent}>
+              <label>
+                学号
+                <input disabled={!selectedClassId} value={studentId} onChange={(event) => setStudentId(event.target.value)} placeholder="例如：2026001" />
+              </label>
+              <label>
+                姓名
+                <input disabled={!selectedClassId} value={studentName} onChange={(event) => setStudentName(event.target.value)} placeholder="学生姓名" />
+              </label>
+              <button className="primary-button" disabled={!selectedClassId || submittingStudent}>
+                {submittingStudent ? "创建中..." : "创建学生"}
+              </button>
+            </form>
+            {selectedClassId ? (
+              <StateBlock loading={rosterState.loading} error={rosterState.error}>
+                {roster.length ? (
+                  <div className="legacy-student-table legacy-student-table-management">
+                    {roster.map((student) => (
+                      <StudentRosterRow key={student.id} student={student} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="legacy-empty compact">当前班级暂无学生。</div>
+                )}
+              </StateBlock>
+            ) : (
+              <div className="legacy-empty compact">请先创建或选择一个班级。</div>
+            )}
+          </section>
+        </div>
       </StateBlock>
     </PageFrame>
   );
 }
 
-function ClassCard({ item }: { item: TeacherDemoClassSummary }) {
+function ClassCard({ item, selected, onSelect }: { item: ClassItem; selected: boolean; onSelect: () => void }) {
   return (
-    <article className="legacy-card class-card">
+    <button className={`legacy-card class-card legacy-class-card-button ${selected ? "selected" : ""}`} onClick={onSelect}>
       <span className="legacy-row-label">{item.status === "active" ? "使用中" : item.status}</span>
       <h2>{item.class_name}</h2>
       <p>{item.description || "无备注。"}</p>
       <div className="legacy-card-stats">
         <span>学生 {item.student_count}</span>
-        <span>参与 {item.active_students}</span>
-        <span>平均 {item.average_score}</span>
-        <span>完成 {item.completion_rate}%</span>
+        <span>{selected ? "已选中" : "点选"}</span>
       </div>
+    </button>
+  );
+}
+
+function StudentRosterRow({ student }: { student: RosterStudent }) {
+  const status = student.status === "disabled" ? "已停用" : student.activated || student.status === "active" ? "已激活" : "待首次登录";
+  return (
+    <article>
+      <strong>{student.student_name}</strong>
+      <span>{student.student_id}</span>
+      <span>{status}</span>
+      <span>{student.activation_mode === "default_password" ? "班级初始密码" : "自主注册"}</span>
     </article>
   );
 }

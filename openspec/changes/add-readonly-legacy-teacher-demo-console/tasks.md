@@ -59,3 +59,19 @@
 - [x] 6.5 Run `openspec validate add-readonly-legacy-teacher-demo-console --strict`.
 - [x] 6.6 If backend Python code changes are implemented, rebuild/restart the backend or old-specific compose runtime and verify route registration against the running service.
 - [x] 6.7 Smoke-inspect rebuilt `web-teacher-old` via old-specific compose at `15178` because `15177` was already allocated; verify the old teacher frontend and backend route auth are reachable.
+
+## 7. Old Teacher Class and Roster Management Adjustment
+
+- [x] 7.1 Revise the old teacher demo-safe boundary so existing mainline class/roster creation is allowed, while broad resource, prompt, media, analytics, import, reset, edit, and delete actions remain hidden.
+- [x] 7.2 Add old teacher API client functions for existing `GET/POST /api/admin/classes` and `GET/POST /api/admin/classes/{class_id}/students`.
+- [x] 7.3 Rework the old `班级` page into a square legacy class/roster management page with class creation, class selection, student creation, roster status, and old student first-login guidance.
+- [x] 7.4 Update old teacher frontend tests so class and roster creation `POST` calls are allowed, while unrelated business mutations remain forbidden.
+- [x] 7.5 Run OpenSpec validation, old teacher typecheck, tests, and build.
+
+## 8. Old Student First-Login Activation
+
+- [x] 8.1 Add old student API support for the current student password-change endpoint.
+- [x] 8.2 Route `must_change_password` student sessions to a legacy-styled first-login password page before showing learning content.
+- [x] 8.3 Add a regression test for pending roster login, first-password change, and entry into the old video library.
+- [x] 8.4 Run old student typecheck, tests, build, and OpenSpec validation.
+- [x] 8.5 Treat seed placeholder videos as no playable video in the legacy video point library, so video-first ordering only promotes real videos.

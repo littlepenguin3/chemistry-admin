@@ -32,6 +32,7 @@ function installTeacherFetchMock() {
   return vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     const url = new URL(String(input), "http://teacher-old.test");
     const path = url.pathname;
+    const method = String(_init?.method || "GET").toUpperCase();
 
     if (path === "/api/auth/me") {
       return jsonResponse({
@@ -158,6 +159,59 @@ function installTeacherFetchMock() {
         ],
       });
     }
+    if (path === "/api/admin/classes" && method === "GET") {
+      return jsonResponse([
+        {
+          id: "class-1",
+          class_name: "无机化学一班",
+          description: "2026 春季演示班",
+          status: "active",
+          student_count: 2,
+        },
+      ]);
+    }
+    if (path === "/api/admin/classes" && method === "POST") {
+      return jsonResponse({
+        id: "class-new",
+        class_name: "无机化学二班",
+        description: "现场新增班级",
+        status: "active",
+        student_count: 0,
+      });
+    }
+    if (path === "/api/admin/classes/class-1/students" && method === "GET") {
+      return jsonResponse([
+        {
+          id: "roster-1",
+          class_id: "class-1",
+          student_id: "2026001",
+          student_name: "李同学",
+          status: "active",
+          activation_mode: "default_password",
+          activated: true,
+        },
+        {
+          id: "roster-2",
+          class_id: "class-1",
+          student_id: "2026002",
+          student_name: "周同学",
+          status: "pending",
+          activation_mode: "default_password",
+          activated: false,
+        },
+      ]);
+    }
+    if (path === "/api/admin/classes/class-1/students" && method === "POST") {
+      return jsonResponse({
+        id: "roster-new",
+        class_id: "class-1",
+        student_id: "2026003",
+        student_name: "陈同学",
+        status: "pending",
+        activation_mode: "default_password",
+        activated: false,
+      });
+    }
     if (path === "/api/admin/legacy/teacher-demo/classes") {
       return jsonResponse({
         classes: [
@@ -247,7 +301,15 @@ function assertNoUnexpectedBusinessMutations(fetchMock: ReturnType<typeof instal
     const method = String(call[1]?.method || "GET").toUpperCase();
     const isAllowedLegacyRecommendationWrite =
       method === "PUT" && path.startsWith("/api/admin/legacy/video-points/") && path.endsWith("/recommendation");
-    return path.startsWith("/api/admin/") && ["POST", "PUT", "PATCH", "DELETE"].includes(method) && !isAllowedLegacyRecommendationWrite;
+    const isAllowedClassCreate = method === "POST" && path === "/api/admin/classes";
+    const isAllowedRosterStudentCreate = method === "POST" && /^\/api\/admin\/classes\/[^/]+\/students$/.test(path);
+    return (
+      path.startsWith("/api/admin/") &&
+      ["POST", "PUT", "PATCH", "DELETE"].includes(method) &&
+      !isAllowedLegacyRecommendationWrite &&
+      !isAllowedClassCreate &&
+      !isAllowedRosterStudentCreate
+    );
   });
   expect(mutationCalls).toEqual([]);
 }
@@ -323,7 +385,7 @@ describe("LegacyTeacherApp", () => {
     assertNoForbiddenVisibleTerms(container);
   });
 
-  it("shows class list and analytics weak point ranking", async () => {
+  it("creates classes and roster students while keeping analytics read-only", async () => {
     const fetchMock = installTeacherFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     const { container } = render(<LegacyTeacherApp />);
@@ -331,7 +393,33 @@ describe("LegacyTeacherApp", () => {
     fireEvent.click(await screen.findByRole("button", { name: "班级" }));
     expect(await screen.findByRole("heading", { name: "班级" })).toBeTruthy();
     expect(await screen.findByText("无机化学一班")).toBeTruthy();
-    expect(screen.getByText("学生 38")).toBeTruthy();
+    expect(await screen.findByText("李同学")).toBeTruthy();
+    expect(
+      screen.getByText("账号为学号；初始密码以当前班级设置为准，可能是统一初始密码或学号。学生首次登录旧学生端后，系统会自动激活账号并关联到当前班级。"),
+    ).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText("例如：无机化学一班"), { target: { value: "无机化学二班" } });
+    fireEvent.change(screen.getByPlaceholderText("选填"), { target: { value: "现场新增班级" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建班级" }));
+    expect(await screen.findByText("已创建班级：无机化学二班")).toBeTruthy();
+
+    fireEvent.click(await screen.findByText("无机化学一班"));
+    fireEvent.change(screen.getByPlaceholderText("例如：2026001"), { target: { value: "2026003" } });
+    fireEvent.change(screen.getByPlaceholderText("学生姓名"), { target: { value: "陈同学" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建学生" }));
+    expect(await screen.findByText("已创建学生：陈同学（2026003），初始密码以当前班级设置为准。")).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.some((call) => {
+        const path = new URL(String(call[0]), "http://teacher-old.test").pathname;
+        return path === "/api/admin/classes" && call[1]?.method === "POST";
+      }),
+    ).toBe(true);
+    expect(
+      fetchMock.mock.calls.some((call) => {
+        const path = new URL(String(call[0]), "http://teacher-old.test").pathname;
+        return path === "/api/admin/classes/class-1/students" && call[1]?.method === "POST";
+      }),
+    ).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: "学情分析" }));
     expect(await screen.findByRole("heading", { name: "学情分析" })).toBeTruthy();

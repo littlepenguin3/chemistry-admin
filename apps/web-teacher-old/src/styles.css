@@ -301,6 +301,7 @@ p {
 }
 
 .legacy-search-row input,
+.legacy-inline-form input,
 .legacy-select-label select,
 .legacy-teacher-login input {
   border: 1px solid #d9c7c2;
@@ -309,6 +310,11 @@ p {
   color: var(--legacy-ink);
   min-height: 44px;
   padding: 9px 11px;
+}
+
+.legacy-inline-form input:disabled {
+  background: #f4eeee;
+  color: #9a8b86;
 }
 
 .primary-button {
@@ -441,6 +447,54 @@ p {
   gap: 14px;
 }
 
+.legacy-class-management-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.85fr) minmax(520px, 1.15fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.legacy-inline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+  border: 1px solid var(--legacy-line);
+  background: #fff;
+  padding: 12px;
+}
+
+.legacy-inline-form.two-column {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 128px;
+  align-items: end;
+}
+
+.legacy-inline-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--legacy-sysu-red);
+  font-weight: 900;
+}
+
+.legacy-class-grid.management {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.legacy-class-grid.management .legacy-card {
+  margin-bottom: 0;
+}
+
+.legacy-class-card-button {
+  width: 100%;
+  border-radius: 0;
+  text-align: left;
+}
+
+.legacy-class-card-button.selected {
+  border-color: var(--legacy-sysu-red);
+  box-shadow: inset 5px 0 0 var(--legacy-sysu-red), 0 10px 24px rgba(75, 0, 2, 0.07);
+}
+
 .class-card h2 {
   margin: 8px 0;
   font-size: 24px;
@@ -477,6 +531,26 @@ p {
 
 .legacy-student-table strong {
   color: var(--legacy-sysu-red);
+}
+
+.legacy-student-table-management article {
+  grid-template-columns: 1.4fr 1fr 1fr 1.2fr;
+}
+
+.legacy-roster-note {
+  margin-bottom: 12px;
+  border: 1px solid #e6c895;
+  border-left: 4px solid var(--legacy-sysu-red);
+  background: #fff8e8;
+  color: #744900;
+  padding: 12px;
+  line-height: 1.65;
+  font-weight: 800;
+}
+
+.legacy-empty.compact {
+  margin-bottom: 0;
+  box-shadow: none;
 }
 
 .legacy-evaluation-grid {
@@ -609,6 +683,14 @@ p {
 
   .legacy-resource-row {
     grid-template-columns: 96px minmax(0, 1fr);
+  }
+
+  .legacy-class-management-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .legacy-inline-form.two-column {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .legacy-row-stats {

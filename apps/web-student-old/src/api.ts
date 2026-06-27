@@ -4,6 +4,8 @@ export type AuthUser = {
   role: "admin" | "teacher" | "student";
   display_name: string;
   status: string;
+  must_change_password?: boolean;
+  password_version?: number;
   student_id?: string | null;
   class_id?: string | null;
   class_name?: string | null;
@@ -12,6 +14,7 @@ export type AuthUser = {
 export type LoginResponse = {
   access_token: string;
   token_type: "bearer";
+  expires_at?: string;
   user: AuthUser;
 };
 
@@ -526,6 +529,16 @@ export function legacyStudentErrorMessage(error: unknown): string {
   return "当前操作未完成，请稍后再试。";
 }
 
+export function legacyStudentLoginErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 401) {
+      return "学号或初始密码不正确。若班级使用统一初始密码，请使用教师端设置的统一初始密码首次登录。";
+    }
+    if (error.status >= 500) return "学习服务暂不可用，请稍后再试。";
+  }
+  return legacyStudentErrorMessage(error);
+}
+
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers || {});
   if (!(options.body instanceof FormData) && !headers.has("Content-Type")) {
@@ -549,6 +562,13 @@ function postJson<T>(path: string, body: unknown): Promise<T> {
 
 export function studentLogin(studentId: string, password: string): Promise<LoginResponse> {
   return postJson<LoginResponse>("/api/auth/student/login", { student_id: studentId, password });
+}
+
+export function changeStudentPassword(newPassword: string, currentPassword?: string): Promise<LoginResponse> {
+  return postJson<LoginResponse>("/api/auth/student/password", {
+    current_password: currentPassword || undefined,
+    new_password: newPassword,
+  });
 }
 
 export function loadCurrentUser(): Promise<AuthUser> {

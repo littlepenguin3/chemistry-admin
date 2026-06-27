@@ -2,8 +2,10 @@ import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 
 import { BookOpenCheck, ChevronRight, ClipboardList, FileText, Folder, Home, PlayCircle, Video, type LucideIcon } from "lucide-react";
 
 import {
+  changeStudentPassword,
   getAuthToken,
   legacyStudentErrorMessage,
+  legacyStudentLoginErrorMessage,
   loadCustomAssessmentOptions,
   loadCatalogNode,
   loadChapterCatalog,
@@ -26,6 +28,7 @@ import {
   type CustomAssessmentOptionsResponse,
   type LegacyAssessmentReportDetail,
   type LegacyVideoPointItem,
+  type LoginResponse,
   type PointDetail,
   type PublicSmartAssessmentQuestion,
   type SmartAssessmentAnswer,
@@ -299,6 +302,22 @@ export function LegacyStudentApp() {
     return <LoginScreen onLogin={setUser} />;
   }
 
+  if (user.must_change_password) {
+    return (
+      <PasswordChangeScreen
+        user={user}
+        onChanged={(response) => {
+          setAuthToken(response.access_token);
+          setUser(response.user);
+        }}
+        onLogout={() => {
+          setAuthToken("");
+          setUser(null);
+        }}
+      />
+    );
+  }
+
   const logout = () => {
     setAuthToken("");
     setUser(null);
@@ -385,7 +404,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
       setAuthToken(response.access_token);
       onLogin(response.user);
     } catch (caught) {
-      setError(legacyStudentErrorMessage(caught));
+      setError(legacyStudentLoginErrorMessage(caught));
     } finally {
       setSubmitting(false);
     }
@@ -398,6 +417,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
         <img className="legacy-login-logo" src={logoSrc} alt="中山大学" />
         <h1>无机化学实验学习平台</h1>
         <p>以实验为知识单元，结合 BKT 掌握度跟踪、视频学习和测评反馈，支持学生开展自主实验学习。</p>
+        <p className="legacy-login-help">首次登录请使用教师端设置的班级初始密码；若班级未设置统一初始密码，则使用学号作为初始密码。</p>
         <form onSubmit={submit}>
           <label>
             学号
@@ -411,6 +431,84 @@ function LoginScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
           <button className="primary-button" disabled={submitting}>
             {submitting ? "登录中..." : "进入学习"}
           </button>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function PasswordChangeScreen({
+  user,
+  onChanged,
+  onLogout,
+}: {
+  user: AuthUser;
+  onChanged: (response: LoginResponse) => void;
+  onLogout: () => void;
+}) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const canSubmit = newPassword.length >= 8 && newPassword === confirmPassword;
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setError("");
+    setSubmitting(true);
+    try {
+      const response = await changeStudentPassword(newPassword);
+      onChanged(response);
+    } catch (caught) {
+      setError(legacyStudentErrorMessage(caught));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="legacy-login-page">
+      <section className="legacy-login-panel legacy-password-panel">
+        <img className="legacy-login-emblem" src={emblemSrc} alt="" />
+        <img className="legacy-login-logo" src={logoSrc} alt="中山大学" />
+        <span className="eyebrow">账户首次激活</span>
+        <h1>设置新的登录密码</h1>
+        <p>
+          {user.display_name || user.username} 已通过班级名单完成身份激活。首次登录需要设置新密码，之后使用学号和新密码进入旧版学生端。
+        </p>
+        <form onSubmit={submit}>
+          <label>
+            新密码
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              autoComplete="new-password"
+              placeholder="至少 8 位"
+            />
+          </label>
+          <label>
+            确认新密码
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              autoComplete="new-password"
+              placeholder="再次输入新密码"
+            />
+          </label>
+          {newPassword && newPassword.length < 8 ? <div className="legacy-state compact">新密码至少需要 8 位。</div> : null}
+          {confirmPassword && newPassword !== confirmPassword ? <div className="legacy-state compact">两次输入的新密码不一致。</div> : null}
+          {error ? <div className="legacy-error">{error}</div> : null}
+          <div className="legacy-password-actions">
+            <button className="secondary-button" type="button" onClick={onLogout}>
+              取消激活
+            </button>
+            <button className="primary-button" disabled={!canSubmit || submitting}>
+              {submitting ? "正在保存..." : "保存并进入学习"}
+            </button>
+          </div>
         </form>
       </section>
     </div>
