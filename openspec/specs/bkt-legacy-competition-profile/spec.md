@@ -97,11 +97,11 @@ The legacy product SHALL provide a compose entrypoint that validates the old stu
 - **AND** a real-schema failure such as a missing SQL column MUST block acceptance until fixed
 
 ### Requirement: Legacy student navigation exposes four first-level modules
-The legacy student product SHALL expose four first-level modules labeled `主页`, `学习`, `评测`, and `我的`.
+The legacy student product SHALL expose four first-level modules labeled `主页`, `学习`, `评测`, and `报告`.
 
 #### Scenario: Legacy student opens the old product
 - **WHEN** an authenticated student opens `web-student-old`
-- **THEN** the first-level navigation MUST show exactly the student modules `主页`, `学习`, `评测`, and `我的`
+- **THEN** the first-level navigation MUST show exactly the student modules `主页`, `学习`, `评测`, and `报告`
 - **AND** `主页` MUST be the default active module
 - **AND** the bottom navigation active tab treatment MUST remain square with no rounded modern-pill styling
 - **AND** the navigation MUST NOT show Atom, RAG, Agent, learning assistant, intelligent monitoring, provider, or retrieval-diagnostic entries
@@ -280,6 +280,7 @@ The old student assessment setup SHALL support `智能薄弱项测试`, `自选�
 - **WHEN** the student selects `智能薄弱项测试` and clicks the primary start action
 - **THEN** the old frontend MUST call the current smart assessment start API
 - **AND** the request MUST let the backend/BKT algorithm choose weak, unmeasured, or otherwise prioritized assessment coverage
+- **AND** the request MUST include the student-selected question count when one is selected
 - **AND** manual experiment checkbox selection MUST NOT be required for this mode
 - **AND** the resulting session MUST open in the old exam-taking page
 
@@ -311,7 +312,8 @@ The old student assessment setup SHALL support `智能薄弱项测试`, `自选�
 #### Scenario: Student chooses question count
 - **WHEN** custom assessment option settings provide question-count choices
 - **THEN** the old setup page MUST render those choices as square old-style buttons or segmented controls
-- **AND** the selected question count MUST be used for `自选实验范围`, `随机练习`, and `全部范围`
+- **AND** the selected question count MUST be used for `智能薄弱项测试`, `自选实验范围`, `随机练习`, and `全部范围`
+- **AND** once the student manually selects a question count, later asynchronous option loading MUST NOT silently reset it to the default count
 - **AND** the page MUST fall back to safe choices such as `5`, `10`, `15`, and `20` only when the API returns no configured choices
 
 ### Requirement: Legacy generated assessments open in an old exam-taking page
@@ -374,6 +376,7 @@ The old student exam-taking page SHALL render current assessment questions in a 
 #### Scenario: Student submits completed answers
 - **WHEN** every question has an answer and the student submits
 - **THEN** the old frontend MUST call the current smart-assessment submit API with the session id and answer list
+- **AND** while the submission/report-generation request is in progress, the old frontend MUST show a centered old-style `AI 正在分析` loading overlay rather than relying only on button text
 - **AND** the backend MUST remain responsible for scoring, BKT mastery updates, report creation, and next recommendations
 - **AND** the old frontend MUST render or navigate to an old-compatible result/report state after successful submission
 
@@ -381,6 +384,59 @@ The old student exam-taking page SHALL render current assessment questions in a 
 - **WHEN** a generated assessment contains fewer questions than requested because the available question bank is insufficient
 - **THEN** the old exam page or setup transition MUST show a controlled old-style notice with the actual and requested question counts
 - **AND** it MUST still allow the student to answer the generated questions
+
+### Requirement: Legacy student report center separates overview and history
+The old student `报告` module SHALL present a report-centered learning feedback surface, not a personal-center page.
+
+#### Scenario: Student opens report center
+- **WHEN** an authenticated student opens old `报告`
+- **THEN** the page MUST keep the student identity card as context
+- **AND** it MUST show a square old-style switch between `概况` and `历史报告`
+- **AND** `概况` MUST be the default selected view
+- **AND** the view MUST NOT show raw TKE/TKT values, raw BKT probability vectors, Agent/RAG/Atom wording, provider names, retrieval diagnostics, or model names
+
+#### Scenario: Student views report overview
+- **WHEN** `概况` is selected
+- **THEN** the page MUST show aggregate report data such as report count, average score, and pending wrong-question review count
+- **AND** it MUST show the latest assessment/report summary when one exists
+- **AND** the latest assessment/report summary MUST provide a `查看报告` action that opens that report detail directly
+- **AND** the overview MUST NOT duplicate the full historical report list
+
+#### Scenario: Student views historical reports
+- **WHEN** `历史报告` is selected
+- **THEN** the page MUST show the student's durable legacy report list
+- **AND** the list MUST show at most 10 reports per page
+- **AND** pagination controls MUST show the current page and total page count
+- **AND** `上一页` and `下一页` controls MUST be disabled or unavailable when the student is already at the first or last page
+- **AND** selecting a report MUST open the old report detail route for that report
+
+### Requirement: Legacy report detail uses AI summary and per-question review
+The old report detail SHALL show a concise AI learning summary and per-question wrong-answer review without exposing modern report internals.
+
+#### Scenario: Student opens old report detail
+- **WHEN** a student opens an old report detail
+- **THEN** the top bar MUST show `学习报告`
+- **AND** the back action MUST be labeled `返回报告主页`
+- **AND** report score/count metadata MAY be shown as old-style summary metrics
+- **AND** the page MUST preserve the legacy forbidden-term gate for Atom, RAG, Agent, chunk, embedding, provider, model, retrieval diagnostics, TKE, and TKT
+
+#### Scenario: AI learning summary is shown
+- **WHEN** the report has persisted AI summary text
+- **THEN** the `AI 学情总结` section MUST render only the AI summary text
+- **AND** it MUST NOT append duplicate local next-step text, fallback narration, or raw mastery diagnostic content in the same section
+
+#### Scenario: Wrong questions are reviewed
+- **WHEN** the report contains wrong questions
+- **THEN** the `错题解析` section MUST render one old-style card per wrong question
+- **AND** each card MUST show the question stem, option list when available, the student's wrong answer as `做错项`, the correct answer as `正确选项`, and a compact `AI 解析` block
+- **AND** the `AI 解析` block MAY use the stored question-bank/database explanation when no structured per-question AI explanation exists
+- **AND** the old frontend MUST NOT render a single full-width global `AI 错题解析` paragraph that displaces the per-question review content
+- **AND** the answer comparison MUST use compact rows rather than large answer boxes that crowd out the explanation
+
+#### Scenario: Report has no wrong questions
+- **WHEN** the report contains no wrong questions
+- **THEN** the detail page MUST render a controlled old-style `本次没有错题。` state
+- **AND** it MUST still show the AI learning summary when available
 
 ### Requirement: Legacy assessment implementation preserves current product and data boundaries
 The old assessment implementation SHALL reuse current assessment APIs and data identities unless old-scoped adapters are explicitly necessary.

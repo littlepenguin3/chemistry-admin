@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 
 from server.app.auth import AuthUser, require_roles
 from server.app.domains.assessments.reports import create_smart_assessment_report
@@ -17,6 +17,7 @@ from server.app.student_smart_assessment_schemas import (
     StudentAssessmentStatusResponse,
     StudentPointAssessmentStartRequest,
     StudentSmartAssessmentResponse,
+    StudentSmartAssessmentStartRequest,
     StudentSmartAssessmentSubmitRequest,
     StudentSmartAssessmentSubmitResponse,
 )
@@ -37,8 +38,15 @@ async def dismiss_baseline_prompt(user: StudentUser) -> StudentAssessmentStatusR
 
 
 @router.post("/smart-assessment/start", response_model=StudentSmartAssessmentResponse)
-async def start_smart_assessment(user: StudentUser) -> StudentSmartAssessmentResponse:
-    return start_student_smart_assessment(user)
+async def start_smart_assessment(
+    user: StudentUser,
+    payload: StudentSmartAssessmentStartRequest | None = Body(default=None),
+) -> StudentSmartAssessmentResponse:
+    return start_student_smart_assessment(
+        user,
+        requested_question_count=payload.question_count if payload else None,
+        replace_existing=bool(payload and payload.replace_existing),
+    )
 
 
 @router.post("/point-assessment/start", response_model=StudentSmartAssessmentResponse)

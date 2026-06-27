@@ -602,6 +602,26 @@ def _load_open_session(session: Any, student_id: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def _abandon_open_session(session: Any, student_id: str, *, reason: str) -> None:
+    _ensure_tables(session)
+    session.execute(
+        text(
+            """
+            UPDATE student_smart_assessment_sessions
+            SET status = 'abandoned',
+                updated_at = now(),
+                metadata = COALESCE(metadata, '{}'::jsonb) || CAST(:metadata AS jsonb)
+            WHERE student_id = :student_id
+              AND status = 'in_progress'
+            """
+        ),
+        {
+            "student_id": student_id,
+            "metadata": _json({"abandoned_reason": reason}),
+        },
+    )
+
+
 def _assessment_mode_from_value(value: Any) -> str:
     mode = str(value or "smart")
     return mode if mode in {"smart", "custom", "point"} else "smart"
@@ -1732,7 +1752,12 @@ def dismiss_student_smart_baseline_prompt(user: Any) -> StudentAssessmentStatusR
         )
 
 
-def start_student_smart_assessment(user: Any) -> StudentSmartAssessmentResponse:
+def start_student_smart_assessment(
+    user: Any,
+    *,
+    requested_question_count: int | None = None,
+    replace_existing: bool = False,
+) -> StudentSmartAssessmentResponse:
     with db_session() as session:
         _ensure_tables(session)
         context = _load_student_context(session, user)
@@ -1740,7 +1765,11 @@ def start_student_smart_assessment(user: Any) -> StudentSmartAssessmentResponse:
         strategy, _inherited, _has_override = _effective_strategy(session, context.class_id)
         if not strategy.enabled:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Smart assessment is disabled")
+        if requested_question_count is not None:
+            strategy = _strategy_from_value({"question_count": requested_question_count}, strategy)
 
+        if replace_existing:
+            _abandon_open_session(session, context.student_id, reason="smart_assessment_restarted")
         existing = _load_open_session(session, context.student_id)
         if existing:
             return _response_for_session(session, existing)
@@ -1872,6 +1901,8 @@ def start_student_custom_assessment(
         if not settings.enabled:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Custom assessment is disabled")
 
+        if payload.replace_existing:
+            _abandon_open_session(session, context.student_id, reason="custom_assessment_restarted")
         existing = _load_open_session(session, context.student_id)
         if existing:
             return _response_for_session(session, existing)

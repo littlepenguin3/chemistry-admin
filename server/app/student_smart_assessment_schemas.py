@@ -84,6 +84,11 @@ class StudentSmartAssessmentResponse(BaseModel):
     questions: list[PublicSmartAssessmentQuestion] = Field(default_factory=list)
 
 
+class StudentSmartAssessmentStartRequest(BaseModel):
+    question_count: int | None = Field(default=None, ge=1, le=50)
+    replace_existing: bool = False
+
+
 class StudentSmartAssessmentAnswer(BaseModel):
     question_id: str = Field(min_length=1)
     answer: Any
@@ -190,6 +195,7 @@ class StudentCustomAssessmentOptionsResponse(BaseModel):
 class StudentCustomAssessmentStartRequest(BaseModel):
     experiment_ids: list[str] = Field(min_length=1)
     question_count: int
+    replace_existing: bool = False
 
 
 class CustomAssessmentSettingsResponse(BaseModel):

@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LegacyStudentApp } from "./LegacyStudentApp";
-import { ApiError, legacyStudentErrorMessage, setAuthToken } from "./api";
+import { ApiError, legacyStudentErrorMessage, setAuthToken, startCustomAssessment, startSmartAssessment } from "./api";
 
 const forbiddenVisibleTerms = [
   "Atom",
@@ -643,6 +643,18 @@ function installStudentFetchMock() {
       });
     }
     if (url.includes("/api/student/legacy/reports")) {
+      const extraReports = Array.from({ length: 10 }, (_, index) => ({
+        id: `report-extra-${index + 1}`,
+        title: `历史测评 ${index + 1}`,
+        report_type: "smart",
+        source_session_id: `session-extra-${index + 1}`,
+        score: 60 + index,
+        correct_count: 6,
+        total_count: 10,
+        correct_rate: 0.6,
+        wrong_count: 4,
+        completed_at: `2026-06-${String(25 - index).padStart(2, "0")}T09:00:00Z`,
+      }));
       return jsonResponse({
         reports: [
           {
@@ -669,6 +681,7 @@ function installStudentFetchMock() {
             wrong_count: 0,
             completed_at: "2026-06-26T11:00:00Z",
           },
+          ...extraReports,
         ],
       });
     }
@@ -893,7 +906,7 @@ describe("LegacyStudentApp", () => {
 
     await waitFor(() => expect(window.location.pathname).toBe("/assessment/session/custom-session-1"));
     const customStartCall = vi.mocked(fetch).mock.calls.find((call) => String(call[0]).includes("/api/student/custom-assessment/start"));
-    expect(JSON.parse(String(customStartCall?.[1]?.body))).toMatchObject({ experiment_ids: ["exp-2"], question_count: 15 });
+    expect(JSON.parse(String(customStartCall?.[1]?.body))).toMatchObject({ experiment_ids: ["exp-2"], question_count: 15, replace_existing: true });
     expect(await screen.findByText("自选范围测评")).toBeTruthy();
     assertNoForbiddenVisibleTerms(container);
   });
@@ -939,6 +952,21 @@ describe("LegacyStudentApp", () => {
     );
   });
 
+  it("sends the selected old assessment question count when starting", async () => {
+    await startSmartAssessment(5);
+    const smartStartCall = vi.mocked(fetch).mock.calls.find((call) => String(call[0]).includes("/api/student/smart-assessment/start"));
+    expect(JSON.parse(String(smartStartCall?.[1]?.body))).toMatchObject({ question_count: 5, replace_existing: true });
+
+    vi.mocked(fetch).mockClear();
+    await startCustomAssessment(["exp-2"], 15);
+    const customStartCall = vi.mocked(fetch).mock.calls.find((call) => String(call[0]).includes("/api/student/custom-assessment/start"));
+    expect(JSON.parse(String(customStartCall?.[1]?.body))).toMatchObject({
+      experiment_ids: ["exp-2"],
+      question_count: 15,
+      replace_existing: true,
+    });
+  });
+
   it("starts random and all-range assessment through current custom API", async () => {
     render(<LegacyStudentApp />);
 
@@ -974,8 +1002,24 @@ describe("LegacyStudentApp", () => {
     expect(screen.getByText("李同学")).toBeTruthy();
     expect(screen.getByText("数智一班")).toBeTruthy();
     expect(await screen.findByRole("heading", { name: "报告" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "概况" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "历史报告" })).toBeTruthy();
     expect(screen.getByText("待复盘错题")).toBeTruthy();
+    expect(screen.getByText("最近一次测评")).toBeTruthy();
+    expect(screen.queryByText("卤族元素测评")).toBeNull();
+    fireEvent.click(screen.getByText("查看报告"));
+    await waitFor(() => expect(window.location.pathname).toBe("/reports/report-1"));
+    fireEvent.click(screen.getByRole("button", { name: "返回报告主页" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/reports"));
+    fireEvent.click(screen.getByRole("button", { name: "历史报告" }));
     expect(screen.getByText("卤族元素测评")).toBeTruthy();
+    expect(screen.getByText("第 1 / 2 页")).toBeTruthy();
+    expect(screen.queryByText("历史测评 9")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+    expect(screen.getByText("第 2 / 2 页")).toBeTruthy();
+    expect(screen.getByText("历史测评 9")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "上一页" }));
+    expect(screen.getByText("第 1 / 2 页")).toBeTruthy();
     expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes("/api/student/legacy/reports"))).toBe(true);
     expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes("/api/student/assessment-reports"))).toBe(false);
 
@@ -984,11 +1028,14 @@ describe("LegacyStudentApp", () => {
     expect(await screen.findByRole("heading", { name: "卤族元素测评" })).toBeTruthy();
     expect(screen.getByText("AI 学情总结")).toBeTruthy();
     expect(screen.getByText("错题解析")).toBeTruthy();
-    expect(screen.getByText(/AI 已根据本次错题生成解析/)).toBeTruthy();
+    expect(screen.queryByText(/AI 已根据本次错题生成解析/)).toBeNull();
+    expect(screen.getByText("做错项")).toBeTruthy();
+    expect(screen.getByText("正确选项")).toBeTruthy();
+    expect(screen.getByText("AI 解析")).toBeTruthy();
     expect(screen.getByText("新制氯水具有氧化性。")).toBeTruthy();
-    expect(screen.queryByText("你的答案")).toBeNull();
-    expect(screen.queryByText("参考答案")).toBeNull();
-    expect(screen.getByRole("button", { name: "返回报告" })).toBeTruthy();
+    expect(screen.getByText("错误")).toBeTruthy();
+    expect(screen.getByText("正确")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "返回报告主页" })).toBeTruthy();
     assertNoForbiddenVisibleTerms(container);
   });
 

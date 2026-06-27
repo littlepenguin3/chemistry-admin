@@ -18,7 +18,7 @@
 - [x] 3.1 Add an old report detail route such as `/reports/:reportId` using the existing lightweight old routing style.
 - [x] 3.2 Render report detail with score/completion overview, report title, completion time, and old-style back navigation to the report list.
 - [x] 3.3 Render an `AI 学情总结` section that presents natural-language conclusions and next-step review advice.
-- [x] 3.4 Render a wrong-question section with stem, submitted answer, reference answer, and explanation for each wrong answer.
+- [x] 3.4 Render a wrong-question section with one card per wrong answer, including stem, compact `做错项`/`正确选项` rows, and a per-question `AI 解析` block.
 - [x] 3.5 Render a controlled `本次没有错题。` state for perfect reports.
 - [x] 3.6 Ensure report detail does not show TKE/TKT/raw mastery values or modern Agent/RAG/Atom implementation wording.
 - [x] 3.7 Add old student tests for report detail summary, wrong-question explanation display, no-wrong state, and forbidden terms.
@@ -39,7 +39,7 @@
 - [x] 5.3 Keep deterministic local fallback builders only for AI unavailable/error/unsafe cases.
 - [x] 5.4 Ensure answer submission remains bounded and report detail can hydrate/retry from completed session payloads.
 - [x] 5.5 Ensure generated/fallback text may use `AI总结`, `AI学情总结`, `AI错题解析`, `掌握度`, `薄弱点`, `复盘建议`, and `解析`, but not Agent/RAG/Atom/provider/retrieval/TKE/TKT terminology.
-- [x] 5.6 Add tests proving AI mistake explanation is exposed as legacy-facing `ai_generated` text and fallback remains useful.
+- [x] 5.6 Add tests proving report-level AI summaries remain visible while wrong-question review prioritizes per-question `AI 解析` cards and fallback remains useful.
 
 ## 6. Validation
 

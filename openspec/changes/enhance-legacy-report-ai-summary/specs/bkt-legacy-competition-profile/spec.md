@@ -25,8 +25,16 @@ The old student `报告` module SHALL present completed learning and assessment 
 - **WHEN** an authenticated student opens the old `报告` module
 - **THEN** the page MUST show a student identity card with student id, name, and class when available
 - **AND** the page MUST show report-oriented heading copy such as `学习报告`, `测评报告`, or `BKT 学情报告`
-- **AND** the page MUST render the student's available report records as a list or table-like old-style cards
+- **AND** the page MUST render an old-style switch between `概况` and `历史报告`
+- **AND** `概况` MUST be the default view and MUST show report count, average score, pending wrong-question review count, and the latest assessment/report summary when available
+- **AND** the latest assessment/report summary MUST provide a `查看报告` action that opens that report detail directly
 - **AND** the page MUST NOT present itself primarily as `我的`, `个人中心`, account settings, or a profile-management surface
+
+#### Scenario: Student opens historical reports
+- **WHEN** the student selects `历史报告`
+- **THEN** the page MUST render the student's available report records as list or table-like old-style cards
+- **AND** the list MUST show at most 10 reports per page
+- **AND** pagination controls MUST show the current page, total page count, and previous/next page actions
 
 #### Scenario: Report list is empty
 - **WHEN** the student has no report records available
@@ -73,13 +81,15 @@ The old student report detail SHALL provide wrong-question review using the AI-g
 #### Scenario: Report has wrong answers
 - **WHEN** a report contains wrong answers
 - **THEN** the report detail MUST render a wrong-question section
-- **AND** each wrong-question item MUST show the question stem
-- **AND** the wrong-question section MUST show an `AI 错题解析` or equivalent explanation from persisted report mistake-explanation text when available
-- **AND** when that explanation source is `ai`, the UI SHOULD NOT require prominent `你的答案` and `参考答案` comparison boxes
+- **AND** each wrong-question item MUST show the question stem, option list when available, `做错项`, `正确选项`, and an `AI 解析` block
+- **AND** the `AI 解析` block MAY use the stored question-bank/database explanation when no structured per-question AI explanation exists
+- **AND** the UI MUST NOT render a single global `AI 错题解析` paragraph that crowds out the per-question cards
+- **AND** the answer comparison MUST be compact and MUST NOT use oversized answer boxes that crowd the explanation
 
 #### Scenario: AI mistake explanation exists
 - **WHEN** the persisted report has `mistake_explanation.source = ai`
-- **THEN** the old report detail MUST render that explanation as the primary wrong-question interpretation
+- **THEN** the old report detail MAY keep that text in the report payload for backend provenance
+- **AND** the old visible UI MUST still prioritize per-question review cards over a global mistake-explanation paragraph
 - **AND** the UI MUST NOT expose the underlying provider, model, Agent mode, RAG retrieval, prompt, or diagnostic trace
 
 #### Scenario: AI mistake explanation is unavailable

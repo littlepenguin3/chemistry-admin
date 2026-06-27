@@ -589,8 +589,11 @@ export function loadPointDetail(nodeId: string): Promise<PointDetail> {
   return api<PointDetail>(`/api/student/catalog/points/${encodeURIComponent(nodeId)}`);
 }
 
-export function startSmartAssessment(): Promise<SmartAssessmentResponse> {
-  return postJson<SmartAssessmentResponse>("/api/student/smart-assessment/start", {});
+export function startSmartAssessment(questionCount?: number): Promise<SmartAssessmentResponse> {
+  return postJson<SmartAssessmentResponse>(
+    "/api/student/smart-assessment/start",
+    questionCount ? { question_count: questionCount, replace_existing: true } : { replace_existing: true },
+  );
 }
 
 export function startPointAssessment(pointNodeId: string): Promise<SmartAssessmentResponse> {
@@ -607,6 +610,7 @@ export function startCustomAssessment(experimentIds: string[], questionCount: nu
   return postJson<SmartAssessmentResponse>("/api/student/custom-assessment/start", {
     experiment_ids: experimentIds,
     question_count: questionCount,
+    replace_existing: true,
   });
 }
 

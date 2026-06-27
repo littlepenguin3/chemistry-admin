@@ -1,4 +1,4 @@
-import { FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpenCheck, ChevronRight, ClipboardList, FileText, Folder, Home, PlayCircle, Video, type LucideIcon } from "lucide-react";
 
 import {
@@ -1184,6 +1184,7 @@ function AssessmentPage() {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [questionCount, setQuestionCount] = useState(10);
+  const questionCountTouchedRef = useRef(false);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
@@ -1197,7 +1198,12 @@ function AssessmentPage() {
       .then((response) => {
         if (!active) return;
         setData(response);
-        setQuestionCount(response.settings.default_question_count || response.settings.question_count_options?.[0] || 10);
+        const allowedCounts = response.settings.question_count_options?.length ? response.settings.question_count_options : [5, 10, 15, 20];
+        const defaultCount = response.settings.default_question_count || allowedCounts[0] || 10;
+        setQuestionCount((current) => {
+          if (questionCountTouchedRef.current && allowedCounts.includes(current)) return current;
+          return defaultCount;
+        });
       })
       .catch((caught) => {
         if (active) setOptionError(legacyStudentErrorMessage(caught));
@@ -1259,6 +1265,10 @@ function AssessmentPage() {
     setMode(nextMode);
     setSelectingRange(false);
   };
+  const selectQuestionCount = (count: number) => {
+    questionCountTouchedRef.current = true;
+    setQuestionCount(count);
+  };
 
   const start = async () => {
     setError("");
@@ -1266,7 +1276,7 @@ function AssessmentPage() {
     try {
       let response: SmartAssessmentResponse;
       if (mode === "smart") {
-        response = await startSmartAssessment();
+        response = await startSmartAssessment(questionCount);
       } else {
         if (!data) {
           setError("暂时无法读取实验范围，请稍后再试。");
@@ -1317,7 +1327,7 @@ function AssessmentPage() {
         </div>
 
         <section className="legacy-assessment-setup" aria-label="自选实验范围">
-          <AssessmentQuestionCountSelector countOptions={countOptions} questionCount={questionCount} onChange={setQuestionCount} />
+          <AssessmentQuestionCountSelector countOptions={countOptions} questionCount={questionCount} onChange={selectQuestionCount} />
 
           {optionError ? <div className="legacy-error">实验范围暂时无法加载；请稍后再试。</div> : null}
           {error ? <div className="legacy-error">{error}</div> : null}
@@ -1382,7 +1392,7 @@ function AssessmentPage() {
       </div>
 
       <section className="legacy-assessment-setup" aria-label="测评设置">
-        <AssessmentQuestionCountSelector countOptions={countOptions} questionCount={questionCount} onChange={setQuestionCount} />
+        <AssessmentQuestionCountSelector countOptions={countOptions} questionCount={questionCount} onChange={selectQuestionCount} />
 
         <div className="legacy-assessment-mode-grid" aria-label="出题方式">
           {assessmentSetupModes.map((item) => (
@@ -1464,6 +1474,7 @@ function AssessmentSessionPage({ sessionId }: { sessionId: string }) {
 
   return (
     <section className="legacy-page legacy-assessment-page legacy-assessment-session-page">
+      {submitting ? <LegacyAnalysisOverlay /> : null}
       <div className="legacy-exam-topbar">
         <strong>{modeLabel}</strong>
         <button className="text-button" onClick={() => navigate("/assessment")}>
@@ -1502,6 +1513,22 @@ function AssessmentSessionPage({ sessionId }: { sessionId: string }) {
         </button>
       </article>
     </section>
+  );
+}
+
+function LegacyAnalysisOverlay() {
+  return (
+    <div className="legacy-analysis-overlay" role="status" aria-live="polite" aria-label="AI 正在分析">
+      <div className="legacy-analysis-panel">
+        <div className="legacy-analysis-loader" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+        <strong>AI 正在分析</strong>
+        <p>正在批改答案并生成学习报告，请稍候。</p>
+      </div>
+    </div>
   );
 }
 
@@ -1636,6 +1663,8 @@ function ReportsPage({ user }: { user: AuthUser }) {
   const [reports, setReports] = useState<AssessmentReportSummary[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [reportView, setReportView] = useState<"overview" | "history">("overview");
+  const [reportPage, setReportPage] = useState(1);
 
   useEffect(() => {
     let active = true;
@@ -1659,6 +1688,11 @@ function ReportsPage({ user }: { user: AuthUser }) {
     return reports.reduce((sum, item) => sum + Number(item.score || 0), 0) / reports.length;
   }, [reports]);
   const wrongTotal = useMemo(() => reports.reduce((sum, item) => sum + Number(item.wrong_count || 0), 0), [reports]);
+  const latestReport = reports[0];
+  const reportsPerPage = 10;
+  const totalReportPages = Math.max(1, Math.ceil(reports.length / reportsPerPage));
+  const currentReportPage = Math.min(reportPage, totalReportPages);
+  const pageReports = reports.slice((currentReportPage - 1) * reportsPerPage, currentReportPage * reportsPerPage);
   const studentId = user.student_id || user.username || "未登记学号";
   const className = user.class_name || user.class_id || "未分班";
 
@@ -1688,24 +1722,65 @@ function ReportsPage({ user }: { user: AuthUser }) {
       </div>
       {loading ? <div className="legacy-state">正在载入报告...</div> : null}
       {error ? <div className="legacy-error">{error}</div> : null}
-      <div className="legacy-metrics">
-        <Metric label="报告数" value={reports.length} />
-        <Metric label="平均分" value={average.toFixed(1)} />
-        <Metric label="待复盘错题" value={wrongTotal} />
+      <div className="legacy-report-switch" role="tablist" aria-label="报告内容切换">
+        <button type="button" className={reportView === "overview" ? "active" : ""} aria-selected={reportView === "overview"} onClick={() => setReportView("overview")}>
+          概况
+        </button>
+        <button type="button" className={reportView === "history" ? "active" : ""} aria-selected={reportView === "history"} onClick={() => setReportView("history")}>
+          历史报告
+        </button>
       </div>
-      <div className="legacy-report-list">
-        {reports.map((report) => (
-          <button className="legacy-report-card" key={report.id} type="button" onClick={() => navigate(`/reports/${encodeURIComponent(report.id)}`)}>
-            <strong>{report.title}</strong>
-            <span>{formatReportDate(report.completed_at)}</span>
-            <p>
-              得分 {formatScore(report.score)}，答对 {report.correct_count}/{report.total_count}，错题 {report.wrong_count || 0} 道。
-            </p>
-            <em>查看报告</em>
-          </button>
-        ))}
-        {!loading && !reports.length ? <div className="legacy-state">暂无测评报告。</div> : null}
-      </div>
+
+      {reportView === "overview" ? (
+        <section className="legacy-report-overview" aria-label="报告概况">
+          <div className="legacy-metrics">
+            <Metric label="报告数" value={reports.length} />
+            <Metric label="平均分" value={average.toFixed(1)} />
+            <Metric label="待复盘错题" value={wrongTotal} />
+          </div>
+          {latestReport ? (
+            <button className="legacy-report-latest" type="button" onClick={() => navigate(`/reports/${encodeURIComponent(latestReport.id)}`)}>
+              <span>最近一次测评</span>
+              <strong>{formatScore(latestReport.score)} 分</strong>
+              <p>
+                {formatReportDate(latestReport.completed_at)}，答对 {latestReport.correct_count}/{latestReport.total_count}，错题 {latestReport.wrong_count || 0} 道。
+              </p>
+              <em>查看报告</em>
+            </button>
+          ) : !loading ? (
+            <div className="legacy-state">暂无测评报告。</div>
+          ) : null}
+        </section>
+      ) : (
+        <section className="legacy-report-history" aria-label="历史报告">
+          <div className="legacy-report-list">
+            {pageReports.map((report) => (
+              <button className="legacy-report-card" key={report.id} type="button" onClick={() => navigate(`/reports/${encodeURIComponent(report.id)}`)}>
+                <strong>{report.title}</strong>
+                <span>{formatReportDate(report.completed_at)}</span>
+                <p>
+                  得分 {formatScore(report.score)}，答对 {report.correct_count}/{report.total_count}，错题 {report.wrong_count || 0} 道。
+                </p>
+                <em>查看报告</em>
+              </button>
+            ))}
+            {!loading && !reports.length ? <div className="legacy-state">暂无测评报告。</div> : null}
+          </div>
+          {reports.length ? (
+            <nav className="legacy-report-pagination" aria-label="报告分页">
+              <button type="button" disabled={currentReportPage <= 1} onClick={() => setReportPage((current) => Math.max(1, current - 1))}>
+                上一页
+              </button>
+              <span>
+                第 {currentReportPage} / {totalReportPages} 页
+              </span>
+              <button type="button" disabled={currentReportPage >= totalReportPages} onClick={() => setReportPage((current) => Math.min(totalReportPages, current + 1))}>
+                下一页
+              </button>
+            </nav>
+          ) : null}
+        </section>
+      )}
     </section>
   );
 }
@@ -1732,15 +1807,14 @@ function ReportDetailPage({ reportId }: { reportId: string }) {
     };
   }, [reportId]);
 
-  const mistakeExplanationText = report?.mistake_explanation?.text?.trim() || "";
-  const hasAiMistakeExplanation = report?.mistake_explanation?.source === "ai" && mistakeExplanationText.length > 0;
+  const aiSummaryText = report?.ai_summary?.text?.trim() || "";
 
   return (
     <section className="legacy-page legacy-report-detail-page">
       <div className="legacy-exam-topbar">
         <strong>学习报告</strong>
         <button className="text-button" onClick={() => navigate("/reports")}>
-          返回报告
+          返回报告主页
         </button>
       </div>
 
@@ -1763,18 +1837,11 @@ function ReportDetailPage({ reportId }: { reportId: string }) {
 
           <section className="legacy-ai-summary">
             <h2>AI 学情总结</h2>
-            <p>{report.ai_summary?.text || "本次报告暂无总结，请继续完成测评以获得学习反馈。"}</p>
-            {report.next_steps ? <p className="legacy-report-next">{report.next_steps}</p> : null}
+            {aiSummaryText ? <p>{aiSummaryText}</p> : null}
           </section>
 
           <section className="legacy-wrong-section">
             <h2>错题解析</h2>
-            {mistakeExplanationText ? (
-              <section className="legacy-answer-explanation legacy-ai-mistake-overview">
-                <h4>AI 错题解析</h4>
-                <p>{mistakeExplanationText}</p>
-              </section>
-            ) : null}
             {report.wrong_questions.length ? (
               <div className="legacy-wrong-list">
                 {report.wrong_questions.map((question, index) => (
@@ -1791,24 +1858,20 @@ function ReportDetailPage({ reportId }: { reportId: string }) {
                         ))}
                       </ul>
                     ) : null}
-                    {!hasAiMistakeExplanation ? (
-                      <>
-                        <div className="legacy-answer-grid">
-                          <div>
-                            <span>你的答案</span>
-                            <strong>{question.submitted_answer}</strong>
-                          </div>
-                          <div>
-                            <span>参考答案</span>
-                            <strong>{question.correct_answer}</strong>
-                          </div>
-                        </div>
-                        <section className="legacy-answer-explanation">
-                          <h4>解析</h4>
-                          <p>{question.explanation}</p>
-                        </section>
-                      </>
-                    ) : null}
+                    <div className="legacy-answer-grid">
+                      <div>
+                        <span>做错项</span>
+                        <strong>{question.submitted_answer}</strong>
+                      </div>
+                      <div>
+                        <span>正确选项</span>
+                        <strong>{question.correct_answer}</strong>
+                      </div>
+                    </div>
+                    <section className="legacy-answer-explanation">
+                      <h4>AI 解析</h4>
+                      <p>{question.explanation || "本题暂无解析。"}</p>
+                    </section>
                   </article>
                 ))}
               </div>
